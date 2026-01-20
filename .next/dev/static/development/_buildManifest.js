@@ -1,6 +1,6 @@
 self.__BUILD_MANIFEST = {
-  "/": [
-    "static/chunks/pages/index.js"
+  "/dashboard": [
+    "static/chunks/pages/dashboard.js"
   ],
   "__rewrites": {
     "afterFiles": [],
@@ -12,16 +12,10 @@ self.__BUILD_MANIFEST = {
     "/_app",
     "/_error",
     "/api/auth/[...nextauth]",
-    "/components/FavButton",
-    "/components/SignInButton",
-    "/components/Userinfo",
-    "/components/useCachedData",
     "/dashboard",
-    "/offline",
     "/repo/[slug]",
     "/subject",
     "/subject/[subject]",
-    "/topic/[topic]",
-    "/types/next-auth.d"
+    "/topic/[topic]"
   ]
 };self.__BUILD_MANIFEST_CB && self.__BUILD_MANIFEST_CB()
