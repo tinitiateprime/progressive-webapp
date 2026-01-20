@@ -1,0 +1,15 @@
+{
+  "subjects": {
+    "vuejs": {
+      "README": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/README.md",
+      "introduction": "https://raw.github.com/Eswar-521/Vue-Js/main/vuejs-tutorial/01-introduction.md",
+      "Getting Started": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/02-getting-started.md",
+      "Tooling Setup": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/03-tooling-setup.md",
+      "Template Directives": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/04-template-directives.md",
+      "Reactivity Basics": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/05-reactivity-basics.md",
+      "Lifecycle & Composition": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/06-lifecycle-composition.md",
+      "Components Basics": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/07-components-basics.md",
+      "Forms": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/09-forms.md"
+    }
+  }
+}
