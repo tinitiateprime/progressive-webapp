@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 16, "column": 0}, "map": {"version":3,"sources":["file:///Users/tsnikhil/Desktop/Main/progressive-webapp/pages/api/auth/%5B...nextauth%5D.ts"],"sourcesContent":["// pages/api/auth/nextauth.ts\r\nimport NextAuth from \"next-auth\";\r\nimport GoogleProvider from \"next-auth/providers/google\";\r\n\r\nexport default NextAuth({\r\n  providers: [\r\n    GoogleProvider({\r\n      clientId: process.env.GOOGLE_CLIENT_ID!,\r\n      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,\r\n    }),\r\n  ],\r\n  session: {\r\n    strategy: \"jwt\", // stores session in JWT (can use cookies)\r\n    maxAge: 30 * 24 * 60 * 60, // 30 days\r\n  },\r\n  callbacks: {\r\n    async session({ session, token }) {\r\n      // store additional info in session if needed\r\n      (session.user as any).id = token.sub;\r\n      return session;\r\n    },\r\n  },\r\n  secret: process.env.NEXTAUTH_SECRET,\r\n});\r\n"],"names":[],"mappings":";;;;AAAA,6BAA6B;AAC7B;AACA;;;uCAEe,IAAA,2NAAQ,EAAC;IACtB,WAAW;QACT,IAAA,yQAAc,EAAC;YACb,UAAU,QAAQ,GAAG,CAAC,gBAAgB;YACtC,cAAc,QAAQ,GAAG,CAAC,oBAAoB;QAChD;KACD;IACD,SAAS;QACP,UAAU;QACV,QAAQ,KAAK,KAAK,KAAK;IACzB;IACA,WAAW;QACT,MAAM,SAAQ,EAAE,OAAO,EAAE,KAAK,EAAE;YAC9B,6CAA6C;YAC5C,QAAQ,IAAI,CAAS,EAAE,GAAG,MAAM,GAAG;YACpC,OAAO;QACT;IACF;IACA,QAAQ,QAAQ,GAAG,CAAC,eAAe;AACrC"}}]
-}
