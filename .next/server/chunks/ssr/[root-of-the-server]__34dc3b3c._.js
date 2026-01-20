@@ -1,3 +1,0 @@
-module.exports=[270406,(a,b,c)=>{b.exports=a.x("next/dist/compiled/@opentelemetry/api",()=>require("next/dist/compiled/@opentelemetry/api"))},508171,(a,b,c)=>{b.exports=a.x("react/jsx-runtime",()=>require("react/jsx-runtime"))},127669,(a,b,c)=>{b.exports=a.x("react",()=>require("react"))},404550,(a,b,c)=>{"use strict";c._=function(a){return a&&a.__esModule?a:{default:a}}},205515,(a,b,c)=>{b.exports=a.x("next/dist/compiled/next-server/pages-turbo.runtime.prod.js",()=>require("next/dist/compiled/next-server/pages-turbo.runtime.prod.js"))},501951,(a,b,c)=>{"use strict";b.exports=a.r(205515)}];
-
-//# sourceMappingURL=%5Broot-of-the-server%5D__34dc3b3c._.js.map
