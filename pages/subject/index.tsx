@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/router";
-import { useCachedData } from "../components/useCachedData";
+import { useCachedData } from "../../components/useCachedData";
 
 export default function Topics() {
   const router = useRouter();
