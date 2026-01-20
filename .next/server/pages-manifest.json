@@ -1,0 +1,13 @@
+{
+  "/": "pages/index.html",
+  "/_app": "pages/_app.js",
+  "/_document": "pages/_document.js",
+  "/_error": "pages/_error.js",
+  "/api/auth/[...nextauth]": "pages/api/auth/[...nextauth].js",
+  "/dashboard": "pages/dashboard.html",
+  "/repo/[slug]": "pages/repo/[slug].html",
+  "/subject": "pages/subject.html",
+  "/subject/[subject]": "pages/subject/[subject].html",
+  "/topic/[topic]": "pages/topic/[topic].html",
+  "/404": "pages/404.html"
+}
