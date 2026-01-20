@@ -12,25 +12,51 @@ export default function Home() {
   const didCallBackend = useRef(false);
   const [redirecting, setRedirecting] = useState(false);
 
+  // Helper: get user location as a promise
+  const getLocation = (): Promise<{ latitude: number; longitude: number } | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        console.log("Geolocation not supported.");
+        return resolve(null);
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.log("Geolocation error:", error.message);
+          resolve(null); // resolve null on error
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0,
+        }
+      );
+    });
+  };
+
   useEffect(() => {
     if (status !== "authenticated") return;
     const email = session?.user?.email;
     if (!email) return;
 
-    // Prevent double-call in React Strict Mode (dev) / re-renders
     if (didCallBackend.current) return;
     didCallBackend.current = true;
 
     setRedirecting(true);
 
-    const location = getLocation();
-    
-    const backendUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5050";
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5050";
 
     (async () => {
       try {
-        await fetch(`${backendUrl}/api/auth/post-login`, {
+        const location = await getLocation();
+
+        const res = await fetch(`${backendUrl}/api/auth/post-login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -39,6 +65,10 @@ export default function Home() {
             gps: location,
           }),
         });
+
+        if (!res.ok) {
+          throw new Error(`Backend responded with status ${res.status}`);
+        }
       } catch (e) {
         console.error("post-login failed:", e);
       } finally {
@@ -46,48 +76,6 @@ export default function Home() {
       }
     })();
   }, [status, session, router]);
-
-  
-function getLocation() {
-  if (navigator.geolocation) {
-    // Request the location
-    navigator.geolocation.getCurrentPosition(showPosition, showError, {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0
-    });
-  } else {
-    // Browser doesn't support geolocation
-    console.log("Geolocation is not supported by this browser.");
-  }
-}
-
-// Success function
-function showPosition(position) {
-  const latitude = position.coords.latitude;
-  const longitude = position.coords.longitude;
-  console.log(`Latitude: ${latitude}, Longitude: ${longitude}`);
-  // You can now send these coordinates to your server or use them directly in the web app
-}
-
-// Error function
-function showError(error) {
-  switch(error.code) {
-    case error.PERMISSION_DENIED:
-      console.log("User denied the request for Geolocation.");
-      break;
-    case error.POSITION_UNAVAILABLE:
-      console.log("Location information is unavailable.");
-      break;
-    case error.TIMEOUT:
-      console.log("The request to get user location timed out.");
-      break;
-    case error.UNKNOWN_ERROR:
-      console.log("An unknown error occurred.");
-      break;
-  }
-}
-
 
   if (redirecting) return <p>Redirecting...</p>;
 

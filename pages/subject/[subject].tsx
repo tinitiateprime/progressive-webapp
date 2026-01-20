@@ -1,7 +1,8 @@
 "use client";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import styles from "./subjectPage.module.css"; // ✅ import css module
+
+import styles from "../subject/subjectPage.module.css"; // Import as a CSS module
 
 interface Topics {
   [key: string]: string;

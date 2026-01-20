@@ -20,10 +20,9 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.mts",
     "**/*.ts",
     "**/*.tsx"
-, "pages/subject/[subject]"  ],
+  ],
   "exclude": [
     "node_modules"
   ]
