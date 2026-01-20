@@ -2,7 +2,7 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import FavButton from "../components/FavButton";
+import FavButton from "../../components/FavButton";
 
 const repoUrls: Record<string, string> = {
   vuejs: "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/README.md",
