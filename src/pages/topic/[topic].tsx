@@ -96,7 +96,7 @@ function plainText(children: any): string {
   return "";
 }
 
-// ✅ remove first markdown H1 to avoid duplicate page title
+// ✅ remove first markdown H1 to avoid duplicate page title and the title....
 function stripFirstMarkdownH1(md: string) {
   if (!md) return md;
   // remove first "# Title" line only if it is at the start (allow empty lines before)
