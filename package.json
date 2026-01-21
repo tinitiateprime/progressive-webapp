@@ -1,11 +1,12 @@
 {
   "name": "pwa-project",
   "version": "0.1.0",
-  "type": "module",
+  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node server.ts",
+    "postbuild": "xcopy /E /I /Y .next\\static .next\\standalone\\.next\\static && xcopy /E /I /Y public .next\\standalone\\public",
+    "start": "node .next/standalone/server.js",
     "lint": "eslint"
   },
   "engines": {
