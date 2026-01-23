@@ -1,152 +1,319 @@
 "use client";
+
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import styles from "./subjectPage.module.css"; // ✅ import css module
+import Link from "next/link";
 
-interface Topics {
-  [key: string]: string;
-}
-
-function normalizeRawUrl(url: string) {
-  return String(url).replace(
-    "https://raw.github.com/",
-    "https://raw.githubusercontent.com/"
-  );
-}
+type Topic = {
+  topic_name: string;
+  md_url: string;
+};
 
 export default function SubjectPage() {
   const router = useRouter();
   const { subject } = router.query;
 
-  const subjectStr = Array.isArray(subject) ? subject[0] : subject;
-
-  const [topics, setTopics] = useState<Topics>({});
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isOffline, setIsOffline] = useState(false);
 
-  const cacheKey = subjectStr ? `md-cache-${subjectStr}` : "";
-
+  debugger
+  // ONLINE / OFFLINE DETECT
   useEffect(() => {
-    if (!subjectStr) return;
+    const update = () => setIsOffline(!navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
-    localStorage.setItem("last-subject", String(subjectStr));
+  // FETCH SUBJECT TOPICS
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (!subject) return;
 
-    if (cacheKey) {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        try {
-          setTopics(JSON.parse(cached));
-          setLoading(false);
-          return;
-        } catch {}
-      }
+    const url =
+      "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
+
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        const found = data.qna_catalog.find(
+          (s: any) =>
+            s.subject.toLowerCase() === String(subject).toLowerCase()
+        );
+        if (!found) throw new Error("Subject not found");
+        setTopics(found.topics);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError("Failed to load subject");
+        setLoading(false);
+      });
+  }, [router.isReady, subject]);
+
+  // SAVE WHOLE SUBJECT (ALL md_url) FOR OFFLINE
+  const saveSubjectForOffline = async () => {
+    if (!("serviceWorker" in navigator)) {
+      alert("Service Worker not supported");
+      return;
     }
 
-  //   fetch("../public/data.json")
-  //     .then((res) => res.json())
-  //     .then(async (data) => {
-  //       const subj = data.subjects?.[subjectStr];
-  //       if (!subj) throw new Error("Subject not found in data.json");
+    if (!topics.length) {
+      alert("No topics loaded yet");
+      return;
+    }
 
-  //       const fetchedTopics: Topics = {};
-  //       for (const [topicName, url] of Object.entries<string>(subj)) {
-  //         try {
-  //           const u = normalizeRawUrl(url);
-  //           const r = await fetch(u);
-  //           if (!r.ok) continue;
-  //           fetchedTopics[topicName] = await r.text();
-  //         } catch (e) {
-  //           console.error("Fetch failed:", topicName, e);
-  //         }
-  //       }
+    const urls: string[] = [
+      "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json",
+    ];
 
-  //       localStorage.setItem(cacheKey, JSON.stringify(fetchedTopics));
-  //       setTopics(fetchedTopics);
-  //       setLoading(false);
-  //     })
-  //     .catch((err) => {
-  //       setError(err.message || "Failed to load subject.");
-  //       setLoading(false);
-  //     });
-  }, [subjectStr, cacheKey]);
+    // Add ALL Markdown URLs for this subject
+    topics.forEach((t) => urls.push(t.md_url));
 
-  const Header = () => (
-    <header className={styles.header}>
-      <div className={styles.brand}>
-        <img src="/favicon_new.png" alt="Logo" className={styles.logo} />
-        <div className={styles.brandText}>
-          <div className={styles.brandTitle}>{subjectStr || "Learning"}</div>
-          <div className={styles.brandSub}>Docs • Topics • Notes</div>
-        </div>
-      </div>
-    </header>
-  );
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      reg.active?.postMessage({
+        type: "PREFETCH_URLS",
+        urls,
+      });
+      alert(
+        `Saved entire "${String(subject)}" subject for Offline ✅ (${topics.length} topics)`
+      );
+    } catch (err) {
+      alert("Failed to save for offline. Ensure Service Worker is registered.");
+    }
+  };
 
-  if (loading || error) {
+  if (loading)
     return (
-      <div className={styles.page}>
-        <Header />
-        <main className={styles.center}>
-          <div className={styles.centerCard}>
-            <div className={styles.centerTitle}>
-              {loading ? "Loading topics..." : "Oops"}
-            </div>
-            <div className={styles.centerMsg}>{error || "Please wait…"}</div>
-
-            {error ? (
-              <button className={styles.btn} onClick={() => router.push("/")}>
-                Go Home
-              </button>
-            ) : null}
-          </div>
-        </main>
-
-        <footer className={styles.footer}>© 2026 My Learning Site</footer>
-      </div>
+      <p style={{ padding: 30, textAlign: "center" }}>
+        Loading…
+      </p>
     );
-  }
+
+  if (error)
+    return (
+      <p style={{ padding: 30, color: "red", textAlign: "center" }}>
+        {error}
+      </p>
+    );
 
   return (
-    <div className={styles.page}>
-      <Header />
-
-      <main className={styles.shell}>
-        <div className={styles.grid}>
-          {Object.keys(topics).map((t, idx) => (
-            <button
-              key={t}
-              className={styles.card}
-              onClick={() =>
-                router.push(
-                  `/topic/${encodeURIComponent(t)}?subject=${encodeURIComponent(
-                    String(subjectStr)
-                  )}`
-                )
-              }
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#b0d0f6",
+        display: "flex",
+        justifyContent: "center",
+        padding: "24px",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 1100,
+          background: "#ffffff",
+          borderRadius: 12,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+          display: "flex",
+          overflow: "hidden",
+        }}
+      >
+        {/* LEFT PANEL – HEADER + OFFLINE INFO */}
+        <aside
+          style={{
+            width: 320,
+            borderRight: "1px solid #f0f0f0",
+            padding: "24px 20px",
+            background: "#fafafa",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div>
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: 1.2,
+                color: "#888",
+                textTransform: "uppercase",
+                marginBottom: 6,
+              }}
             >
-              <div className={styles.cardTop}>
-                <span className={styles.index}>{idx + 1}</span>
-                <span className={styles.title}>{t}</span>
-              </div>
+              Subject
+            </p>
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                margin: 0,
+                wordBreak: "break-word",
+              }}
+            >
+              {String(subject).toUpperCase()}
+            </h1>
+          </div>
 
-              <p className={styles.preview}>
-                {(topics[t] || "").replace(/\n/g, " ").slice(0, 120)}...
-              </p>
+          <button
+            onClick={saveSubjectForOffline}
+            style={{
+              padding: "10px 16px",
+              borderRadius: 8,
+              border: "none",
+              background: isOffline ? "#ff4d4f" : "#0070f3",
+              color: "#fff",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              boxShadow: "0 4px 10px rgba(0, 112, 243, 0.35)",
+            }}
+          >
+            {isOffline ? "Offline Mode" : "Save Subject for Offline"}
+          </button>
 
-              <div className={styles.openRow}>
-                <span className={styles.openText}>Open</span>
-                <span className={styles.arrow}>→</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </main>
+          <p
+            style={{
+              fontSize: 12,
+              color: "#666",
+              lineHeight: 1.5,
+              marginTop: 4,
+            }}
+          >
+            This will download all Q&A content for this subject so it can be
+            viewed later even without an internet connection.
+          </p>
 
-      <footer className={styles.footer}>
-        <span>© 2026 My Learning Site</span>
-        <span className={styles.footerDot}>•</span>
-        <span className={styles.footerMuted}>Built for fast learning</span>
-      </footer>
+          <div
+            style={{
+              marginTop: "auto",
+              padding: 12,
+              borderRadius: 8,
+              background: isOffline ? "#fff1f0" : "#f0f5ff",
+              border: `1px solid ${isOffline ? "#ffa39e" : "#adc6ff"}`,
+              fontSize: 12,
+              color: "#555",
+            }}
+          >
+            <strong>Status:</strong>{" "}
+            {isOffline ? "You are offline. Cached content will be used." : "You are online. You can save this subject for offline use."}
+          </div>
+        </aside>
+
+        {/* RIGHT PANEL – TOPIC LIST */}
+        <main
+          style={{
+            flex: 1,
+            padding: "24px 28px",
+            overflowY: "auto",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: 16,
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 18,
+                margin: 0,
+                fontWeight: 600,
+              }}
+            >
+              Topics ({topics.length})
+            </h2>
+            <span
+              style={{
+                fontSize: 12,
+                color: "#999",
+              }}
+            >
+              Tap a topic to open its Q&A
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: 12,
+            }}
+          >
+            {topics.map((t, idx) => (
+              <Link
+                key={t.topic_name}
+                href={`/topic/${encodeURIComponent(
+                  t.topic_name
+                )}?subject=${subject}`}
+                style={{
+                  textDecoration: "none",
+                }}
+              >
+                <div
+                  style={{
+                    borderRadius: 10,
+                    border: "1px solid #f0f0f0",
+                    padding: "12px 14px",
+                    background: "#fff",
+                    cursor: "pointer",
+                    transition:
+                      "transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.transform =
+                      "translateY(-1px)";
+                    (e.currentTarget as HTMLDivElement).style.boxShadow =
+                      "0 4px 12px rgba(0,0,0,0.06)";
+                    (e.currentTarget as HTMLDivElement).style.borderColor =
+                      "#d6e4ff";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.transform =
+                      "translateY(0)";
+                    (e.currentTarget as HTMLDivElement).style.boxShadow =
+                      "none";
+                    (e.currentTarget as HTMLDivElement).style.borderColor =
+                      "#f0f0f0";
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#999",
+                      marginBottom: 4,
+                    }}
+                  >
+                    #{idx + 1}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: "#222",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {t.topic_name}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

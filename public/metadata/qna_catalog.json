@@ -1,0 +1,59 @@
+{
+  "qna_catalog": [
+    {
+      "subject": "vuejs",
+      "topics": [
+        {
+          "topic_name": "README",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/README.md"
+        },
+        {
+          "topic_name": "introduction",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/01-introduction.md"
+        },
+        {
+          "topic_name": "Getting Started",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/02-getting-started.md"
+        },
+        {
+          "topic_name": "Tooling Setup",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/03-tooling-setup.md"
+        },
+        {
+          "topic_name": "Template Directives",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/04-template-directives.md"
+        },
+        {
+          "topic_name": "Reactivity Basics",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/05-reactivity-basics.md"
+        },
+        {
+          "topic_name": "Lifecycle & Composition",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/06-lifecycle-composition.md"
+        },
+        {
+          "topic_name": "Components Basics",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/07-components-basics.md"
+        },
+        {
+          "topic_name": "Forms",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Vue-Js/main/vuejs-tutorial/09-forms.md"
+        }
+      ]
+    },
+    {
+      "subject": "nextjs",
+      "topics": [
+        {
+          "topic_name": "01-introduction",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Next-js/main/nextjs-tutorial/01-introduction.md"
+        },
+        {
+          "topic_name": "06-server-actions",
+          "md_url": "https://raw.githubusercontent.com/Eswar-521/Next-js/main/nextjs-tutorial/06-server-actions.md"
+        }
+      ]
+    }
+  ]
+}
+

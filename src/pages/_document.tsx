@@ -4,7 +4,13 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        {/* ✅ Google Font: Inter */}
+        {/* ✅ PWA MANIFEST & ICONS – Add these lines */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon-192.png"></link>
+        <meta name="theme-color" content="#000000" />
+        <meta name="description" content="Tinitiate Dashboard PWA" />
+
+        {/* ✅ GOOGLE FONTS */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -12,7 +18,6 @@ export default function Document() {
           rel="stylesheet"
         />
       </Head>
-
       <body>
         <Main />
         <NextScript />
@@ -20,3 +25,4 @@ export default function Document() {
     </Html>
   );
 }
+

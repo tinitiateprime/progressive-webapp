@@ -1,12 +1,10 @@
 "use client";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 export default function Dashboard() {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const router = useRouter();
-
 
   const repos = [
     { name: "Vue.js", slug: "vuejs" },
@@ -30,14 +28,21 @@ export default function Dashboard() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "20px 40px",
+          padding: "15px 40px",
           backgroundColor: "#fff",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         }}
       >
-        <h1 style={{ color: "#0070f3", fontSize: 24 }}>
-          Tinitiate Dashboard
-        </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img
+            src="/favicon_new.png"
+            alt="Tinitiate Logo"
+            style={{ width: 32, height: 32 }}
+          />
+          <h1 style={{ color: "#0070f3", fontSize: 22, margin: 0 }}>
+            Tinitiate Dashboard
+          </h1>
+        </div>
 
         <button
           onClick={() =>
@@ -53,7 +58,14 @@ export default function Dashboard() {
             borderRadius: 6,
             cursor: "pointer",
             fontWeight: 500,
+            transition: "all 0.2s",
           }}
+          onMouseEnter={(e) =>
+            ((e.target as HTMLButtonElement).style.backgroundColor = "#d32f2f")
+          }
+          onMouseLeave={(e) =>
+            ((e.target as HTMLButtonElement).style.backgroundColor = "#e53935")
+          }
         >
           Sign Out
         </button>
@@ -74,11 +86,12 @@ export default function Dashboard() {
             width: 70,
             height: 70,
             borderRadius: "50%",
+            border: "2px solid #0070f3",
           }}
         />
       </div>
 
-      {/* Tutorials */}
+      {/* Tutorials Grid */}
       <section
         style={{
           maxWidth: 900,
@@ -99,11 +112,16 @@ export default function Dashboard() {
               borderRadius: 12,
               boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
               cursor: "pointer",
+              transition: "all 0.2s",
             }}
+            onMouseEnter={(e) =>
+              ((e.currentTarget as HTMLDivElement).style.transform = "translateY(-3px)")
+            }
+            onMouseLeave={(e) =>
+              ((e.currentTarget as HTMLDivElement).style.transform = "translateY(0)")
+            }
           >
-            <h3 style={{ margin: 0, color: "#0070f3" }}>
-              {repo.name}
-            </h3>
+            <h3 style={{ margin: 0, color: "#0070f3" }}>{repo.name}</h3>
             <p style={{ fontSize: 14, color: "#5f6368" }}>
               Click to view tutorial
             </p>

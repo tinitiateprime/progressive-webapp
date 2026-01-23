@@ -2,7 +2,6 @@ self.__SERVER_FILES_MANIFEST={
   "version": 1,
   "config": {
     "env": {},
-    "webpack": null,
     "typescript": {
       "ignoreBuildErrors": false
     },
@@ -82,7 +81,7 @@ self.__SERVER_FILES_MANIFEST={
     "productionBrowserSourceMaps": false,
     "excludeDefaultMomentLocales": true,
     "reactProductionProfiling": false,
-    "reactStrictMode": null,
+    "reactStrictMode": true,
     "reactMaxHeadersLength": 6000,
     "httpAgentOptions": {
       "keepAlive": true
@@ -91,7 +90,6 @@ self.__SERVER_FILES_MANIFEST={
     "compiler": {},
     "expireTime": 31536000,
     "staticPageGenerationTimeout": 60,
-    "output": "standalone",
     "modularizeImports": {
       "@mui/icons-material": {
         "transform": "@mui/icons-material/{{member}}"
@@ -100,7 +98,7 @@ self.__SERVER_FILES_MANIFEST={
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/Users/tsnikhil/Desktop/Main/progressive-webapp",
+    "outputFileTracingRoot": "/Users/tsnikhil/Downloads/progressive-webapp",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -293,11 +291,11 @@ self.__SERVER_FILES_MANIFEST={
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "/Users/tsnikhil/Desktop/Main/progressive-webapp"
+      "root": "/Users/tsnikhil/Downloads/progressive-webapp"
     },
     "distDirRoot": ".next"
   },
-  "appDir": "/Users/tsnikhil/Desktop/Main/progressive-webapp",
+  "appDir": "/Users/tsnikhil/Downloads/progressive-webapp",
   "relativeAppDir": "",
   "files": [
     ".next/routes-manifest.json",
@@ -307,6 +305,10 @@ self.__SERVER_FILES_MANIFEST={
     ".next/server/functions-config-manifest.json",
     ".next/server/middleware-manifest.json",
     ".next/server/middleware-build-manifest.js",
+    ".next/server/middleware-react-loadable-manifest.js",
+    ".next/react-loadable-manifest.json",
+    ".next/dynamic-css-manifest.json",
+    ".next/server/dynamic-css-manifest.js",
     ".next/BUILD_ID",
     ".next/server/next-font-manifest.js",
     ".next/server/next-font-manifest.json",
