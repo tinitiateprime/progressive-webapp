@@ -32,107 +32,37 @@ export default function SubjectPage() {
     };
   }, []);
 
-  // key per subject
-const getSubjectCacheKey = (subject: string) =>
-  `subject-topics-${subject.toLowerCase()}`;
+  // FETCH SUBJECT TOPICS (no caching)
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (!subject) return;
 
-useEffect(() => {
-  if (!router.isReady) return;
-  if (!subject) return;
+    const url =
+      "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
 
-  const subjectStr = String(subject);
-  const cacheKey = getSubjectCacheKey(subjectStr);
-
-  const url =
-    "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
-
-  const loadFromCache = () => {
-    if (typeof window === "undefined") return false;
-    const raw = localStorage.getItem(cacheKey);
-    if (!raw) return false;
-    try {
-      const cached: Topic[] = JSON.parse(raw);
-      setTopics(cached);
-      setLoading(false);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  // If offline, try local cache only
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    const ok = loadFromCache();
-    if (!ok) {
-      setError("Offline and no cached data for this subject.");
-      setLoading(false);
-    }
-    return;
-  }
-
-  // Online: fetch, then cache
-  fetch(url)
-    .then((res) => res.json())
-    .then((data) => {
-      const found = data.qna_catalog.find(
-        (s: any) =>
-          s.subject.toLowerCase() === subjectStr.toLowerCase()
-      );
-      if (!found) throw new Error("Subject not found");
-      setTopics(found.topics);
-      setLoading(false);
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem(cacheKey, JSON.stringify(found.topics));
-      }
-    })
-    .catch(() => {
-      // Network failed → try cache as fallback
-      const ok = loadFromCache();
-      if (!ok) {
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        const found = data.qna_catalog.find(
+          (s: any) =>
+            s.subject.toLowerCase() === String(subject).toLowerCase()
+        );
+        if (!found) throw new Error("Subject not found");
+        setTopics(found.topics);
+        setLoading(false);
+      })
+      .catch(() => {
         setError("Failed to load subject");
         setLoading(false);
-      }
-    });
-}, [router.isReady, subject]);
+      });
+  }, [router.isReady, subject]);
 
-
-  // SAVE WHOLE SUBJECT (ALL md_url) FOR OFFLINE
+  // SAVE WHOLE SUBJECT (ALL md_url) FOR OFFLINE – disabled for now
   const saveSubjectForOffline = async () => {
-  if (!("serviceWorker" in navigator)) {
-    alert("Service Worker not supported");
-    return;
-  }
-
-  if (!topics.length) {
-    alert("No topics loaded yet");
-    return;
-  }
-
-  if (!navigator.onLine) {
-    alert("You are offline. Go online once to download the subject.");
-    return;
-  }
-
-  // Only topic markdown files
-  const urls: string[] = topics.map((t) => t.md_url);
-
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    reg.active?.postMessage({
-      type: "PREFETCH_URLS",
-      urls,
-    });
     alert(
-      `Saved entire "${String(
-        subject
-      )}" subject for Offline ✅ (${topics.length} topics)`
+      "Offline save is currently disabled. Please stay online to browse topics."
     );
-  } catch (err) {
-    alert("Failed to save for offline. Ensure Service Worker is registered.");
-  }
-};
-
+  };
 
   const totalPages = Math.max(1, Math.ceil(topics.length / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
@@ -212,26 +142,22 @@ useEffect(() => {
 
                 <button
                   onClick={saveSubjectForOffline}
-                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-white shadow-sm sm:text-sm ${
-                    isOffline
-                      ? "cursor-not-allowed bg-slate-400"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  }`}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-white shadow-sm sm:text-sm bg-slate-400 cursor-not-allowed"
                   aria-label="Save subject for offline"
                 >
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    fill="none"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 4h16v12H4zM8 4v12M16 4v12M4 16h16v4H4z"
-                    />
-                  </svg>
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      fill="none"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4 4h16v12H4zM8 4v12M16 4v12M4 16h16v4H4z"
+                      />
+                    </svg>
                   <span className="hidden sm:inline">Save offline</span>
                 </button>
               </div>
@@ -247,8 +173,139 @@ useEffect(() => {
         </header>
 
         <main className="flex-1 overflow-y-auto px-4 pb-3 pt-3 sm:px-6 sm:pt-4">
-          {/* rest of your topics grid + pagination + status card unchanged */}
-          {/* ... (your existing JSX from topics grid onwards) ... */}
+          {/* Header text */}
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-900 sm:text-base">
+              Topics ({topics.length})
+            </h2>
+            <span className="text-[11px] text-slate-500 sm:text-xs">
+              Tap a topic to open its Q&A
+            </span>
+          </div>
+
+          {/* Grid */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 mb-4">
+            {currentTopics.map((t, idx) => {
+              const globalIndex = startIndex + idx;
+              return (
+                <Link
+                  key={t.topic_name}
+                  href={`/topic/${encodeURIComponent(
+                    t.topic_name
+                  )}?subject=${subject}`}
+                  className="group block h-full"
+                >
+                  <div className="flex h-full flex-col rounded-2xl border border-slate-100 bg-white px-3 py-3 text-left shadow-[0_1px_0_rgba(15,23,42,0.04)] transition duration-150 group-hover:-translate-y-1 group-hover:border-indigo-200 group-hover:shadow-md">
+                    <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
+                      <span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                        <svg
+                          className="h-3 w-3"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          fill="none"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                        open
+                      </span>
+                    </div>
+                    <div className="mb-2 line-clamp-2 text-sm font-medium text-slate-900 font-bold">
+                      {t.topic_name}
+                    </div>
+                    <div className="mt-auto pt-1 text-[10px] uppercase tracking-[0.12em] text-slate-400">
+                      Q&A Topic
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mb-3 flex items-center justify-between gap-3 text-xs sm:text-sm">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className={`inline-flex items-center gap-1 rounded-md border px-3 py-1.5 ${
+                  currentPage === 1
+                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  fill="none"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                <span>Prev</span>
+              </button>
+
+              <span className="text-[11px] text-slate-500 sm:text-xs">
+                Page{" "}
+                <span className="font-semibold text-slate-900">
+                  {currentPage}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-slate-900">
+                  {totalPages}
+                </span>
+              </span>
+
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className={`inline-flex items-center gap-1 rounded-md border px-3 py-1.5 ${
+                  currentPage === totalPages
+                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <span>Next</span>
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  fill="none"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Status */}
+          <div
+            className={`rounded-md border px-3 py-2 text-[11px] leading-relaxed sm:text-xs ${
+              isOffline
+                ? "border-rose-200 bg-rose-50 text-rose-800"
+                : "border-indigo-200 bg-indigo-50 text-indigo-800"
+            }`}
+          >
+            <span className="font-semibold">Status: </span>
+            {isOffline
+              ? "You are offline. Topic loading may fail because there is no offline cache."
+              : "You are online. You can browse all topics normally."}
+          </div>
         </main>
       </div>
     </div>
