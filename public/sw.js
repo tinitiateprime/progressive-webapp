@@ -1,1 +1,95 @@
-if(!self.define){let e,s={};const a=(a,i)=>(a=new URL(a+".js",i).href,s[a]||new Promise(s=>{if("document"in self){const e=document.createElement("script");e.src=a,e.onload=s,document.head.appendChild(e)}else e=a,importScripts(a),s()}).then(()=>{let e=s[a];if(!e)throw new Error(`Module ${a} didn’t register its module`);return e}));self.define=(i,n)=>{const t=e||("document"in self?document.currentScript.src:"")||location.href;if(s[t])return;let c={};const r=e=>a(e,t),f={module:{uri:t},exports:c,require:r};s[t]=Promise.all(i.map(e=>f[e]||r(e))).then(e=>(n(...e),c))}}define(["./workbox-f52fd911"],function(e){"use strict";importScripts(),self.skipWaiting(),e.clientsClaim(),e.precacheAndRoute([{url:"/_next/dynamic-css-manifest.json",revision:"d751713988987e9331980363e24189ce"},{url:"/_next/static/chunks/0-8d70fad10992899d.js",revision:"8d70fad10992899d"},{url:"/_next/static/chunks/230-7ce16ebd86b9de86.js",revision:"7ce16ebd86b9de86"},{url:"/_next/static/chunks/962-18944ef0e62d1815.js",revision:"18944ef0e62d1815"},{url:"/_next/static/chunks/979-4041da85fda975f5.js",revision:"4041da85fda975f5"},{url:"/_next/static/chunks/framework-75892d61b920805f.js",revision:"75892d61b920805f"},{url:"/_next/static/chunks/main-b5d4561ae495663a.js",revision:"b5d4561ae495663a"},{url:"/_next/static/chunks/pages/_app-96e4affc19cf3f9c.js",revision:"96e4affc19cf3f9c"},{url:"/_next/static/chunks/pages/_error-502ed5e138b0f7a8.js",revision:"502ed5e138b0f7a8"},{url:"/_next/static/chunks/pages/dashboard-ee51fb75b7025e39.js",revision:"ee51fb75b7025e39"},{url:"/_next/static/chunks/pages/index-502359578c5153b4.js",revision:"502359578c5153b4"},{url:"/_next/static/chunks/pages/index1-cc1d733897f13e90.js",revision:"cc1d733897f13e90"},{url:"/_next/static/chunks/pages/repo/%5Bslug%5D-c4dbb151992b33ea.js",revision:"c4dbb151992b33ea"},{url:"/_next/static/chunks/pages/subject-76a55f768f51bc51.js",revision:"76a55f768f51bc51"},{url:"/_next/static/chunks/pages/subject/%5Bsubject%5D-698ee7590b044f2f.js",revision:"698ee7590b044f2f"},{url:"/_next/static/chunks/pages/topic/%5Btopic%5D-123fda4ff94bde6b.js",revision:"123fda4ff94bde6b"},{url:"/_next/static/chunks/polyfills-42372ed130431b0a.js",revision:"846118c33b2c0e922d7b3a7676f81f6f"},{url:"/_next/static/chunks/webpack-f864a508f152d7ef.js",revision:"f864a508f152d7ef"},{url:"/_next/static/css/4b0ab1f442d832e1.css",revision:"4b0ab1f442d832e1"},{url:"/_next/static/pEaRHJwsZ6bKQHR_Ps48c/_buildManifest.js",revision:"c645c8b31e17af2963e4876952ea5a81"},{url:"/_next/static/pEaRHJwsZ6bKQHR_Ps48c/_ssgManifest.js",revision:"b6652df95db52feb4daf4eca35380933"},{url:"/favicon_new.png",revision:"10831eaa87320aa9febdee16c7f848ca"},{url:"/file.svg",revision:"d09f95206c3fa0bb9bd9fefabfd0ea71"},{url:"/globe.svg",revision:"2aaafa6a49b6563925fe440891e32717"},{url:"/icon-192.png",revision:"10831eaa87320aa9febdee16c7f848ca"},{url:"/icon-512.png",revision:"10831eaa87320aa9febdee16c7f848ca"},{url:"/manifest.json",revision:"6f1e573e634ae8f7007bfdaede20595b"},{url:"/metadata/qna_catalog.json",revision:"cf82b77aba36d83c168ef3866aae157d"},{url:"/next.svg",revision:"8e061864f388b47f33a1c3780831193e"},{url:"/vercel.svg",revision:"c0af2f507b369b085b35ef4bbe3bcf1e"},{url:"/window.svg",revision:"a2760511c65806022ad20adf74370ff3"}],{ignoreURLParametersMatching:[]}),e.cleanupOutdatedCaches(),e.registerRoute("/",new e.NetworkFirst({cacheName:"start-url",plugins:[{cacheWillUpdate:async({request:e,response:s,event:a,state:i})=>s&&"opaqueredirect"===s.type?new Response(s.body,{status:200,statusText:"OK",headers:s.headers}):s}]}),"GET"),e.registerRoute(/^https:\/\/raw\.githubusercontent\.com\/.*$/,new e.CacheFirst({cacheName:"github-raw-cache",plugins:[new e.ExpirationPlugin({maxEntries:300,maxAgeSeconds:604800})]}),"GET")});
+// public/sw.js
+
+const CACHE_NAME = 'tinitiate-cache-v1';
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME)
+          .map((k) => caches.delete(k))
+      );
+      await self.clients.claim();
+    })()
+  );
+});
+
+// Generic cache-first for all same-origin requests + raw GitHub content
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+
+      // For GitHub raw URLs (and other cross-origin), use a no-cors Request key
+      if (url.hostname === 'raw.githubusercontent.com') {
+        const cached = await cache.match(
+          new Request(request.url, { mode: 'no-cors' })
+        );
+        if (cached) return cached;
+
+        try {
+          const networkReq = new Request(request.url, { mode: 'no-cors' });
+          const response = await fetch(networkReq);
+          if (response) {
+            await cache.put(networkReq, response.clone());
+          }
+          return response;
+        } catch (err) {
+          return cached || Response.error();
+        }
+      }
+
+      // Same-origin (your Next app) – normal cache-first
+      const cached = await cache.match(request);
+      if (cached) return cached;
+
+      try {
+        const response = await fetch(request);
+        if (response.ok) {
+          await cache.put(request, response.clone());
+        }
+        return response;
+      } catch (err) {
+        return cached || Response.error();
+      }
+    })()
+  );
+});
+
+
+// Receive list of URLs to prefetch from page
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'PREFETCH_URLS') return;
+
+  const urls = data.urls || [];
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await Promise.all(
+        urls.map(async (u) => {
+          try {
+            const request = new Request(u, { mode: 'no-cors' });
+            const res = await fetch(request);
+            // opaque is fine, just store it; we don't inspect it
+            await cache.put(request, res.clone());
+          } catch (e) {
+            console.error('Prefetch failed for', u, e);
+          }
+        })
+      );
+    })()
+  );
+});
+

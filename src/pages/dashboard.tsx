@@ -1,14 +1,16 @@
 "use client";
-import { useSession, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function Dashboard() {
-  const { data: session } = useSession();
   const router = useRouter();
 
+  // This can come from Git JSON or an API call,
+  // but it will always be rendered now.
   const repos = [
     { name: "Vue.js", slug: "vuejs" },
     { name: "Next.js", slug: "nextjs" },
+    { name: "Sql-Server", slug: "sqlserver" },
   ];
 
   return (
@@ -80,7 +82,7 @@ export default function Dashboard() {
         }}
       >
         <img
-          src={session?.user?.image || "/default-avatar.png"}
+          src="/default-avatar.png"
           alt="User Avatar"
           style={{
             width: 70,
@@ -115,10 +117,12 @@ export default function Dashboard() {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLDivElement).style.transform = "translateY(-3px)")
+              ((e.currentTarget as HTMLDivElement).style.transform =
+                "translateY(-3px)")
             }
             onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLDivElement).style.transform = "translateY(0)")
+              ((e.currentTarget as HTMLDivElement).style.transform =
+                "translateY(0)")
             }
           >
             <h3 style={{ margin: 0, color: "#0070f3" }}>{repo.name}</h3>
