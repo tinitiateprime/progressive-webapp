@@ -13,6 +13,23 @@ type FavTopic = {
   subject: string;
 };
 
+type CachedTopic = {
+  topic_name: string;
+  md_url: string;
+  content: string;
+};
+
+type SubjectCache = {
+  subject: string;
+  topics: CachedTopic[];
+  cachedAt: number;
+};
+
+const SUBJECT_CACHE_KEY = (subject: string) =>
+  `offline-subject-${encodeURIComponent(subject)}`;
+
+
+
 const CATALOG_URL =
   "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
 
@@ -40,44 +57,33 @@ export default function SubjectPage() {
   const [offlineTopics, setOfflineTopics] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<FavTopic[]>([]);
 
-  // online/offline watcher
-  useEffect(() => {
-    const update = () => setIsOffline(!navigator.onLine);
-    update();
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-    };
-  }, []);
+  const FAV_KEY = "favorites_topics_v1";
 
-  // load completed + offline list + favorites
-  useEffect(() => {
-    try {
-      setCompleted(JSON.parse(localStorage.getItem("completedTopics") || "[]"));
-      setOfflineTopics(JSON.parse(localStorage.getItem("offlineTopics") || "[]"));
-    } catch {
-      setCompleted([]);
-      setOfflineTopics([]);
+useEffect(() => {
+  // completed + offline
+  try {
+    setCompleted(JSON.parse(localStorage.getItem("completedTopics") || "[]"));
+    setOfflineTopics(JSON.parse(localStorage.getItem("offlineTopics") || "[]"));
+  } catch {
+    setCompleted([]);
+    setOfflineTopics([]);
+  }
+
+  // favorites (pure client-side)
+  try {
+    const raw = localStorage.getItem(FAV_KEY);
+    if (!raw) {
+      setFavorites([]);
+      return;
     }
+    const parsed: FavTopic[] = JSON.parse(raw);
+    setFavorites(Array.isArray(parsed) ? parsed : []);
+  } catch (err) {
+    console.error("Failed to read favorites from localStorage:", err);
+    setFavorites([]);
+  }
+}, []);
 
-    const loadFavorites = async () => {
-      try {
-        const res = await fetch("/api/favorites", {
-          cache: "no-store",
-          headers: { "Cache-Control": "no-store" },
-        });
-        if (!res.ok) return;
-        const favs: FavTopic[] = await res.json();
-        setFavorites(favs);
-      } catch (err) {
-        console.error("Failed to load favorites:", err);
-      }
-    };
-
-    loadFavorites();
-  }, []);
 
   // fetch topics
   useEffect(() => {
@@ -126,28 +132,56 @@ export default function SubjectPage() {
   );
 
   // Save whole subject offline (prefetch all URLs)
-  const saveSubjectForOffline = async () => {
-    if (!("serviceWorker" in navigator))
-      return alert("Service Worker not supported");
+  // Save whole subject offline (download all markdown and cache in localStorage)
+const saveSubjectForOffline = async () => {
+  if (!topics.length) {
+    alert("No topics to save for offline.");
+    return;
+  }
 
-    const urls = [CATALOG_URL, ...topics.map((t) => t.md_url)];
+  try {
+    // Fetch all md_url in parallel
+    const cachedTopics: CachedTopic[] = await Promise.all(
+      topics.map(async (t) => {
+        const res = await fetch(t.md_url);
+        if (!res.ok) {
+          throw new Error(
+            `Failed ${t.topic_name}: HTTP ${res.status} ${res.statusText}`
+          );
+        }
+        const text = await res.text();
+        return {
+          topic_name: t.topic_name,
+          md_url: t.md_url,
+          content: text,
+        };
+      })
+    );
 
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      reg.active?.postMessage({ type: "PREFETCH_URLS", urls });
+    const payload: SubjectCache = {
+      subject: subjectStr,
+      topics: cachedTopics,
+      cachedAt: Date.now(),
+    };
 
-      // mark all topic slugs as offline (UI + localStorage)
-      const allSlugs = topics.map((t) => slugify(t.topic_name));
-      const updated = Array.from(new Set([...offlineTopics, ...allSlugs]));
-      setOfflineTopics(updated);
-      localStorage.setItem("offlineTopics", JSON.stringify(updated));
+    // Save to localStorage
+    localStorage.setItem(
+      SUBJECT_CACHE_KEY(subjectStr),
+      JSON.stringify(payload)
+    );
 
-      alert(`Saved "${subjectStr}" for offline ✅`);
-    } catch (err) {
-      console.error("Save subject offline failed:", err);
-      alert("Failed to save offline");
-    }
-  };
+    // Keep your existing offline slug tracking for UI
+    const allSlugs = topics.map((t) => slugify(`${t.topic_name}-${t.md_url}`));
+    const updated = Array.from(new Set([...offlineTopics, ...allSlugs]));
+    setOfflineTopics(updated);
+    localStorage.setItem("offlineTopics", JSON.stringify(updated));
+
+    alert(`Saved "${subjectStr}" (${cachedTopics.length} topics) for offline ✅`);
+  } catch (err: any) {
+    console.error("Save subject offline failed:", err);
+    alert(err?.message || "Failed to save subject offline");
+  }
+};
 
   // Save one topic offline
   const saveTopicForOffline = async (slug: string, mdUrl: string) => {
@@ -166,53 +200,22 @@ export default function SubjectPage() {
   };
 
   // ✅ Favorites toggle (POST/DELETE query param)
-const toggleFavorite = async (topic: FavTopic) => {
-  const isFavorite = favorites.some((f) => f.slug === topic.slug);
+const toggleFavorite = (topic: FavTopic) => {
+  setFavorites((prev) => {
+    const exists = prev.some((f) => f.slug === topic.slug);
 
-  // ✅ optimistic UI update (instant star toggle)
-  const optimistic = isFavorite
-    ? favorites.filter((f) => f.slug !== topic.slug)
-    : [...favorites, topic];
+    const updated = exists
+      ? prev.filter((f) => f.slug !== topic.slug)
+      : [...prev, topic];
 
-  const prev = favorites;
-  setFavorites(optimistic);
-
-  try {
-    const url = isFavorite
-      ? `/api/favorites?slug=${encodeURIComponent(topic.slug)}`
-      : `/api/favorites`;
-
-    const res = await fetch(url, {
-      method: isFavorite ? "DELETE" : "POST",
-      headers: isFavorite
-        ? { "Cache-Control": "no-store" }
-        : { "Content-Type": "application/json", "Cache-Control": "no-store" },
-      body: isFavorite ? undefined : JSON.stringify(topic),
-      cache: "no-store",
-    });
-
-    // ✅ handle 404 clearly (your current problem)
-    if (res.status === 404) {
-      console.error(
-        "API route not found: /api/favorites. Create pages/api/favorites.ts (Pages Router) OR src/app/api/favorites/route.ts (App Router)."
-      );
-      setFavorites(prev); // rollback
-      return;
+    try {
+      localStorage.setItem(FAV_KEY, JSON.stringify(updated));
+    } catch (err) {
+      console.error("Failed to write favorites to localStorage:", err);
     }
 
-    if (!res.ok) {
-      const msg = await res.text().catch(() => "");
-      console.error("Favorite toggle failed:", res.status, msg);
-      setFavorites(prev); // rollback
-      return;
-    }
-
-    const updated: FavTopic[] = await res.json();
-    setFavorites(updated); // sync with server result
-  } catch (err) {
-    console.error("Error toggling favorite:", err);
-    setFavorites(prev); // rollback
-  }
+    return updated;
+  });
 };
 
 
@@ -332,13 +335,15 @@ const toggleFavorite = async (topic: FavTopic) => {
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((t, i) => {
-                const slug = slugify(t.topic_name);
-                const isDone = completed.includes(slug);
-                const isOff = offlineTopics.includes(slug);
-                const isFav = favorites.some((f) => f.slug === slug);
+              // was: const slug = slugify(t.topic_name);
+              const slug = slugify(`${t.topic_name}-${t.md_url}`);
+              const isDone = completed.includes(slug);
+              const isOff = offlineTopics.includes(slug);
+              const isFav = favorites.some((f) => f.slug === slug);
 
-                const href = `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(subjectStr)}`;
-
+              const href = `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
+                subjectStr
+              )}`;
                 return (
                   <div
                     key={t.topic_name}
