@@ -1,11 +1,10 @@
 {
-  "name": "Tinitiate Technical Prep",
-  "short_name": "Tinitiate",
-  "description": "Offline Technical Prep PWA",
+  "name": "IT Training App",
+  "short_name": "Training",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "theme_color": "#0070f3",
   "icons": [
     {
       "src": "/icon-192.png",

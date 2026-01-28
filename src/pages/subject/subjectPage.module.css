@@ -1,0 +1,192 @@
+/* ===== Root Page ===== */
+.page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f5fbff, #eef7f2);
+  display: flex;
+  flex-direction: column;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ===== Header (Fixed) ===== */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background: linear-gradient(90deg, #0f766e, #0284c7);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo {
+  width: 42px;
+  height: 42px;
+}
+
+.brandText {
+  color: #fff;
+}
+
+.brandTitle {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.brandSub {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* ===== Main Layout ===== */
+.shell {
+  padding-top: 90px; /* space for fixed header */
+  padding-left: 24px;
+  padding-right: 24px;
+  padding-bottom: 60px;
+  flex: 1;
+}
+
+/* ===== Grid ===== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 22px;
+}
+
+/* ===== Topic Card ===== */
+.card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px;
+  border: 1px solid #e5eef5;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  border-color: #38bdf8;
+  box-shadow: 0 18px 40px rgba(2, 132, 199, 0.18);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.index {
+  background: linear-gradient(135deg, #22c55e, #0ea5e9);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* ===== Preview Text ===== */
+.preview {
+  font-size: 13px;
+  color: #475569;
+  margin: 14px 0 18px;
+  line-height: 1.5;
+}
+
+/* ===== Open Row ===== */
+.openRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.arrow {
+  font-size: 18px;
+  transition: transform 0.2s ease;
+}
+
+.card:hover .arrow {
+  transform: translateX(6px);
+}
+
+/* ===== Center Loader / Error ===== */
+.center {
+  padding-top: 120px;
+  display: flex;
+  justify-content: center;
+}
+
+.centerCard {
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.12);
+}
+
+.centerTitle {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.centerMsg {
+  font-size: 14px;
+  color: #64748b;
+  margin: 12px 0 24px;
+}
+
+/* ===== Button ===== */
+.btn {
+  background: linear-gradient(135deg, #22c55e, #0284c7);
+  color: #fff;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+/* ===== Footer ===== */
+.footer {
+  background: #0f172a;
+  color: #e5e7eb;
+  text-align: center;
+  padding: 14px;
+  font-size: 13px;
+}
+
+.footerMuted {
+  opacity: 0.75;
+}
+
+.footerDot {
+  margin: 0 8px;
+}
