@@ -28,10 +28,10 @@ type SubjectCache = {
 const SUBJECT_CACHE_KEY = (subject: string) =>
   `offline-subject-${encodeURIComponent(subject)}`;
 
-
-
 const CATALOG_URL =
   "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
+
+const FAVORITES_API = "/api/favorites"; // ✅ server writes public/data/favorites.json
 
 const slugify = (text: string) =>
   text
@@ -57,33 +57,30 @@ export default function SubjectPage() {
   const [offlineTopics, setOfflineTopics] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<FavTopic[]>([]);
 
-  const FAV_KEY = "favorites_topics_v1";
-
-useEffect(() => {
-  // completed + offline
-  try {
-    setCompleted(JSON.parse(localStorage.getItem("completedTopics") || "[]"));
-    setOfflineTopics(JSON.parse(localStorage.getItem("offlineTopics") || "[]"));
-  } catch {
-    setCompleted([]);
-    setOfflineTopics([]);
-  }
-
-  // favorites (pure client-side)
-  try {
-    const raw = localStorage.getItem(FAV_KEY);
-    if (!raw) {
-      setFavorites([]);
-      return;
+  // ✅ Load completed + offline (localStorage only for these)
+  useEffect(() => {
+    try {
+      setCompleted(JSON.parse(localStorage.getItem("completedTopics") || "[]"));
+      setOfflineTopics(JSON.parse(localStorage.getItem("offlineTopics") || "[]"));
+    } catch {
+      setCompleted([]);
+      setOfflineTopics([]);
     }
-    const parsed: FavTopic[] = JSON.parse(raw);
-    setFavorites(Array.isArray(parsed) ? parsed : []);
-  } catch (err) {
-    console.error("Failed to read favorites from localStorage:", err);
-    setFavorites([]);
-  }
-}, []);
+  }, []);
 
+  // ✅ Load favorites from public/data/favorites.json via API
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(FAVORITES_API, { cache: "no-store" });
+        const data = await res.json();
+        setFavorites(Array.isArray(data?.favorites) ? data.favorites : []);
+      } catch (err) {
+        console.error("Failed to load favorites:", err);
+        setFavorites([]);
+      }
+    })();
+  }, []);
 
   // fetch topics
   useEffect(() => {
@@ -131,57 +128,50 @@ useEffect(() => {
     [offlineTopics, topicSlugSet]
   );
 
-  // Save whole subject offline (prefetch all URLs)
   // Save whole subject offline (download all markdown and cache in localStorage)
-const saveSubjectForOffline = async () => {
-  if (!topics.length) {
-    alert("No topics to save for offline.");
-    return;
-  }
+  const saveSubjectForOffline = async () => {
+    if (!topics.length) {
+      alert("No topics to save for offline.");
+      return;
+    }
 
-  try {
-    // Fetch all md_url in parallel
-    const cachedTopics: CachedTopic[] = await Promise.all(
-      topics.map(async (t) => {
-        const res = await fetch(t.md_url);
-        if (!res.ok) {
-          throw new Error(
-            `Failed ${t.topic_name}: HTTP ${res.status} ${res.statusText}`
-          );
-        }
-        const text = await res.text();
-        return {
-          topic_name: t.topic_name,
-          md_url: t.md_url,
-          content: text,
-        };
-      })
-    );
+    try {
+      const cachedTopics: CachedTopic[] = await Promise.all(
+        topics.map(async (t) => {
+          const res = await fetch(t.md_url);
+          if (!res.ok) {
+            throw new Error(
+              `Failed ${t.topic_name}: HTTP ${res.status} ${res.statusText}`
+            );
+          }
+          const text = await res.text();
+          return {
+            topic_name: t.topic_name,
+            md_url: t.md_url,
+            content: text,
+          };
+        })
+      );
 
-    const payload: SubjectCache = {
-      subject: subjectStr,
-      topics: cachedTopics,
-      cachedAt: Date.now(),
-    };
+      const payload: SubjectCache = {
+        subject: subjectStr,
+        topics: cachedTopics,
+        cachedAt: Date.now(),
+      };
 
-    // Save to localStorage
-    localStorage.setItem(
-      SUBJECT_CACHE_KEY(subjectStr),
-      JSON.stringify(payload)
-    );
+      localStorage.setItem(SUBJECT_CACHE_KEY(subjectStr), JSON.stringify(payload));
 
-    // Keep your existing offline slug tracking for UI
-    const allSlugs = topics.map((t) => slugify(`${t.topic_name}-${t.md_url}`));
-    const updated = Array.from(new Set([...offlineTopics, ...allSlugs]));
-    setOfflineTopics(updated);
-    localStorage.setItem("offlineTopics", JSON.stringify(updated));
+      const allSlugs = topics.map((t) => slugify(`${t.topic_name}-${t.md_url}`));
+      const updated = Array.from(new Set([...offlineTopics, ...allSlugs]));
+      setOfflineTopics(updated);
+      localStorage.setItem("offlineTopics", JSON.stringify(updated));
 
-    alert(`Saved "${subjectStr}" (${cachedTopics.length} topics) for offline ✅`);
-  } catch (err: any) {
-    console.error("Save subject offline failed:", err);
-    alert(err?.message || "Failed to save subject offline");
-  }
-};
+      alert(`Saved "${subjectStr}" (${cachedTopics.length} topics) for offline ✅`);
+    } catch (err: any) {
+      console.error("Save subject offline failed:", err);
+      alert(err?.message || "Failed to save subject offline");
+    }
+  };
 
   // Save one topic offline
   const saveTopicForOffline = async (slug: string, mdUrl: string) => {
@@ -199,25 +189,43 @@ const saveSubjectForOffline = async () => {
     }
   };
 
-  // ✅ Favorites toggle (POST/DELETE query param)
-const toggleFavorite = (topic: FavTopic) => {
-  setFavorites((prev) => {
-    const exists = prev.some((f) => f.slug === topic.slug);
+  /**
+   * ✅ Favorites toggle:
+   * - Calls /api/favorites (server writes to public/data/favorites.json)
+   * - Optimistic UI
+   * - Stops card click navigation (we also keep data-no-nav and stopPropagation)
+   */
+  const toggleFavorite = async (topic: FavTopic) => {
+    const exists = favorites.some((f) => f.slug === topic.slug);
 
-    const updated = exists
-      ? prev.filter((f) => f.slug !== topic.slug)
-      : [...prev, topic];
+    // optimistic UI update
+    setFavorites((prev) =>
+      exists ? prev.filter((f) => f.slug !== topic.slug) : [...prev, topic]
+    );
 
     try {
-      localStorage.setItem(FAV_KEY, JSON.stringify(updated));
+      const res = await fetch(FAVORITES_API, {
+        method: exists ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(topic),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Favorites update failed");
+
+      setFavorites(Array.isArray(data?.favorites) ? data.favorites : []);
     } catch (err) {
-      console.error("Failed to write favorites to localStorage:", err);
+      console.error("Favorites update failed:", err);
+      // reload server truth
+      try {
+        const res2 = await fetch(FAVORITES_API, { cache: "no-store" });
+        const data2 = await res2.json();
+        setFavorites(Array.isArray(data2?.favorites) ? data2.favorites : []);
+      } catch {
+        // keep optimistic if even reload fails
+      }
     }
-
-    return updated;
-  });
-};
-
+  };
 
   // --------- UI classes ----------
   const pageBg =
@@ -273,14 +281,24 @@ const toggleFavorite = (topic: FavTopic) => {
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">
                   {subjectStr ? subjectStr.toUpperCase() : "SUBJECT"}
                 </h1>
-                <div className={theme === "dark" ? "text-sm text-slate-300" : "text-sm text-slate-700"}>
+                <div
+                  className={
+                    theme === "dark"
+                      ? "text-sm text-slate-300"
+                      : "text-sm text-slate-700"
+                  }
+                >
                   {isOffline ? "Offline mode" : "Online"} • {topics.length} topics
                 </div>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button className={btnOutline} onClick={() => router.push("/dashboard")} type="button">
+              <button
+                className={btnOutline}
+                onClick={() => router.push("/dashboard")}
+                type="button"
+              >
                 <FaArrowLeft /> Back
               </button>
 
@@ -309,16 +327,32 @@ const toggleFavorite = (topic: FavTopic) => {
               />
             </div>
 
-            <div className={theme === "dark" ? "text-sm text-slate-300 flex items-center gap-3" : "text-sm text-slate-700 flex items-center gap-3"}>
+            <div
+              className={
+                theme === "dark"
+                  ? "text-sm text-slate-300 flex items-center gap-3"
+                  : "text-sm text-slate-700 flex items-center gap-3"
+              }
+            >
               <span>
                 Progress{" "}
-                <span className={theme === "dark" ? "ml-2 px-3 py-1 rounded-full bg-slate-800 text-slate-100" : "ml-2 px-3 py-1 rounded-full bg-blue-50 text-blue-600"}>
+                <span
+                  className={
+                    theme === "dark"
+                      ? "ml-2 px-3 py-1 rounded-full bg-slate-800 text-slate-100"
+                      : "ml-2 px-3 py-1 rounded-full bg-blue-50 text-blue-600"
+                  }
+                >
                   {completedCount}/{topics.length}
                 </span>
               </span>
 
               <span
-                className={theme === "dark" ? "px-3 py-1 rounded-full bg-slate-800 text-slate-100" : "px-3 py-1 rounded-full bg-yellow-50 text-yellow-700"}
+                className={
+                  theme === "dark"
+                    ? "px-3 py-1 rounded-full bg-slate-800 text-slate-100"
+                    : "px-3 py-1 rounded-full bg-yellow-50 text-yellow-700"
+                }
                 title="Offline topics in this subject"
               >
                 Offline: {offlineCount}
@@ -335,22 +369,21 @@ const toggleFavorite = (topic: FavTopic) => {
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((t, i) => {
-              // was: const slug = slugify(t.topic_name);
-              const slug = slugify(`${t.topic_name}-${t.md_url}`);
-              const isDone = completed.includes(slug);
-              const isOff = offlineTopics.includes(slug);
-              const isFav = favorites.some((f) => f.slug === slug);
+                const slug = slugify(`${t.topic_name}-${t.md_url}`);
+                const isDone = completed.includes(slug);
+                const isOff = offlineTopics.includes(slug);
+                const isFav = favorites.some((f) => f.slug === slug);
 
-              const href = `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
-                subjectStr
-              )}`;
+                const href = `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
+                  subjectStr
+                )}`;
+
                 return (
                   <div
                     key={t.topic_name}
                     className={topicCard + " cursor-pointer"}
                     role="button"
                     tabIndex={0}
-                    // ✅ Prevent card navigation when clicking star/save buttons
                     onClick={(e) => {
                       const el = e.target as HTMLElement;
                       if (el.closest('[data-no-nav="true"]')) return;
@@ -365,6 +398,12 @@ const toggleFavorite = (topic: FavTopic) => {
                       data-no-nav="true"
                       type="button"
                       onPointerDown={(e) => {
+                        // ✅ makes click not trigger card navigation on some browsers
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onMouseDown={(e) => {
+                        // ✅ extra safety for desktop mouse events
                         e.preventDefault();
                         e.stopPropagation();
                       }}
@@ -377,6 +416,7 @@ const toggleFavorite = (topic: FavTopic) => {
                         theme === "dark" ? "text-yellow-300" : "text-yellow-400"
                       }`}
                       title={isFav ? "Remove from favorites" : "Add to favorites"}
+                      aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
                     >
                       {isFav ? "★" : "☆"}
                     </button>
@@ -415,12 +455,20 @@ const toggleFavorite = (topic: FavTopic) => {
                             e.preventDefault();
                             e.stopPropagation();
                           }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             saveTopicForOffline(slug, t.md_url);
                           }}
-                          className={theme === "dark" ? "text-xs text-slate-400 hover:text-slate-200" : "text-xs text-slate-500 hover:text-slate-900"}
+                          className={
+                            theme === "dark"
+                              ? "text-xs text-slate-400 hover:text-slate-200"
+                              : "text-xs text-slate-500 hover:text-slate-900"
+                          }
                         >
                           Save offline
                         </button>

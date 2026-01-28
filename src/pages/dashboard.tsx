@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { ThemeContext } from "../context/ThemeContext";
 import { FaMoon, FaSun } from "react-icons/fa";
 
 type CatalogTopic = { topic_name: string; md_url: string };
 type CatalogSubject = { subject: string; topics: CatalogTopic[] };
+
+const FAVORITES_API = "/api/favorites";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -17,6 +19,9 @@ export default function Dashboard() {
   const [subjects, setSubjects] = useState<CatalogSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  // ✅ Favorites count
+  const [favCount, setFavCount] = useState<number>(0);
 
   useEffect(() => {
     const update = () => setIsOffline(!navigator.onLine);
@@ -29,6 +34,28 @@ export default function Dashboard() {
     };
   }, []);
 
+  const loadFavoritesCount = useCallback(async () => {
+    try {
+      const res = await fetch(FAVORITES_API, { cache: "no-store" });
+      const data = await res.json();
+      const list = Array.isArray(data?.favorites) ? data.favorites : [];
+      setFavCount(list.length);
+    } catch (e) {
+      console.error("Failed to load favorites count:", e);
+      setFavCount(0); // ✅ show 0 if anything fails
+    }
+  }, []);
+
+  useEffect(() => {
+    // ✅ load count on mount
+    loadFavoritesCount();
+
+    // ✅ refresh count when user returns to this tab
+    const onFocus = () => loadFavoritesCount();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [loadFavoritesCount]);
+
   useEffect(() => {
     const url =
       "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
@@ -38,7 +65,6 @@ export default function Dashboard() {
         const res = await fetch(url);
 
         if (!res.ok) {
-          // HTTP error (404, 500, etc.)
           const text = await res.text().catch(() => "");
           throw new Error(
             `HTTP ${res.status} ${res.statusText}${
@@ -47,7 +73,6 @@ export default function Dashboard() {
           );
         }
 
-        // Try to parse JSON and catch invalid JSON separately
         let json: any;
         try {
           json = await res.json();
@@ -55,10 +80,7 @@ export default function Dashboard() {
           throw new Error(`Invalid JSON: ${e?.message || "parse error"}`);
         }
 
-        const catalog = Array.isArray(json.qna_catalog)
-          ? json.qna_catalog
-          : [];
-
+        const catalog = Array.isArray(json.qna_catalog) ? json.qna_catalog : [];
         setSubjects(catalog);
         setErr("");
       } catch (e: any) {
@@ -106,11 +128,7 @@ export default function Dashboard() {
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span className="badge">{isOffline ? "Offline" : "Online"}</span>
-            <button
-              className="btn btn-outline"
-              onClick={toggleTheme}
-              type="button"
-            >
+            <button className="btn btn-outline" onClick={toggleTheme} type="button">
               {theme === "dark" ? <FaSun /> : <FaMoon />}
               <span>{theme === "dark" ? "Light" : "Dark"}</span>
             </button>
@@ -144,6 +162,44 @@ export default function Dashboard() {
               gap: 14,
             }}
           >
+            {/* ✅ Favorites Card (NEW) */}
+            <Link
+              href="/favorites"
+              style={{ textDecoration: "none", color: "inherit" }}
+            >
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>
+                  Favorites
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>
+                  {favCount} item{favCount === 1 ? "" : "s"}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 14,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    className="badge"
+                    style={{
+                      borderColor: "rgba(250,204,21,0.35)",
+                      color: "var(--brand)",
+                    }}
+                  >
+                    View
+                  </span>
+                  <span style={{ fontWeight: 800, color: "var(--brand-2)" }}>
+                    Open →
+                  </span>
+                </div>
+              </div>
+            </Link>
+
+            {/* Subjects */}
             {subjects.map((s) => (
               <Link
                 key={s.subject}
@@ -160,13 +216,7 @@ export default function Dashboard() {
                   >
                     {s.subject}
                   </div>
-                  <div
-                    style={{
-                      marginTop: 6,
-                      fontSize: 13,
-                      color: "var(--muted)",
-                    }}
-                  >
+                  <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>
                     {s.topics?.length || 0} topics
                   </div>
 
@@ -187,12 +237,7 @@ export default function Dashboard() {
                     >
                       Start
                     </span>
-                    <span
-                      style={{
-                        fontWeight: 800,
-                        color: "var(--brand-2)",
-                      }}
-                    >
+                    <span style={{ fontWeight: 800, color: "var(--brand-2)" }}>
                       Open →
                     </span>
                   </div>

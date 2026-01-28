@@ -73,13 +73,16 @@ export default function Home() {
                 Start Learning <FaArrowRight />
               </button>
 
-              <button
-                className="btn btn-outline gap-2 w-full sm:w-auto"
-                onClick={() => router.push("/subjects")}
-              >
-                <FaBook className="text-sm" />
-                Browse Subjects
-              </button>
+              <a
+  href="https://www.tinitiate.com/training/beginner-training"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="btn btn-outline gap-2 w-full sm:w-auto"
+>
+  <FaBook className="text-sm" />
+  Browse Subjects
+</a>
+
             </div>
 
             {/* ===== FEATURES ===== */}

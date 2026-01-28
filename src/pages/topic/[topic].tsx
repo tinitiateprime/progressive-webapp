@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/router";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import ReactMarkdown, { Components } from "react-markdown";
@@ -19,9 +19,13 @@ import {
   FaMoon,
   FaSun,
   FaSearch,
+  FaFont,
 } from "react-icons/fa";
 
-import { materialLight, materialDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import {
+  materialLight,
+  materialDark,
+} from "react-syntax-highlighter/dist/cjs/styles/prism";
 
 const SyntaxHighlighter = dynamic(
   () => import("react-syntax-highlighter").then((mod) => mod.Prism),
@@ -30,6 +34,20 @@ const SyntaxHighlighter = dynamic(
 
 type CatalogTopic = { topic_name: string; md_url: string };
 type CatalogSubject = { subject: string; topics: CatalogTopic[] };
+
+type FontKey = "Serif" | "Sans" | "Mono" | "Literary" | "Editorial";
+
+const FONT_KEY_STORAGE = "global_font_style_v1";
+
+const FONT_FAMILIES: Record<FontKey, string> = {
+  Serif: `ui-serif, Georgia, Cambria, "Times New Roman", Times, serif`,
+  Sans: `ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"`,
+  Mono: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
+  Literary: `"Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif`,
+  Editorial: `Charter, "Baskerville", "Libre Baskerville", "Times New Roman", serif`,
+};
+
+const MONO_STACK = `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
 
 export default function TopicPage() {
   const router = useRouter();
@@ -54,7 +72,13 @@ export default function TopicPage() {
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // ✅ Global font control (markdown only)
+  const [fontKey, setFontKey] = useState<FontKey>("Sans");
+  const [fontMenuOpen, setFontMenuOpen] = useState(false);
+  const fontMenuRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
+    // online/offline badge
     const update = () => setIsOffline(!navigator.onLine);
     update();
     window.addEventListener("online", update);
@@ -64,6 +88,36 @@ export default function TopicPage() {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  useEffect(() => {
+    // restore font
+    try {
+      const saved = localStorage.getItem(FONT_KEY_STORAGE);
+      if (saved && ["Serif", "Sans", "Mono", "Literary", "Editorial"].includes(saved)) {
+        setFontKey(saved as FontKey);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    // persist font
+    try {
+      localStorage.setItem(FONT_KEY_STORAGE, fontKey);
+    } catch {}
+  }, [fontKey]);
+
+  useEffect(() => {
+    // close font dropdown on outside click
+    const onDown = (e: MouseEvent) => {
+      if (!fontMenuOpen) return;
+      const target = e.target as Node;
+      if (fontMenuRef.current && !fontMenuRef.current.contains(target)) {
+        setFontMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [fontMenuOpen]);
 
   useEffect(() => {
     if (!router.isReady || !topic || !subject) return;
@@ -117,7 +171,9 @@ export default function TopicPage() {
 
   const prevTopic = currentIndex > 0 ? topics[currentIndex - 1] : null;
   const nextTopic =
-    currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
+    currentIndex >= 0 && currentIndex < topics.length - 1
+      ? topics[currentIndex + 1]
+      : null;
 
   const saveOffline = async () => {
     if (!catalogData || !("serviceWorker" in navigator))
@@ -134,10 +190,12 @@ export default function TopicPage() {
   };
 
   const toRawGithub = (u: string) => {
-    const m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+    const m = u.match(
+      /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
+    );
     if (!m) return u;
-    const [, owner, repo, branch, path] = m;
-    return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+    const [, owner, repo, branch, p] = m;
+    return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${p}`;
   };
 
   const resolveImgSrc = (src: unknown): string => {
@@ -164,7 +222,10 @@ export default function TopicPage() {
       const raw = String(children).replace(/\n$/, "");
       const key = `${match?.[1] ?? "text"}:${raw.slice(0, 80)}`;
 
-      if (inline) return <code>{children}</code>;
+      // ✅ inline code should NOT change with font dropdown
+      if (inline) {
+        return <code style={{ fontFamily: MONO_STACK }}>{children}</code>;
+      }
 
       if (match) {
         const onCopy = async () => {
@@ -218,6 +279,7 @@ export default function TopicPage() {
                 fontSize: "13px",
                 maxWidth: "100%",
                 overflowX: "auto",
+                fontFamily: MONO_STACK,
               }}
               {...props}
             >
@@ -229,7 +291,7 @@ export default function TopicPage() {
 
       return (
         <pre style={{ maxWidth: "100%", overflowX: "auto" }}>
-          <code>{children}</code>
+          <code style={{ fontFamily: MONO_STACK }}>{children}</code>
         </pre>
       );
     },
@@ -255,24 +317,60 @@ export default function TopicPage() {
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <img src="/favicon_new.png" alt="Logo" style={{ width: 32, height: 32, borderRadius: 10 }} />
+          <img
+            src="/favicon_new.png"
+            alt="Logo"
+            style={{ width: 32, height: 32, borderRadius: 10 }}
+          />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div
+              style={{
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
               {subjectStr.toUpperCase()}
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>{isOffline ? "Offline" : "Online"}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>
+              {isOffline ? "Offline" : "Online"}
+            </div>
           </div>
         </div>
 
-        <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
-          <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
-        </button>
+        {/* ✅ Theme button + Sidebar toggle under it (NO OVERLAY) */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+            <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
+          </button>
+
+          <button
+            className="btn btn-outline"
+            onClick={() => setSidebarOpen(false)}
+            type="button"
+            aria-label="Collapse sidebar"
+          >
+            <FaChevronLeft />
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Link href={`/subject/${encodeURIComponent(subjectStr)}`} onClick={onNavigate} className="btn btn-outline">
+        <Link
+          href={`/subject/${encodeURIComponent(subjectStr)}`}
+          onClick={onNavigate}
+          className="btn btn-outline"
+        >
           <FaArrowLeft /> Back
         </Link>
         <Link href="/" onClick={onNavigate} className="btn btn-outline" aria-label="Home">
@@ -286,7 +384,13 @@ export default function TopicPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search topics…"
-          style={{ width: "100%", border: "none", outline: "none", background: "transparent", color: "var(--text)" }}
+          style={{
+            width: "100%",
+            border: "none",
+            outline: "none",
+            background: "transparent",
+            color: "var(--text)",
+          }}
         />
       </div>
 
@@ -315,7 +419,12 @@ export default function TopicPage() {
           );
         })}
 
-        <button className="btn btn-primary" onClick={saveOffline} type="button" style={{ width: "100%", marginTop: 8 }}>
+        <button
+          className="btn btn-primary"
+          onClick={saveOffline}
+          type="button"
+          style={{ width: "100%", marginTop: 8 }}
+        >
           <FaDownload /> Save Offline
         </button>
       </div>
@@ -324,20 +433,87 @@ export default function TopicPage() {
 
   const CollapsedRail = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+      {/* ✅ Theme first */}
+      <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+        {theme === "dark" ? <FaSun /> : <FaMoon />}
+      </button>
+
+      {/* ✅ Open/close toggle UNDER theme (as requested) */}
       <button className="btn btn-outline" onClick={() => setSidebarOpen(true)} type="button" aria-label="Expand sidebar">
         <FaChevronRight />
       </button>
+
       <Link href={`/subject/${encodeURIComponent(subjectStr)}`} className="btn btn-outline" aria-label="Back">
         <FaArrowLeft />
       </Link>
       <Link href="/" className="btn btn-outline" aria-label="Home">
         <FaHome />
       </Link>
-      <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
-        {theme === "dark" ? <FaSun /> : <FaMoon />}
-      </button>
     </div>
   );
+
+  const FontButton = () => (
+    <div ref={fontMenuRef} style={{ position: "relative" }}>
+      <button
+        className="btn btn-outline"
+        type="button"
+        aria-label="Font style"
+        onClick={() => setFontMenuOpen((v) => !v)}
+        style={{ padding: "8px 10px" }}
+      >
+        <FaFont />
+      </button>
+
+      {fontMenuOpen && (
+        <div
+          className="card"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 8px)",
+            right: 0,
+            zIndex: 60,
+            padding: 8,
+            minWidth: 180,
+            borderRadius: 14,
+          }}
+        >
+          {(["Serif", "Sans", "Mono", "Literary", "Editorial"] as FontKey[]).map((k) => {
+            const active = k === fontKey;
+            return (
+              <button
+                key={k}
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  setFontKey(k);
+                  setFontMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  justifyContent: "space-between",
+                  marginBottom: 6,
+                  fontFamily: FONT_FAMILIES[k],
+                  fontWeight: active ? 900 : 700,
+                  opacity: active ? 1 : 0.9,
+                }}
+              >
+                <span>{k}</span>
+                {active ? <span aria-hidden>✓</span> : <span aria-hidden style={{ opacity: 0.3 }}>•</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const prevHref = prevTopic
+    ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
+    : "#";
+
+  const nextHref = nextTopic
+    ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
+    : "#";
 
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
@@ -353,8 +529,28 @@ export default function TopicPage() {
             gap: 10,
           }}
         >
+          {/* Top row (like screenshot) */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* Logo (small square button like screenshot) */}
+              <Link
+                href="/"
+                className="btn btn-primary"
+                aria-label="Home"
+                style={{
+                  width: 36,
+                  height: 36,
+                  padding: 0,
+                  borderRadius: 12,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 900,
+                }}
+              >
+                TI
+              </Link>
+
               {/* MOBILE HAMBURGER */}
               <button
                 className="btn btn-outline lg:hidden"
@@ -368,7 +564,7 @@ export default function TopicPage() {
                 </span>
               </button>
 
-              {/* DESKTOP TOGGLE */}
+              {/* DESKTOP TOGGLE (keep) */}
               <button
                 className="btn btn-outline hidden lg:inline-flex"
                 onClick={() => setSidebarOpen((v) => !v)}
@@ -378,58 +574,97 @@ export default function TopicPage() {
                 {sidebarOpen ? <FaChevronLeft /> : <FaChevronRight />}
               </button>
 
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontWeight: 900,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: "70vw",
-                  }}
-                >
-                  {topicStr || (loading ? "Loading…" : "")}
-                </div>
+              {/* Home icon like screenshot */}
+              <Link href="/" className="btn btn-outline" aria-label="Home" style={{ padding: "8px 10px" }}>
+                <FaHome />
+              </Link>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                className="badge"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  fontWeight: 800,
+                }}
+                title={isOffline ? "Offline" : "Online"}
+              >
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: isOffline ? "orange" : "limegreen" }} />
+                {isOffline ? "Offline" : "Online"}
+              </span>
+
+              {/* ✅ Font button BEFORE theme button */}
+              <FontButton />
+
+              <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme" style={{ padding: "8px 10px" }}>
+                <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Second row: Prev (left) + Center title + Next (right) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <Link
+              className="btn btn-outline"
+              href={prevHref}
+              style={{
+                opacity: prevTopic ? 1 : 0.5,
+                pointerEvents: prevTopic ? "auto" : "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                borderRadius: 12,
+              }}
+              aria-disabled={!prevTopic}
+            >
+              <FaChevronLeft />
+              Prev
+            </Link>
+
+            <div style={{ textAlign: "center", minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 900, letterSpacing: 0.6 }}>
+                {currentIndex >= 0 && topics.length > 0
+                  ? `TOPIC ${currentIndex + 1} OF ${topics.length}`
+                  : loading
+                  ? "LOADING…"
+                  : ""}
+              </div>
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: 20,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "70vw",
+                }}
+              >
+                {topicStr || (loading ? "Loading…" : "")}
               </div>
             </div>
 
-            <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
-              <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
-            </button>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="badge" style={{ display: "none" }}>
-                {isOffline ? "Offline" : "Online"}
-              </span>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Link
-                className="btn btn-outline"
-                href={
-                  prevTopic
-                    ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
-                    : "#"
-                }
-                style={{ opacity: prevTopic ? 1 : 0.5, pointerEvents: prevTopic ? "auto" : "none" }}
-              >
-                <FaChevronLeft />
-              </Link>
-
-              <Link
-                className="btn btn-outline"
-                href={
-                  nextTopic
-                    ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
-                    : "#"
-                }
-                style={{ opacity: nextTopic ? 1 : 0.5, pointerEvents: nextTopic ? "auto" : "none" }}
-              >
-                <FaChevronRight />
-              </Link>
-            </div>
+            <Link
+              className="btn btn-outline"
+              href={nextHref}
+              style={{
+                opacity: nextTopic ? 1 : 0.5,
+                pointerEvents: nextTopic ? "auto" : "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                borderRadius: 12,
+              }}
+              aria-disabled={!nextTopic}
+            >
+              Next
+              <FaChevronRight />
+            </Link>
           </div>
         </div>
       </div>
@@ -438,50 +673,27 @@ export default function TopicPage() {
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: 12 }}>
         <div style={{ display: "flex", gap: 12 }}>
           {/* DESKTOP SIDEBAR */}
-         <aside
-  className="card hidden lg:flex"
-  style={{
-    width: sidebarOpen ? 320 : 70,
-    overflow: "hidden",
-    transition: "width 180ms ease",
-    padding: 12,
-    flexDirection: "column",
-    alignSelf: "stretch",
-    position: "relative",
-  }}
->
-  {/* COLLAPSE BUTTON */}
-  <button
-    className="btn btn-outline"
-    onClick={() => setSidebarOpen(!sidebarOpen)}
-    style={{
-      position: "absolute",
-      top: 12,
-      right: 12,
-      zIndex: 10,
-      width: 30,
-      height: 30,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      borderRadius: "50%",
-      padding: 0,
-    }}
-    aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-  >
-    {sidebarOpen ? <FaChevronLeft /> : <FaChevronRight />}
-  </button>
-
-  {sidebarOpen ? <Sidebar /> : <CollapsedRail />}
-</aside>
-
+          <aside
+            className="card hidden lg:flex"
+            style={{
+              width: sidebarOpen ? 320 : 70,
+              overflow: "hidden",
+              transition: "width 180ms ease",
+              padding: 12,
+              flexDirection: "column",
+              alignSelf: "stretch",
+            }}
+          >
+            {sidebarOpen ? <Sidebar /> : <CollapsedRail />}
+          </aside>
 
           {/* CONTENT */}
           <main className="card" style={{ flex: 1, padding: 14, minWidth: 0 }}>
             {loading && <div style={{ color: "var(--muted)" }}>Loading content…</div>}
             {!loading && error && <div style={{ color: "crimson" }}>{error}</div>}
             {!loading && !error && (
-              <div className="prose">
+              // ✅ Apply font ONLY to markdown (not code blocks)
+              <div className="prose" style={{ fontFamily: FONT_FAMILIES[fontKey] }}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {content}
                 </ReactMarkdown>
