@@ -31,22 +31,6 @@ const SyntaxHighlighter = dynamic(
 type CatalogTopic = { topic_name: string; md_url: string };
 type CatalogSubject = { subject: string; topics: CatalogTopic[] };
 
-type CachedTopic = {
-  topic_name: string;
-  md_url: string;
-  content: string;
-};
-
-type SubjectCache = {
-  subject: string;
-  topics: CachedTopic[];
-  cachedAt: number;
-};
-
-const SUBJECT_CACHE_KEY = (subject: string) =>
-  `offline-subject-${encodeURIComponent(subject)}`;
-
-
 export default function TopicPage() {
   const router = useRouter();
   const { topic, subject } = router.query;
@@ -80,100 +64,43 @@ export default function TopicPage() {
       window.removeEventListener("offline", update);
     };
   }, []);
-  
-useEffect(() => {
-  if (!router.isReady || !topic || !subject) return;
 
-  const catalogUrl =
-    "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
+  useEffect(() => {
+    if (!router.isReady || !topic || !subject) return;
 
-  const load = async () => {
     setLoading(true);
     setError("");
-    setContent("");
 
-    try {
-      // 1) If offline, try localStorage cache first
-      if (!navigator.onLine) {
-        const raw = localStorage.getItem(SUBJECT_CACHE_KEY(subjectStr));
-        if (raw) {
-          try {
-            const cached: SubjectCache = JSON.parse(raw);
-            setCatalogData({
-              subject: cached.subject,
-              topics: cached.topics.map((t) => ({
-                topic_name: t.topic_name,
-                md_url: t.md_url,
-              })),
-            });
+    const catalogUrl =
+      "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
 
-            const foundTopic = cached.topics.find(
-              (t) => t.topic_name === topicStr
-            );
-            if (foundTopic) {
-              const base = foundTopic.md_url.slice(
-                0,
-                foundTopic.md_url.lastIndexOf("/") + 1
-              );
-              setMdBaseUrl(base);
-              setContent(foundTopic.content);
-              setLoading(false);
-              return;
-            }
-          } catch (e) {
-            console.error("Failed to parse cached subject:", e);
-          }
-        }
+    fetch(catalogUrl)
+      .then((res) => res.json())
+      .then((data: { qna_catalog: CatalogSubject[] }) => {
+        const catalog = data.qna_catalog.find(
+          (s) => s.subject.toLowerCase() === subjectStr.toLowerCase()
+        );
+        if (!catalog) throw new Error("Subject not found");
+        setCatalogData(catalog);
 
-        // offline and no usable cache
-        setError("Offline and no cached content for this topic");
+        const found = catalog.topics.find((t) => t.topic_name === topicStr);
+        if (!found) throw new Error("Topic not found");
+
+        const base = found.md_url.slice(0, found.md_url.lastIndexOf("/") + 1);
+        setMdBaseUrl(base);
+
+        return fetch(found.md_url);
+      })
+      .then((res) => res.text())
+      .then((md) => {
+        setContent(md);
         setLoading(false);
-        return;
-      }
-
-      // 2) Online: fetch catalog and then markdown
-      const resCatalog = await fetch(catalogUrl);
-      if (!resCatalog.ok) {
-        throw new Error(
-          `Catalog HTTP ${resCatalog.status} ${resCatalog.statusText}`
-        );
-      }
-      const data: { qna_catalog: CatalogSubject[] } = await resCatalog.json();
-
-      const catalog = data.qna_catalog.find(
-        (s) => s.subject.toLowerCase() === subjectStr.toLowerCase()
-      );
-      if (!catalog) throw new Error("Subject not found");
-      setCatalogData(catalog);
-
-      const found = catalog.topics.find((t) => t.topic_name === topicStr);
-      if (!found) throw new Error("Topic not found");
-
-      const base = found.md_url.slice(
-        0,
-        found.md_url.lastIndexOf("/") + 1
-      );
-      setMdBaseUrl(base);
-
-      const resMd = await fetch(found.md_url);
-      if (!resMd.ok) {
-        throw new Error(
-          `Markdown HTTP ${resMd.status} ${resMd.statusText}`
-        );
-      }
-      const md = await resMd.text();
-      setContent(md);
-      setLoading(false);
-    } catch (e: any) {
-      console.error("Failed to load content:", e);
-      setError(e?.message || "Failed to load content");
-      setLoading(false);
-    }
-  };
-
-  load();
-}, [router.isReady, topicStr, subjectStr, topic, subject]);
-
+      })
+      .catch(() => {
+        setError("Failed to load content");
+        setLoading(false);
+      });
+  }, [router.isReady, topicStr, subjectStr, topic, subject]);
 
   const topics = catalogData?.topics ?? [];
 
@@ -193,47 +120,18 @@ useEffect(() => {
     currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
 
   const saveOffline = async () => {
-  if (!catalogData || !catalogData.topics.length) {
-    alert("No topics to save for offline.");
-    return;
-  }
+    if (!catalogData || !("serviceWorker" in navigator))
+      return alert("Service Worker not supported");
 
-  try {
-    // Fetch all markdown in parallel
-    const cachedTopics: CachedTopic[] = await Promise.all(
-      catalogData.topics.map(async (t) => {
-        const res = await fetch(t.md_url);
-        if (!res.ok) {
-          throw new Error(
-            `Failed ${t.topic_name}: HTTP ${res.status} ${res.statusText}`
-          );
-        }
-        const text = await res.text();
-        return {
-          topic_name: t.topic_name,
-          md_url: t.md_url,
-          content: text,
-        };
-      })
-    );
+    const urls = [
+      "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json",
+      ...catalogData.topics.map((t) => t.md_url),
+    ];
 
-    const payload: SubjectCache = {
-      subject: subjectStr,
-      topics: cachedTopics,
-      cachedAt: Date.now(),
-    };
-
-    localStorage.setItem(
-      SUBJECT_CACHE_KEY(subjectStr),
-      JSON.stringify(payload)
-    );
-
-    alert(`Saved "${subjectStr}" (${cachedTopics.length} topics) for offline ✅`);
-  } catch (err: any) {
-    console.error("Save offline failed:", err);
-    alert(err?.message || "Failed to save offline");
-  }
-};
+    const reg = await navigator.serviceWorker.ready;
+    reg.active?.postMessage({ type: "PREFETCH_URLS", urls });
+    alert(`Saved "${subjectStr}" for offline ✅`);
+  };
 
   const toRawGithub = (u: string) => {
     const m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
