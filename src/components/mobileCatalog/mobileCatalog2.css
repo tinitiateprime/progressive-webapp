@@ -1,0 +1,660 @@
+/* ✅ Google Fonts (5 options for your font selector) */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&display=swap");
+
+/* =========================
+   Root Wrapper
+   ========================= */
+.mCatWrap {
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+
+  background:
+    radial-gradient(1200px 900px at 18% 0%, rgba(99,102,241,0.14), transparent 55%),
+    radial-gradient(900px 700px at 92% 12%, rgba(56,189,248,0.14), transparent 58%),
+    radial-gradient(900px 700px at 60% 92%, rgba(16,185,129,0.10), transparent 55%),
+    #f3f4f6;
+
+  overscroll-behavior: none;
+
+  /* ✅ card font variable controlled by React style: { "--card-font": "..." } */
+  --card-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+/* ✅ Sticky topbar (premium blur) */
+.mCatTopbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid rgba(17, 24, 39, 0.10);
+  padding: 10px 12px;
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.06);
+}
+
+/* ✅ Brand row */
+.mCatBrand {
+  font-weight: 700;
+  letter-spacing: 0.15px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1;
+  color: #111827;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mBrandLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mBrandIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.mCatBrandText {
+  font-weight: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+}
+
+/* =========================
+   Top Actions (Theme + Font)
+   ========================= */
+.mTopActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+.mIconBtn {
+  height: 34px;
+  width: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: rgba(255, 255, 255, 0.95);
+  color: #111827;
+
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.10);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+.mIconBtn:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(17, 24, 39, 0.14); }
+.mIconBtn:active { transform: translateY(0px); opacity: 0.95; }
+
+/* ✅ Font menu popover */
+.mFontMenu {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: 220px;
+
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(17, 24, 39, 0.18);
+  padding: 10px;
+  z-index: 80;
+}
+
+.mFontMenuTitle {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.75);
+  padding: 6px 8px 8px;
+}
+
+.mFontItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+.mFontItem:hover { background: rgba(17, 24, 39, 0.05); transform: translateY(-1px); }
+.mFontItem.isSelected { background: rgba(17, 24, 39, 0.06); border-color: rgba(17, 24, 39, 0.10); }
+
+.mFontName { font-size: 13px; font-weight: 650; color: rgba(17, 24, 39, 0.90); text-align: left; }
+.mCheck { font-weight: 900; font-size: 13px; color: rgba(17, 24, 39, 0.75); }
+.mCheckGhost { width: 12px; height: 12px; }
+
+/* =========================
+   Tabs
+   ========================= */
+.mCatTabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 4px;
+
+  background: rgba(17, 24, 39, 0.04);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  border-radius: 999px;
+}
+.mCatTabs::-webkit-scrollbar { width: 0; height: 0; }
+
+.mCatTab {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 560;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.1;
+  color: rgba(17, 24, 39, 0.78);
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.mCatTab:hover { background: rgba(255, 255, 255, 0.55); transform: translateY(-1px); }
+.mCatTab.isActive {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(17, 24, 39, 0.10);
+  color: #111827;
+  box-shadow: 0 10px 18px rgba(17, 24, 39, 0.08);
+}
+
+.mCatHint {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.55;
+  color: #111827;
+}
+
+.mCatMain { flex: 1; min-height: 0; }
+
+/* =========================
+   Pager stage
+   ========================= */
+.mVPager {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  scrollbar-width: none;
+
+  /* ✅ IMPORTANT: allow BOTH, because card body will pan-x */
+  touch-action: pan-x pan-y;
+
+  overscroll-behavior: contain;
+}
+.mVPager::-webkit-scrollbar { width: 0; height: 0; }
+
+.mVSlide {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  will-change: transform, opacity;
+}
+.mVSlide[aria-hidden="true"] { pointer-events: none; }
+.mVSlide[aria-hidden="false"] { pointer-events: auto; }
+
+/* =========================
+   Apply selected font to all cards
+   ========================= */
+.mCard,
+.mCardHeader,
+.mCardBody,
+.mCardTitle,
+.mCardMeta,
+.mCardIndex,
+.mMetaPill,
+.mCard .mdWrap {
+  font-family: var(--card-font);
+}
+
+/* =========================
+   Card
+   ========================= */
+.mCard {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+
+  height: 100%;
+  max-height: 100%;
+
+  background:
+    radial-gradient(800px 260px at 20% 0%, rgba(99,102,241,0.10), transparent 60%),
+    radial-gradient(700px 240px at 90% 0%, rgba(56,189,248,0.10), transparent 62%),
+    rgba(255, 255, 255, 0.94);
+
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  border-radius: 20px;
+
+  box-shadow:
+    0 18px 45px rgba(17, 24, 39, 0.10),
+    0 2px 10px rgba(17, 24, 39, 0.05);
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  position: relative;
+  isolation: isolate;
+}
+
+.mCard::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 22px;
+  background:
+    radial-gradient(520px 260px at 15% 0%, rgba(99,102,241,0.18), transparent 60%),
+    radial-gradient(520px 260px at 90% 10%, rgba(56,189,248,0.16), transparent 62%);
+  filter: blur(16px);
+  opacity: 0.55;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* header */
+.mCardHeader {
+  padding: 14px 14px 12px;
+  padding-right: 56px;
+
+  border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+  position: relative;
+  cursor: default;
+
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.80));
+}
+
+.mCardTitle {
+  font-weight: 650;
+  font-size: 14px;
+  line-height: 1.25;
+  letter-spacing: 0.1px;
+  color: #111827;
+}
+
+.mCardMeta { margin-top: 6px; }
+
+.mMetaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+
+  color: rgba(17, 24, 39, 0.78);
+
+  background: linear-gradient(180deg, rgba(17,24,39,0.05), rgba(17,24,39,0.03));
+  border: 1px solid rgba(17, 24, 39, 0.10);
+}
+
+.mMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mTopicPicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mTopicSelect {
+  height: 26px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+
+  width: min(170px, 54vw);
+  max-width: 170px;
+
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: rgba(17, 24, 39, 0.85);
+
+  outline: none;
+  cursor: pointer;
+}
+.mTopicSelect:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16); }
+
+.mTopicCount {
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.55);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  background: rgba(17, 24, 39, 0.03);
+}
+
+.mCardIndex {
+  position: absolute;
+  right: 12px;
+  top: 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.55);
+}
+
+/* =========================
+   ✅ Card Body (HORIZONTAL SCROLL)
+   ========================= */
+.mCardBody {
+  padding: 14px;
+
+  flex: 1 1 auto;
+  min-height: 0;
+
+  /* ✅ switch to horizontal scrolling */
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+
+  /* ✅ make touch feel correct inside */
+  touch-action: pan-x;
+
+  /* left/right scroll affordance */
+  box-shadow:
+    inset 12px 0 14px -14px rgba(17, 24, 39, 0.18),
+    inset -12px 0 14px -14px rgba(17, 24, 39, 0.14);
+
+  scrollbar-width: none;
+}
+.mCardBody::-webkit-scrollbar { width: 0; height: 0; }
+
+.mCardLoading,
+.mCardError {
+  padding: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* preview skeleton (offscreen slides) */
+.mCardPreview {
+  position: relative;
+  padding: 14px;
+  background: transparent;
+  overflow: hidden;
+}
+.mCardPreview::before {
+  content: "";
+  display: block;
+  height: 220px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background:
+    linear-gradient(rgba(17,24,39,0.10), rgba(17,24,39,0.10)) 18px 18px / 55% 10px no-repeat,
+    linear-gradient(rgba(17,24,39,0.08), rgba(17,24,39,0.08)) 18px 38px / 38% 8px no-repeat,
+    linear-gradient(rgba(17,24,39,0.07), rgba(17,24,39,0.07)) 18px 72px / 82% 8px no-repeat,
+    linear-gradient(rgba(17,24,39,0.07), rgba(17,24,39,0.07)) 18px 92px / 78% 8px no-repeat,
+    linear-gradient(rgba(17,24,39,0.07), rgba(17,24,39,0.07)) 18px 112px / 74% 8px no-repeat;
+  background-color: rgba(255, 255, 255, 0.88);
+}
+
+/* =========================
+   ✅ Horizontal-flow markdown (columns)
+   ========================= */
+.mCard .mdWrap {
+  margin: 0;
+  padding: 0;
+  line-height: 1.65;
+  font-size: clamp(14px, 3.4vw, 16px);
+  color: #111827;
+
+  /* ✅ THIS is the trick: content flows top→bottom then continues to the right */
+  height: 100%;
+  min-height: 100%;
+
+  column-width: var(--mcolw, 320px);   /* set by ResizeObserver in TopicCardSlide */
+  column-gap: 26px;
+  column-fill: auto;
+
+  /* give breathing room at the very end */
+  padding-right: 18px;
+}
+
+/* Avoid breaking important blocks across columns */
+.mCard .mdWrap h1,
+.mCard .mdWrap h2,
+.mCard .mdWrap h3,
+.mCard .mdWrap p,
+.mCard .mdWrap ul,
+.mCard .mdWrap ol,
+.mCard .mdWrap blockquote,
+.mCard .mdWrap table,
+.mCard .mdWrap img,
+.mCard .mdWrap pre,
+.mCard .mdWrap hr,
+.mCard .mdWrap li {
+  break-inside: avoid-column;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.mCard .mdWrap h1,
+.mCard .mdWrap h2,
+.mCard .mdWrap h3 {
+  line-height: 1.25;
+  margin: 18px 0 10px;
+}
+
+.mCard .mdWrap p { margin: 10px 0; }
+.mCard .mdWrap ul { padding-left: 18px; margin: 10px 0; }
+.mCard .mdWrap li { margin: 6px 0; }
+
+/* images responsive */
+.mCard .mdWrap img {
+  max-width: 100% !important;
+  height: auto !important;
+  width: auto !important;
+  display: block;
+  margin: 10px auto;
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(17, 24, 39, 0.10);
+}
+
+/* code always monospace */
+.mCard .mdWrap code,
+.mCard .mdWrap pre,
+.mCard .mdWrap pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.mCard .mdWrap code {
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.06);
+}
+
+/* ✅ code block stays whole; if tall => internal vertical scroll */
+.mCard .mdWrap pre {
+  border-radius: 12px;
+
+  overflow-x: auto;
+  overflow-y: auto;             /* ✅ important */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  padding: 12px;
+  background: rgba(17, 24, 39, 0.045);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+
+  display: inline-block;
+  width: 100%;
+
+  /* keep inside fixed card height */
+  max-height: min(55vh, 420px);
+}
+.mCard .mdWrap pre::-webkit-scrollbar { width: 0; height: 0; }
+
+/* Optional: hide "Back to Content" for SQL Server cards */
+.mCard[data-subjectkey="sqlserver"] .backToContent,
+.mCard[data-subjectkey="sqlserver"] .back-to-content,
+.mCard[data-subjectkey="sqlserver"] a.backToContent,
+.mCard[data-subjectkey="sqlserver"] button.backToContent {
+  display: none !important;
+}
+
+/* desktop spacing */
+@media (min-width: 768px) {
+  .mVSlide { padding: 16px; }
+  .mCardHeader { padding: 16px 16px 14px; padding-right: 60px; }
+  .mCardBody { padding: 16px; }
+  .mCardIndex { right: 14px; top: 16px; }
+}
+
+/* =========================
+   DARK MODE
+   ========================= */
+.mCatWrap[data-theme="dark"] {
+  color-scheme: dark;
+  background:
+    radial-gradient(1200px 900px at 18% 0%, rgba(99,102,241,0.22), transparent 55%),
+    radial-gradient(900px 700px at 92% 12%, rgba(56,189,248,0.20), transparent 58%),
+    radial-gradient(900px 700px at 60% 92%, rgba(16,185,129,0.16), transparent 55%),
+    #0b1220;
+
+  color: #e5e7eb;
+}
+
+.mCatWrap[data-theme="dark"] .mCatTopbar {
+  background: rgba(15, 23, 42, 0.78);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.mCatWrap[data-theme="dark"] .mCatBrand,
+.mCatWrap[data-theme="dark"] .mCatHint {
+  color: rgba(229, 231, 235, 0.80);
+}
+
+.mCatWrap[data-theme="dark"] .mCatTabs {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mCatWrap[data-theme="dark"] .mCatTab {
+  color: rgba(229, 231, 235, 0.80);
+}
+
+.mCatWrap[data-theme="dark"] .mCatTab.isActive {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+}
+
+.mCatWrap[data-theme="dark"] .mIconBtn {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e5e7eb;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
+}
+
+.mCatWrap[data-theme="dark"] .mFontMenu {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.mCatWrap[data-theme="dark"] .mFontMenuTitle { color: rgba(229, 231, 235, 0.78); }
+.mCatWrap[data-theme="dark"] .mFontItem:hover { background: rgba(255, 255, 255, 0.06); }
+.mCatWrap[data-theme="dark"] .mFontItem.isSelected { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.12); }
+.mCatWrap[data-theme="dark"] .mFontName { color: rgba(229, 231, 235, 0.92); }
+.mCatWrap[data-theme="dark"] .mCheck { color: rgba(229, 231, 235, 0.75); }
+
+.mCatWrap[data-theme="dark"] .mCard {
+  background:
+    radial-gradient(800px 260px at 20% 0%, rgba(99,102,241,0.18), transparent 60%),
+    radial-gradient(700px 240px at 90% 0%, rgba(56,189,248,0.16), transparent 62%),
+    rgba(15, 23, 42, 0.92);
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.55),
+    0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.mCatWrap[data-theme="dark"] .mCardHeader {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.82));
+  border-bottom: 1px solid rgba(255,  255, 255, 0.10);
+}
+
+.mCatWrap[data-theme="dark"] .mCardTitle { color: #e5e7eb; }
+.mCatWrap[data-theme="dark"] .mMetaPill {
+  color: rgba(229, 231, 235, 0.86);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.mCatWrap[data-theme="dark"] .mCardIndex { color: rgba(229, 231, 235, 0.55); }
+
+.mCatWrap[data-theme="dark"] .mCardBody {
+  box-shadow:
+    inset 12px 0 14px -14px rgba(0,0,0,0.55),
+    inset -12px 0 14px -14px rgba(0,0,0,0.55);
+}
+
+.mCatWrap[data-theme="dark"] .mCard .mdWrap { color: #e5e7eb; }
+.mCatWrap[data-theme="dark"] .mCard .mdWrap code { background: rgba(255, 255, 255, 0.08); }
+.mCatWrap[data-theme="dark"] .mCard .mdWrap pre {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.mCatWrap[data-theme="dark"] .mTopicSelect {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.92);
+  color: rgba(229, 231, 235, 0.92);
+}
+
+.mCatWrap[data-theme="dark"] .mTopicCount {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(229, 231, 235, 0.60);
+}
+
+.mCatWrap[data-theme="dark"] .mBrandIcon {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
+}
