@@ -59,31 +59,12 @@ export default function TopicCardSlide({
     return () => cancelAnimationFrame(id);
   }, [isActive, subjectKey, content, loading, error]);
 
-  // ✅ KEY: column width should match visible card body width
+  // ✅ when opening a new topic, always start at TOP
   useEffect(() => {
     if (!isActive) return;
     const el = bodyRef.current;
     if (!el) return;
-
-    const apply = () => {
-      const w = el.clientWidth || 320;
-      el.style.setProperty("--mcolw", `${w}px`);
-    };
-
-    apply();
-
-    const ro = new ResizeObserver(() => apply());
-    ro.observe(el);
-
-    return () => ro.disconnect();
-  }, [isActive]);
-
-  // ✅ when opening a new topic, always start at the beginning (left)
-  useEffect(() => {
-    if (!isActive) return;
-    const el = bodyRef.current;
-    if (!el) return;
-    el.scrollLeft = 0;
+    el.scrollTop = 0;
   }, [isActive, mdUrl]);
 
   const showTopicDropdown =
@@ -91,22 +72,22 @@ export default function TopicCardSlide({
 
   return (
     <section
-      className={`mVSlide ${slideClassName || ""}`}
+      className={`tntMc2PagerSlide ${slideClassName || ""}`}
       style={slideStyle}
       aria-hidden={!isActive}
     >
-      <div className="mCard" ref={cardRef} data-subjectkey={subjectKey}>
-        <div className="mCardHeader">
-          <div className="mCardTitle">{title}</div>
+      <div className="tntMc2TopicCard" ref={cardRef} data-subjectkey={subjectKey}>
+        <div className="tntMc2CardHeaderArea">
+          <div className="tntMc2CardTitleTxt">{title}</div>
 
-          <div className="mCardMeta">
-            <div className="mMetaRow">
-              {subject ? <span className="mMetaPill">{subject}</span> : null}
+          <div className="tntMc2CardMetaArea">
+            <div className="tntMc2MetaRowFlex">
+              {subject ? <span className="tntMc2MetaPillTag">{subject}</span> : null}
 
               {showTopicDropdown ? (
-                <div className="mTopicPicker" aria-label="Topic dropdown">
+                <div className="tntMc2TopicPickerWrap" aria-label="Topic dropdown">
                   <select
-                    className="mTopicSelect"
+                    className="tntMc2TopicSelectCtrl"
                     value={index}
                     onChange={(e) => {
                       const idx = Number(e.target.value);
@@ -123,35 +104,26 @@ export default function TopicCardSlide({
                       </option>
                     ))}
                   </select>
-
-                  <span className="mTopicCount" aria-hidden="true">
-                    {orderedTopics.length}
-                  </span>
                 </div>
               ) : null}
             </div>
           </div>
 
           {Number.isFinite(total) && total > 0 ? (
-            <div className="mCardIndex" aria-label={`Card ${index + 1} of ${total}`}>
+            <div className="tntMc2CardIndexTxt" aria-label={`Card ${index + 1} of ${total}`}>
               {index + 1}/{total}
             </div>
           ) : null}
         </div>
 
-        <div
-          ref={bodyRef}
-          className="mCardBody"
-          /* Tailwind-friendly (works if Tailwind is on):
-             className="mCardBody overflow-x-auto overflow-y-hidden"
-           */
-        >
+        {/* ✅ NEW CLASS: vertical scroll container */}
+        <div ref={bodyRef} className="tntMc2CardBodyScrollY">
           {!isActive ? (
-            <div className="mCardPreview" aria-hidden="true" />
+            <div className="tntMc2CardPreviewBlank" aria-hidden="true" />
           ) : loading ? (
-            <div className="mCardLoading">Loading markdown…</div>
+            <div className="tntMc2CardLoadingTxt">Loading markdown…</div>
           ) : error ? (
-            <div className="mCardError">
+            <div className="tntMc2CardErrorBox">
               <div style={{ fontWeight: 900 }}>Failed to load</div>
               <div style={{ opacity: 0.8 }}>{String(error)}</div>
             </div>

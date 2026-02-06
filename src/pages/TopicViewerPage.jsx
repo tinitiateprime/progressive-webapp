@@ -16,54 +16,38 @@ export default function TopicViewerPage() {
   const { content, loading, error } = useMarkdown(mdUrl);
 
   return (
-    <div>
-      <div
-        style={{
-          maxWidth: 980,
-          margin: "0 auto",
-          padding: "18px 16px 0",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
+    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
+      <div className="max-w-[980px] mx-auto px-4 pt-4 flex items-center gap-3">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 12,
-            border: "1px solid rgba(0,0,0,0.15)",
-            background: "white",
-            cursor: "pointer",
-            fontWeight: 800,
-          }}
+          className="px-3 py-2 rounded-[12px] border border-black/15 bg-white font-extrabold hover:bg-black/5"
         >
           ← Back
         </button>
 
         <div>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>{safeTitle}</div>
-          {subject ? (
-            <div style={{ fontSize: 12, opacity: 0.75 }}>Subject: {subject}</div>
-          ) : null}
-          <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
+          <div className="font-black text-[18px]">{safeTitle}</div>
+          {subject ? <div className="text-[12px] opacity-75">Subject: {subject}</div> : null}
+          <div className="text-[12px] opacity-60 mt-0.5">
             Source: {mdUrl ? "GitHub raw" : "Missing md_url"}
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div style={{ padding: 24, maxWidth: 980, margin: "0 auto" }}>
-          <h3>Loading markdown…</h3>
+        <div className="max-w-[980px] mx-auto p-6">
+          <h3 className="font-black text-[18px]">Loading markdown…</h3>
         </div>
       ) : error ? (
-        <div style={{ padding: 24, maxWidth: 980, margin: "0 auto" }}>
-          <h3>Failed to load markdown</h3>
-          <p style={{ color: "crimson", fontWeight: 700 }}>{error}</p>
+        <div className="max-w-[980px] mx-auto p-6">
+          <h3 className="font-black text-[18px]">Failed to load markdown</h3>
+          <p className="text-red-600 font-bold">{String(error)}</p>
         </div>
       ) : (
-        <MarkdownViewer content={content} />
+        <div className="max-w-[980px] mx-auto px-4 py-4">
+          <MarkdownViewer content={content} />
+        </div>
       )}
     </div>
   );

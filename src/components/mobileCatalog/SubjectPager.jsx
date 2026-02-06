@@ -32,7 +32,7 @@ function sortTopics(topics = []) {
   return arr;
 }
 
-/* ✅ allow code blocks to still scroll horizontally */
+/* allow code blocks to still scroll horizontally */
 function findScrollableX(startEl, stopEl) {
   let el = startEl;
   while (el && el !== stopEl && el !== document.body) {
@@ -52,7 +52,7 @@ function canScrollX(el, dx) {
   return el.scrollLeft > 1;
 }
 
-/* ✅ allow card body to scroll vertically; only page when it can't */
+/* allow card body to scroll vertically; only page when it can't */
 function findScrollableY(startEl, stopEl) {
   let el = startEl;
   while (el && el !== stopEl && el !== document.body) {
@@ -131,7 +131,7 @@ export default function SubjectPager({ subjectItem }) {
     lockPaging();
   };
 
-  // ✅ NEW: jump directly to any topic index (used by README dropdown)
+  // jump directly to any topic index (dropdown)
   const jumpToIndex = (toIndex) => {
     if (lockRef.current || animatingRef.current) return;
 
@@ -167,7 +167,7 @@ export default function SubjectPager({ subjectItem }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject]);
 
-  // wheel handling (capture)
+  // wheel handling
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
@@ -315,7 +315,15 @@ export default function SubjectPager({ subjectItem }) {
   };
 
   return (
-    <div className="mVPager" ref={pagerRef} aria-label={`Pager for ${subject}`}>
+    <div
+      ref={pagerRef}
+      aria-label={`Pager for ${subject}`}
+      className={[
+        "h-full w-full relative overflow-hidden scrollbar-hide",
+        "[touch-action:pan-y]",
+        "overscroll-contain",
+      ].join(" ")}
+    >
       {ordered.map((t, idx) => (
         <TopicCardSlide
           key={`${subject}-${t?.topic_name || "topic"}-${idx}`}
@@ -324,9 +332,6 @@ export default function SubjectPager({ subjectItem }) {
           index={idx}
           total={ordered.length}
           activeIndex={activeIndex}
-          isOpen={true}
-          onOpen={() => {}}
-          onClose={() => {}}
           slideStyle={slideStyleFor(idx)}
           orderedTopics={ordered}
           onJumpToIndex={jumpToIndex}

@@ -1,69 +1,33 @@
-:root {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ✅ Fonts */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&display=swap");
 
-  /* ✅ You want light UI */
-  color-scheme: light;
-}
+/* ✅ Tailwind v4 */
+@import "tailwindcss";
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
+  width: 100%;
 }
 
 body {
   margin: 0;
-  display: block;                 /* ✅ important: no flex centering */
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
-    "Helvetica Neue", "Noto Sans", "Liberation Sans";
-  background: #f6f7fb;
-  color: #111;
+  background: #f3f4f6;
 }
 
-#root {
-  width: 100%;
-  display: block;
+html.dark body {
+  background: #0b1220;
 }
 
-* {
-  box-sizing: border-box;
-}
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+/* hide scrollbars but keep scroll */
+@layer utilities {
+  .scrollbar-hide {
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 }
-a:hover {
-  color: #535bf2;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-
-/* optional: remove dark default button background from Vite */
-button {
-  background-color: #f9f9f9;
-  color: #111;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-:root { --cn-sticky-top: 70px; } /* set to your header height */

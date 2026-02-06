@@ -32,28 +32,7 @@ function sortTopics(topics = []) {
   return arr;
 }
 
-/* ✅ detect scrollable X (card body + code blocks) */
-function findScrollableX(startEl, stopEl) {
-  let el = startEl;
-  while (el && el !== stopEl && el !== document.body) {
-    const style = window.getComputedStyle(el);
-    const ox = style.overflowX;
-    const canOverflow = ox === "auto" || ox === "scroll";
-    if (canOverflow && el.scrollWidth > el.clientWidth + 4) return el;
-    el = el.parentElement;
-  }
-  return null;
-}
-function canScrollX(el, dx) {
-  if (!el) return false;
-  const max = el.scrollWidth - el.clientWidth;
-  if (max <= 1) return false;
-  if (dx > 0) return el.scrollLeft < max - 1;
-  return el.scrollLeft > 1;
-}
-
 const DURATION_MS = 650;
-const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const WHEEL_THRESHOLD = 90;
 const COOLDOWN_MS = 450;
 
@@ -73,8 +52,6 @@ export default function SubjectPager({ subjectItem }) {
   const activeRef = useRef(0);
   const animatingRef = useRef(false);
 
-  const touchTargetRef = useRef(null);
-
   useEffect(() => {
     activeRef.current = activeIndex;
   }, [activeIndex]);
@@ -86,7 +63,7 @@ export default function SubjectPager({ subjectItem }) {
     setTimeout(() => (lockRef.current = false), COOLDOWN_MS);
   };
 
-  const startNav = (dir, axis) => {
+  const startNav = (dir) => {
     if (lockRef.current || animatingRef.current) return;
 
     const from = activeRef.current;
@@ -94,8 +71,7 @@ export default function SubjectPager({ subjectItem }) {
     if (to === from) return;
 
     animatingRef.current = true;
-    setAnim({ from, to, axis, dir, phase: "prep" });
-
+    setAnim({ from, to, dir, phase: "prep" });
     setActiveIndex(to);
 
     requestAnimationFrame(() => {
@@ -111,7 +87,6 @@ export default function SubjectPager({ subjectItem }) {
     lockPaging();
   };
 
-  // ✅ jump directly to any topic index (dropdown)
   const jumpToIndex = (toIndex) => {
     if (lockRef.current || animatingRef.current) return;
 
@@ -122,7 +97,7 @@ export default function SubjectPager({ subjectItem }) {
     const dir = to > from ? 1 : -1;
 
     animatingRef.current = true;
-    setAnim({ from, to, axis: "x", dir, phase: "prep" });
+    setAnim({ from, to, dir, phase: "prep" });
     setActiveIndex(to);
 
     requestAnimationFrame(() => {
@@ -138,16 +113,14 @@ export default function SubjectPager({ subjectItem }) {
     lockPaging();
   };
 
-  // reset when subject changes
   useEffect(() => {
     setActiveIndex(0);
     setAnim(null);
     animatingRef.current = false;
     accRef.current = { x: 0, y: 0 };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject]);
 
-  // ✅ wheel handling: vertical wheel scrolls card horizontally if possible
+  // ✅ Allow vertical scroll; only intercept big horizontal trackpad swipes
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
@@ -155,61 +128,23 @@ export default function SubjectPager({ subjectItem }) {
     const onWheel = (e) => {
       if (lockRef.current || animatingRef.current) return;
 
-      let dx = e.deltaX || 0;
-      let dy = e.deltaY || 0;
-
-      // shift+wheel => horizontal
-      if (e.shiftKey && Math.abs(dx) < 2 && Math.abs(dy) > 2) {
-        dx = dy;
-        dy = 0;
-      }
+      const dx = e.deltaX || 0;
+      const dy = e.deltaY || 0;
 
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
 
-      const mostlyHorizontal = absX > absY && absX > 3;
-      const mostlyVertical = absY >= absX && absY > 3;
+      // ✅ Vertical scroll should work normally
+      if (absY >= absX) return;
 
-      // ✅ If user scrolls vertically, but there is an inner horizontal scroller (card body),
-      // convert dy -> horizontal scroll inside that card first.
-      if (mostlyVertical) {
-        const scrollerX = findScrollableX(e.target, el);
-        if (scrollerX && canScrollX(scrollerX, dy)) {
-          e.preventDefault();
-          scrollerX.scrollLeft += dy;
-          accRef.current.x = 0;
-          accRef.current.y = 0;
-          return;
-        }
-      }
-
-      if (mostlyHorizontal) {
-        const scrollerX = findScrollableX(e.target, el);
-        if (scrollerX && canScrollX(scrollerX, dx)) return;
-
+      // ✅ Horizontal swipe → change topic
+      if (absX > 3) {
         e.preventDefault();
         accRef.current.x += dx;
-
-        if (Math.abs(accRef.current.x) < WHEEL_THRESHOLD) return;
-
-        const dir = accRef.current.x > 0 ? 1 : -1;
-        accRef.current.x = 0;
-
-        startNav(dir, "x");
-        return;
-      }
-
-      if (mostlyVertical) {
-        // no vertical scrolling in card now => use vertical to switch topics
-        e.preventDefault();
-        accRef.current.y += dy;
-
-        if (Math.abs(accRef.current.y) < WHEEL_THRESHOLD) return;
-
-        const dir = accRef.current.y > 0 ? 1 : -1;
-        accRef.current.y = 0;
-
-        startNav(dir, "y");
+        if (Math.abs(accRef.current.x) >= WHEEL_THRESHOLD) {
+          startNav(accRef.current.x > 0 ? 1 : -1);
+          accRef.current.x = 0;
+        }
       }
     };
 
@@ -217,106 +152,33 @@ export default function SubjectPager({ subjectItem }) {
     return () => el.removeEventListener("wheel", onWheel, { capture: true });
   }, [ordered.length]);
 
-  // touch swipe: do NOT page if card can scroll horizontally
-  useEffect(() => {
-    const el = pagerRef.current;
-    if (!el) return;
-
-    let sx = 0;
-    let sy = 0;
-
-    const onTouchStart = (e) => {
-      const t = e.touches?.[0];
-      if (!t) return;
-      sx = t.clientX;
-      sy = t.clientY;
-      touchTargetRef.current = e.target;
-    };
-
-    const onTouchEnd = (e) => {
-      if (lockRef.current || animatingRef.current) return;
-
-      const t = e.changedTouches?.[0];
-      if (!t) return;
-
-      const dx = t.clientX - sx;
-      const dy = t.clientY - sy;
-
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-
-      // ✅ horizontal gesture first tries inner horizontal scroll
-      if (absX > 60 && absX > absY * 1.2) {
-        const startTarget = touchTargetRef.current;
-        const scrollerX = findScrollableX(startTarget, el);
-
-        // swipe left => content should move right => positive scroll
-        const scrollIntent = -dx;
-
-        if (scrollerX && canScrollX(scrollerX, scrollIntent)) {
-          // let native scrolling handle it (don’t page)
-          return;
-        }
-
-        startNav(dx < 0 ? 1 : -1, "x");
-        return;
-      }
-
-      // vertical gesture => page topics
-      if (absY > 60 && absY > absX * 1.2) {
-        const dir = (-dy) > 0 ? 1 : -1;
-        startNav(dir, "y");
-      }
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchend", onTouchEnd);
-    };
-  }, [ordered.length]);
-
   const slideStyleFor = (idx) => {
-    const baseTransition =
-      anim?.phase === "run" ? `transform ${DURATION_MS}ms ${EASE}` : "none";
-
     if (!anim) {
       return {
         transform: idx === activeIndex ? "translate3d(0,0,0)" : "translate3d(200%,0,0)",
         opacity: idx === activeIndex ? 1 : 0,
-        transition: "none",
       };
     }
 
-    const { from, to, axis, dir, phase } = anim;
-    const off = (n) =>
-      axis === "x" ? `translate3d(${n}%,0,0)` : `translate3d(0,${n}%,0)`;
+    const { from, to, dir, phase } = anim;
+    const off = (n) => `translate3d(${n}%,0,0)`;
 
-    if (idx === from) {
-      return { transform: phase === "run" ? off(-dir * 100) : off(0), opacity: 1, transition: baseTransition };
-    }
-    if (idx === to) {
-      return { transform: phase === "run" ? off(0) : off(dir * 100), opacity: 1, transition: baseTransition };
-    }
-
-    return { transform: off(200), opacity: 0, transition: "none" };
+    if (idx === from) return { transform: phase === "run" ? off(-dir * 100) : off(0) };
+    if (idx === to) return { transform: phase === "run" ? off(0) : off(dir * 100) };
+    return { transform: off(200), opacity: 0 };
   };
 
   return (
-    <div className="mVPager" ref={pagerRef} aria-label={`Pager for ${subject}`}>
+    <div className="tntMc2PagerRoot" ref={pagerRef}>
       {ordered.map((t, idx) => (
         <TopicCardSlide
-          key={`${subject}-${t?.topic_name || "topic"}-${idx}`}
+          key={`${subject}-${idx}`}
           topic={t}
           subject={subject}
           index={idx}
           total={ordered.length}
           activeIndex={activeIndex}
-          isOpen={true}
-          onOpen={() => {}}
-          onClose={() => {}}
+          isOpen
           slideStyle={slideStyleFor(idx)}
           orderedTopics={ordered}
           onJumpToIndex={jumpToIndex}
