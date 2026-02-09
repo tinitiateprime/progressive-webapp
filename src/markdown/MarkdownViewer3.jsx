@@ -1,16 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-function CodeBlock({ codeText }) {
-  const [copied, setCopied] = useState(false);
-  return <div className="relative">{/* your copy button later */}</div>;
-}
 
 export default function MarkdownViewer({ content, baseUrl = "" }) {
   const md = useMemo(() => String(content || ""), [content]);
 
-  // ✅ Resolve relative URLs using the markdown file URL (md_url)
+  // ✅ Resolve relative URLs (images/links) against the markdown file URL (md_url)
   const resolveUrl = useCallback(
     (url) => {
       if (!url) return "";
@@ -48,7 +43,7 @@ export default function MarkdownViewer({ content, baseUrl = "" }) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        urlTransform={resolveUrl} // ✅ fixes markdown img/link urls
+        urlTransform={resolveUrl} // ✅ fixes markdown ![]() urls
         components={{
           h1: (props) => (
             <h1 className="mt-[18px] mb-[10px] leading-[1.25] font-[800]" {...props} />
@@ -63,7 +58,7 @@ export default function MarkdownViewer({ content, baseUrl = "" }) {
           ul: (props) => <ul className="pl-[18px] my-[10px] list-disc" {...props} />,
           li: (props) => <li className="my-[6px]" {...props} />,
 
-          // ✅ Resolve + render image (avoid break + full width)
+          // ✅ small, centered, responsive image + resolved src
           img: ({ src, alt, ...rest }) => {
             const fixedSrc = resolveUrl(src);
             return (
@@ -74,7 +69,8 @@ export default function MarkdownViewer({ content, baseUrl = "" }) {
                   alt={alt || ""}
                   loading="lazy"
                   className={[
-                    "w-full h-auto block mx-auto",
+                    "block mx-auto h-auto",
+                    "max-w-[80px] w-full", // ✅ small image (change to 240/420 if needed)
                     "object-contain rounded-[14px]",
                     "shadow-[0_14px_30px_rgba(17,24,39,0.10)]",
                   ].join(" ")}
@@ -84,7 +80,6 @@ export default function MarkdownViewer({ content, baseUrl = "" }) {
             );
           },
 
-          // ✅ optional: tables scroll horizontally on small screens
           table: ({ children, ...props }) => (
             <div className="max-w-full overflow-x-auto [touch-action:pan-x] my-[10px]">
               <table {...props} className="w-max min-w-full border-collapse">
@@ -94,7 +89,6 @@ export default function MarkdownViewer({ content, baseUrl = "" }) {
           ),
 
           code: ({ inline, className, children, ...props }) => {
-            const text = String(children || "");
             if (inline) {
               return (
                 <code
@@ -111,19 +105,16 @@ export default function MarkdownViewer({ content, baseUrl = "" }) {
             }
 
             return (
-              <div className="relative">
-                <CodeBlock codeText={text} />
-                <pre
-                  className={[
-                    "mt-2 rounded-[12px] p-3 overflow-x-auto overflow-y-hidden scrollbar-hide",
-                    "[touch-action:pan-x]",
-                    "bg-slate-900/[0.045] border border-slate-900/[0.08]",
-                    "dark:bg-white/[0.06] dark:border-white/[0.10]",
-                  ].join(" ")}
-                >
-                  <code className={`font-mono ${className || ""}`}>{children}</code>
-                </pre>
-              </div>
+              <pre
+                className={[
+                  "mt-2 rounded-[12px] p-3 overflow-x-auto overflow-y-hidden scrollbar-hide",
+                  "[touch-action:pan-x]",
+                  "bg-slate-900/[0.045] border border-slate-900/[0.08]",
+                  "dark:bg-white/[0.06] dark:border-white/[0.10]",
+                ].join(" ")}
+              >
+                <code className={`font-mono ${className || ""}`}>{children}</code>
+              </pre>
             );
           },
         }}
