@@ -1,6 +1,6 @@
 import { useCatalog } from "../hooks/useCatalog";
 import CardNavigation from "../components/cardNavigation/CardNavigation";
-import MobileCatalog2 from "../components/mobileCatalog/MobileCatalog2";
+import MobileCatalog2 from "../components/mobileCatalog/MobileCatalogTw";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 
 export default function Dashboard2() {

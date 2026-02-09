@@ -3,6 +3,8 @@
 
 /* ✅ Tailwind v4 */
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
 
 html,
 body,

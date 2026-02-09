@@ -343,6 +343,16 @@ export default function HomePage() {
             Open Dashboard2 <span style={styles.btnArrow}>→</span>
           </button>
 
+           <button
+            type="button"
+            onClick={() => navigate("/dashboard3")}
+            style={styles.primaryBtn}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0px)")}
+          >
+            Open Dashboard3 <span style={styles.btnArrow}>→</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
