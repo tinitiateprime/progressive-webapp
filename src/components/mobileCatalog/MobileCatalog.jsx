@@ -8,16 +8,10 @@ function norm(s) {
   return String(s || "").toLowerCase().trim();
 }
 
-const SUBJECT_LABELS = {
-  vuejs: "Vue.js",
-  nextjs: "Next.js",
-  sqlserver: "SQL Server",
-};
-
 function prettySubject(subject) {
-  const key = norm(subject);
-  return SUBJECT_LABELS[key] || subject || "Subject";
+  return subject || "Subject";
 }
+
 
 function pickSubject(catalog, id) {
   const key = norm(id);
