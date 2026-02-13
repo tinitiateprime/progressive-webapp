@@ -1,27 +1,95 @@
-/**
- * Groups topics into rows by scroll_row and sorts each row by topic_position.
- * Robust handling:
- * - missing scroll_row => row 1
- * - missing topic_position => goes to end
- */
-export function groupTopicsIntoRows(topics = []) {
-  const map = new Map();
+// File: src/utils/catalogLayout.js
 
-  for (const t of topics) {
-    const row = Number.isFinite(Number(t.scroll_row)) ? Number(t.scroll_row) : 1;
-    if (!map.has(row)) map.set(row, []);
-    map.get(row).push(t);
+function toNum(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function norm(s) {
+  return String(s || "").toLowerCase().trim();
+}
+
+function isReadme(topic) {
+  return norm(topic?.topic_name) === "readme";
+}
+
+/**
+ * Computes safe row/col for every topic:
+ * - If scroll_row/topic_position exist → use them
+ * - Else fallback to list order using cols
+ */
+function withComputedRowCol(topics = [], cols = 3) {
+  const c = Math.max(1, Number(cols) || 3);
+
+  return (topics || []).map((t, i) => {
+    const fallbackRow = Math.floor(i / c) + 1;
+    const fallbackCol = (i % c) + 1;
+
+    return {
+      ...t,
+      __row: toNum(t?.scroll_row, fallbackRow),
+      __col: toNum(t?.topic_position, fallbackCol),
+      __idx: i,
+    };
+  });
+}
+
+/**
+ * ✅ Row-wise sort:
+ * README first, then row (top→bottom), then col (left→right)
+ */
+export function sortTopicsRowWise(topics = [], cols = 3) {
+  const arr = withComputedRowCol(topics, cols);
+
+  arr.sort((a, b) => {
+    const ar = isReadme(a);
+    const br = isReadme(b);
+    if (ar !== br) return ar ? -1 : 1;
+
+    if (a.__row !== b.__row) return a.__row - b.__row;
+    if (a.__col !== b.__col) return a.__col - b.__col;
+
+    // stable fallback
+    return (a.__idx ?? 0) - (b.__idx ?? 0);
+  });
+
+  // remove computed fields before returning
+  return arr.map(({ __row, __col, __idx, ...rest }) => rest);
+}
+
+/**
+ * ✅ Groups into rows using computed row/col (never column-fill scramble)
+ * Returns: [{ row: 1, topics: [...] }, { row: 2, topics: [...] }, ...]
+ */
+export function groupTopicsIntoRows(topics = [], cols = 3) {
+  const c = Math.max(1, Number(cols) || 3);
+  const arr = withComputedRowCol(topics, c);
+
+  // group by row
+  const rowMap = new Map();
+  for (const t of arr) {
+    const r = t.__row;
+    if (!rowMap.has(r)) rowMap.set(r, []);
+    rowMap.get(r).push(t);
   }
 
-  const rowNumbers = Array.from(map.keys()).sort((a, b) => a - b);
+  const rows = [...rowMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([row, rowTopics]) => {
+      const ordered = [...rowTopics].sort((a, b) => {
+        const ar = isReadme(a);
+        const br = isReadme(b);
+        if (ar !== br) return ar ? -1 : 1;
 
-  return rowNumbers.map((rowNum) => {
-    const rowTopics = map.get(rowNum) || [];
-    rowTopics.sort((a, b) => {
-      const ap = Number.isFinite(Number(a.topic_position)) ? Number(a.topic_position) : 999999;
-      const bp = Number.isFinite(Number(b.topic_position)) ? Number(b.topic_position) : 999999;
-      return ap - bp;
+        if (a.__col !== b.__col) return a.__col - b.__col;
+        return (a.__idx ?? 0) - (b.__idx ?? 0);
+      });
+
+      return {
+        row,
+        topics: ordered.map(({ __row, __col, __idx, ...rest }) => rest),
+      };
     });
-    return { row: rowNum, topics: rowTopics };
-  });
+
+  return rows;
 }

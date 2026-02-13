@@ -1,3 +1,4 @@
+// File: SubjectPager.jsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -14,25 +15,26 @@ function toNum(v, fallback = 9999) {
 
 function sortTopics(topics = []) {
   const arr = [...topics];
+
   arr.sort((a, b) => {
     const ar = isReadme(a);
     const br = isReadme(b);
     if (ar !== br) return ar ? -1 : 1;
 
-    const ap = toNum(a?.topic_position);
-    const bp = toNum(b?.topic_position);
-    if (ap !== bp) return ap - bp;
-
     const asr = toNum(a?.scroll_row);
     const bsr = toNum(b?.scroll_row);
     if (asr !== bsr) return asr - bsr;
 
+    const ap = toNum(a?.topic_position);
+    const bp = toNum(b?.topic_position);
+    if (ap !== bp) return ap - bp;
+
     return String(a?.topic_name || "").localeCompare(String(b?.topic_name || ""));
   });
+
   return arr;
 }
 
-/* allow code blocks to still scroll horizontally */
 function findScrollableX(startEl, stopEl) {
   let el = startEl;
   while (el && el !== stopEl && el !== document.body) {
@@ -52,7 +54,6 @@ function canScrollX(el, dx) {
   return el.scrollLeft > 1;
 }
 
-/* allow card body to scroll vertically; only page when it can't */
 function findScrollableY(startEl, stopEl) {
   let el = startEl;
   while (el && el !== stopEl && el !== document.body) {
@@ -86,6 +87,23 @@ export default function SubjectPager({ subjectItem }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [anim, setAnim] = useState(null);
 
+  const [animEnabled, setAnimEnabled] = useState(() => {
+    const v = localStorage.getItem("mcat_anim");
+    return v == null ? true : v === "1";
+  });
+  useEffect(() => {
+    localStorage.setItem("mcat_anim", animEnabled ? "1" : "0");
+  }, [animEnabled]);
+
+  // ✅ for arrow coloring
+  const [lastAxis, setLastAxis] = useState("x");
+  const lastAxisRef = useRef("x");
+  const setAxisFast = (axis) => {
+    if (lastAxisRef.current === axis) return;
+    lastAxisRef.current = axis;
+    setLastAxis(axis);
+  };
+
   const lockRef = useRef(false);
   const accRef = useRef({ x: 0, y: 0 });
   const timeoutRef = useRef(null);
@@ -109,9 +127,19 @@ export default function SubjectPager({ subjectItem }) {
   const startNav = (dir, axis) => {
     if (lockRef.current || animatingRef.current) return;
 
+    setAxisFast(axis);
+
     const from = activeRef.current;
     const to = clampIndex(from + dir);
     if (to === from) return;
+
+    if (!animEnabled) {
+      clearTimeout(timeoutRef.current);
+      setAnim(null);
+      setActiveIndex(to);
+      lockPaging();
+      return;
+    }
 
     animatingRef.current = true;
     setAnim({ from, to, axis, dir, phase: "prep" });
@@ -131,15 +159,24 @@ export default function SubjectPager({ subjectItem }) {
     lockPaging();
   };
 
-  // jump directly to any topic index (dropdown)
   const jumpToIndex = (toIndex) => {
     if (lockRef.current || animatingRef.current) return;
+
+    setAxisFast("x");
 
     const from = activeRef.current;
     const to = clampIndex(toIndex);
     if (to === from) return;
 
     const dir = to > from ? 1 : -1;
+
+    if (!animEnabled) {
+      clearTimeout(timeoutRef.current);
+      setAnim(null);
+      setActiveIndex(to);
+      lockPaging();
+      return;
+    }
 
     animatingRef.current = true;
     setAnim({ from, to, axis: "x", dir, phase: "prep" });
@@ -158,16 +195,15 @@ export default function SubjectPager({ subjectItem }) {
     lockPaging();
   };
 
-  // reset when subject changes
   useEffect(() => {
     setActiveIndex(0);
     setAnim(null);
     animatingRef.current = false;
     accRef.current = { x: 0, y: 0 };
+    setAxisFast("x");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject]);
 
-  // wheel handling
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
@@ -190,6 +226,8 @@ export default function SubjectPager({ subjectItem }) {
       const mostlyVertical = absY >= absX && absY > 3;
 
       if (mostlyHorizontal) {
+        setAxisFast("x");
+
         const scrollerX = findScrollableX(e.target, el);
         if (scrollerX && canScrollX(scrollerX, dx)) return;
 
@@ -206,6 +244,8 @@ export default function SubjectPager({ subjectItem }) {
       }
 
       if (mostlyVertical) {
+        setAxisFast("y");
+
         const scrollerY = findScrollableY(e.target, el);
         if (scrollerY && canScrollY(scrollerY, dy)) return;
 
@@ -223,9 +263,8 @@ export default function SubjectPager({ subjectItem }) {
 
     el.addEventListener("wheel", onWheel, { passive: false, capture: true });
     return () => el.removeEventListener("wheel", onWheel, { capture: true });
-  }, [ordered.length]);
+  }, [ordered.length, animEnabled]);
 
-  // touch swipe
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
@@ -254,11 +293,13 @@ export default function SubjectPager({ subjectItem }) {
       const absY = Math.abs(dy);
 
       if (absX > 60 && absX > absY * 1.2) {
+        setAxisFast("x");
         startNav(dx < 0 ? 1 : -1, "x");
         return;
       }
 
       if (absY > 60 && absY > absX * 1.2) {
+        setAxisFast("y");
         const startTarget = touchTargetRef.current;
         const scrollIntent = -dy;
 
@@ -277,13 +318,13 @@ export default function SubjectPager({ subjectItem }) {
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchend", onTouchEnd);
     };
-  }, [ordered.length]);
+  }, [ordered.length, animEnabled]);
 
   const slideStyleFor = (idx) => {
     const baseTransition =
-      anim?.phase === "run" ? `transform ${DURATION_MS}ms ${EASE}` : "none";
+      animEnabled && anim?.phase === "run" ? `transform ${DURATION_MS}ms ${EASE}` : "none";
 
-    if (!anim) {
+    if (!anim || !animEnabled) {
       return {
         transform: idx === activeIndex ? "translate3d(0,0,0)" : "translate3d(200%,0,0)",
         opacity: idx === activeIndex ? 1 : 0,
@@ -292,9 +333,7 @@ export default function SubjectPager({ subjectItem }) {
     }
 
     const { from, to, axis, dir, phase } = anim;
-
-    const off = (n) =>
-      axis === "x" ? `translate3d(${n}%,0,0)` : `translate3d(0,${n}%,0)`;
+    const off = (n) => (axis === "x" ? `translate3d(${n}%,0,0)` : `translate3d(0,${n}%,0)`);
 
     if (idx === from) {
       return {
@@ -310,9 +349,10 @@ export default function SubjectPager({ subjectItem }) {
         transition: baseTransition,
       };
     }
-
     return { transform: off(200), opacity: 0, transition: "none" };
   };
+
+  const toggleAnim = () => setAnimEnabled((v) => !v);
 
   return (
     <div
@@ -335,6 +375,13 @@ export default function SubjectPager({ subjectItem }) {
           slideStyle={slideStyleFor(idx)}
           orderedTopics={ordered}
           onJumpToIndex={jumpToIndex}
+          onPrev={() => startNav(-1, "x")}
+          onNext={() => startNav(1, "x")}
+          canPrev={idx > 0}
+          canNext={idx < ordered.length - 1}
+          animEnabled={animEnabled}
+          onToggleAnim={toggleAnim}
+          lastAxis={lastAxis} // ✅ IMPORTANT
         />
       ))}
     </div>
