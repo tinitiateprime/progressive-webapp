@@ -40,6 +40,109 @@ const readOfflineSubjects = (): OfflineSubjectMeta[] => {
   return metas.sort((a, b) => a.subject.localeCompare(b.subject));
 };
 
+
+const toRawGithub = (u: string) => {
+  const m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+  if (!m) return u;
+  const [, owner, repo, branch, path] = m;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+};
+
+/** Extract first URL from a string; also convert blob->raw if needed */
+const extractUrl = (text: string) => {
+  const m = text.match(/\bhttps?:\/\/[^\s)]+/);
+  if (!m) return "";
+  let url = m[0].replace(/[)\],]+$/g, "");
+  if (url.includes("github.com/") && url.includes("/blob/")) url = toRawGithub(url);
+  return url;
+};
+
+const cleanTitle = (s: string) =>
+  s
+    .replace(/\s*\*\s*https?:\/\/.*$/i, "")
+    .replace(/\s*https?:\/\/.*$/i, "")
+    .trim();
+
+/**
+ * ✅ Parses YOUR README format:
+ *
+ * Subject:
+ *   ## Vue JS
+ *
+ * Topics:
+ *   ### Introduction
+ *   https://raw....
+ */
+const parseCatalogFromReadme = (md: string): CatalogSubject[] => {
+  const text = (md || "").replace(/\r/g, "\n");
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const map = new Map<string, CatalogSubject>();
+  const ensureSubject = (name: string) => {
+    const key = cleanTitle(name);
+    if (!map.has(key)) map.set(key, { subject: key, topics: [] });
+    return map.get(key)!;
+  };
+
+  let currentSubject: CatalogSubject | null = null;
+
+  const addTopic = (sub: CatalogSubject, topic_name: string, md_url: string) => {
+    const tn = cleanTitle(topic_name);
+    const url = md_url.trim();
+    if (!tn || !url) return;
+    if (sub.topics.some((t) => t.topic_name === tn)) return;
+    sub.topics.push({ topic_name: tn, md_url: url });
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // SUBJECT: "## Vue JS" but ignore "## Catalog 1"
+    const h2 = line.match(/^##\s+(.*)$/);
+    if (h2) {
+      const heading = h2[1].trim();
+      if (/^catalog\s*\d*/i.test(heading)) continue; // ignore "Catalog 1/2/3"
+      currentSubject = ensureSubject(heading);
+      continue;
+    }
+
+    // TOPIC: "### Introduction" and URL usually next line
+    const h3 = line.match(/^###\s+(.*)$/);
+    if (h3) {
+      if (!currentSubject) continue;
+
+      const topicTitle = h3[1].trim();
+
+      // URL can be on same line OR next lines until next heading
+      let url = extractUrl(line);
+
+      if (!url) {
+        for (let j = i + 1; j < lines.length; j++) {
+          const next = lines[j];
+
+          // stop if next heading starts
+          if (/^#{1,6}\s+/.test(next)) break;
+
+          const candidate = extractUrl(next);
+          if (candidate) {
+            url = candidate;
+            break;
+          }
+        }
+      }
+
+      if (url) addTopic(currentSubject, topicTitle, url);
+      continue;
+    }
+  }
+
+  return Array.from(map.values()).filter((s) => s.subject && (s.topics?.length ?? 0) > 0);
+};
+
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -75,15 +178,17 @@ export default function Dashboard() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  
   // ── load catalog from network ──────────────────────────────────────────────
   useEffect(() => {
-    const url =
-      "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/metadata/qna_catalog.json";
-
-    fetch(url)
-      .then((r) => r.json())
-      .then((json) => {
-        setSubjects(json.qna_catalog || []);
+    const readmeBlob =
+      "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
+    const readmeRaw = toRawGithub(readmeBlob);
+    fetch(readmeRaw)
+      .then((r) => r.text())
+      .then((text) => {
+        const catalog = parseCatalogFromReadme(text);
+        setSubjects(catalog);
         setLoading(false);
       })
       .catch(() => {
