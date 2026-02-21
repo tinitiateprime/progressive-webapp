@@ -3,7 +3,7 @@
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { ThemeContext } from "../../context/ThemeContext";
-import { FaArrowLeft, FaMoon, FaSearch, FaSun } from "react-icons/fa";
+import { FaArrowLeft, FaMoon, FaSearch, FaSun, FaDownload, FaCheckCircle } from "react-icons/fa";
 
 type Topic = { topic_name: string; md_url: string };
 
@@ -16,6 +16,8 @@ type FavTopic = {
 // ✅ Source: tinitiate_it_traning_app README (RAW)
 const README_RAW_URL =
   "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/README.md";
+
+const CACHE_NAME = "tinitiate-offline-v1";
 
 const slugify = (text: string) =>
   text
@@ -124,6 +126,7 @@ export default function SubjectPage() {
   const router = useRouter();
   const { subject } = router.query;
   const subjectStr = String(subject || "");
+  const subjectKey = useMemo(() => `offline_subject_${normalize(subjectStr)}`, [subjectStr]);
 
   const { theme, toggleTheme } = useContext(ThemeContext);
 
@@ -134,6 +137,14 @@ export default function SubjectPage() {
   const [q, setQ] = useState("");
 
   const [favorites, setFavorites] = useState<FavTopic[]>([]);
+
+  // ✅ offline save states
+  const [savingOffline, setSavingOffline] = useState(false);
+  const [offlineSavedAt, setOfflineSavedAt] = useState<number | null>(null);
+  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number }>({
+    done: 0,
+    total: 0,
+  });
 
   // online/offline watcher (status only)
   useEffect(() => {
@@ -146,6 +157,22 @@ export default function SubjectPage() {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  // load offline meta (savedAt) for this subject
+  useEffect(() => {
+    if (!subjectStr) return;
+    try {
+      const raw = localStorage.getItem(subjectKey);
+      if (!raw) {
+        setOfflineSavedAt(null);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setOfflineSavedAt(typeof parsed?.savedAt === "number" ? parsed.savedAt : null);
+    } catch {
+      setOfflineSavedAt(null);
+    }
+  }, [subjectStr, subjectKey]);
 
   // load favorites
   useEffect(() => {
@@ -169,6 +196,21 @@ export default function SubjectPage() {
   // ✅ fetch topics from README
   useEffect(() => {
     if (!router.isReady || !subjectStr) return;
+
+    const loadFromOffline = () => {
+      try {
+        const raw = localStorage.getItem(subjectKey);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.topics)) {
+          setTopics(parsed.topics);
+          setError("");
+          setOfflineSavedAt(typeof parsed?.savedAt === "number" ? parsed.savedAt : null);
+          return true;
+        }
+      } catch {}
+      return false;
+    };
 
     const run = async () => {
       setLoading(true);
@@ -207,21 +249,80 @@ export default function SubjectPage() {
         setTopics(ordered);
       } catch (err) {
         console.error("Failed to load subject:", err);
-        setTopics([]);
-        setError("Failed to load subject");
+
+        // ✅ offline fallback
+        const ok = loadFromOffline();
+        if (!ok) {
+          setTopics([]);
+          setError("Failed to load subject (and no offline copy found)");
+        }
       } finally {
         setLoading(false);
       }
     };
 
     run();
-  }, [router.isReady, subjectStr]);
+  }, [router.isReady, subjectStr, subjectKey]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
     if (!qq) return topics;
     return topics.filter((t) => t.topic_name.toLowerCase().includes(qq));
   }, [topics, q]);
+
+  // ✅ Save Offline (cache markdown + store topic list)
+  const handleSaveOffline = async () => {
+    if (!topics.length) return;
+
+    setSavingOffline(true);
+    setSaveProgress({ done: 0, total: topics.length });
+
+    try {
+      if (typeof window === "undefined") return;
+
+      // Cache API support check
+      const hasCache = "caches" in window;
+      if (!hasCache) {
+        alert("Your browser does not support offline cache (Cache Storage).");
+        return;
+      }
+
+      const cache = await caches.open(CACHE_NAME);
+
+      // (optional) cache README too
+      try {
+        const r = await fetch(README_RAW_URL, { cache: "no-store" });
+        if (r.ok) await cache.put(README_RAW_URL, r.clone());
+      } catch {}
+
+      // Save meta + topics list
+      const meta = {
+        subject: subjectStr,
+        savedAt: Date.now(),
+        topicCount: topics.length,
+        topics,
+      };
+      localStorage.setItem(subjectKey, JSON.stringify(meta));
+      setOfflineSavedAt(meta.savedAt);
+
+      // Cache each markdown url
+      for (let i = 0; i < topics.length; i++) {
+        const url = topics[i].md_url;
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (res.ok) {
+            await cache.put(url, res.clone());
+          }
+        } catch (e) {
+          // ignore per-file failures
+        } finally {
+          setSaveProgress((p) => ({ ...p, done: i + 1 }));
+        }
+      }
+    } finally {
+      setSavingOffline(false);
+    }
+  };
 
   // ✅ Favorites toggle (POST/DELETE)
   const toggleFavorite = async (topic: FavTopic) => {
@@ -308,7 +409,7 @@ export default function SubjectPage() {
          hover:-translate-y-2 hover:shadow-2xl`;
 
   const btnBase =
-    "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-[0.99]";
+    "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
   const btnOutline =
     theme === "dark"
       ? `${btnBase} border border-slate-700 bg-slate-900 hover:bg-slate-800`
@@ -338,11 +439,44 @@ export default function SubjectPage() {
                   }
                 >
                   {isOffline ? "Offline" : "Online"} • {topics.length} topics
+                  {offlineSavedAt ? " • Offline saved" : ""}
                 </div>
+
+                {offlineSavedAt && (
+                  <div className={theme === "dark" ? "text-xs text-slate-400" : "text-xs text-slate-600"}>
+                    Saved at: {new Date(offlineSavedAt).toLocaleString()}
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              {/* ✅ Save Offline Button */}
+              <button
+                className={btnOutline}
+                onClick={handleSaveOffline}
+                type="button"
+                disabled={savingOffline || topics.length === 0}
+                title="Save all topic cards (markdown) for offline reading"
+              >
+                {savingOffline ? (
+                  <>
+                    <FaDownload />
+                    Saving {saveProgress.done}/{saveProgress.total}
+                  </>
+                ) : offlineSavedAt ? (
+                  <>
+                    <FaCheckCircle />
+                    Saved Offline
+                  </>
+                ) : (
+                  <>
+                    <FaDownload />
+                    Save Offline
+                  </>
+                )}
+              </button>
+
               <button
                 className={btnOutline}
                 onClick={() => router.push("/dashboard")}
