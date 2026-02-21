@@ -7,28 +7,39 @@ import { ThemeContext, Theme } from "../context/ThemeContext";
 
 export default function App({ Component, pageProps }: AppProps) {
   const [theme, setTheme] = useState<Theme>("light");
-
+  const [mounted, setMounted] = useState(false);
+  
   useEffect(() => {
+    setMounted(true);
     const saved = localStorage.getItem("theme") as Theme | null;
-    if (saved) setTheme(saved);
-    else setTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    if (saved) {
+      setTheme(saved);
+    } else {
+      setTheme(
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+      );
+    }
   }, []);
 
   useEffect(() => {
+    if (!mounted) return; // ✅ skip on server
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem("theme", theme);
-  }, [theme]);
+  }, [theme, mounted]);
 
+  // SW registration unchanged
   useEffect(() => {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(console.error);
-  }
-}, []);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(console.error);
+    }
+  }, []);
 
   const toggleTheme = () => setTheme((p) => (p === "light" ? "dark" : "light"));
 
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+   return (
+    <ThemeContext.Provider value={{ theme, toggleTheme: () => setTheme(p => p === "light" ? "dark" : "light") }}>
       <Head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -38,7 +49,6 @@ export default function App({ Component, pageProps }: AppProps) {
         />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
       </Head>
-
       <Component {...pageProps} />
     </ThemeContext.Provider>
   );

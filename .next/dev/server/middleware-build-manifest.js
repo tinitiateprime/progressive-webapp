@@ -34,6 +34,11 @@ globalThis.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/offline.js"
     ],
+    "/subject/[subject]": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/subject/[subject].js"
+    ],
     "/topic/[topic]": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",

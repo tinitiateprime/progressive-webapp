@@ -158,6 +158,8 @@ const readOfflineMeta = (key: string): OfflineSubjectMeta | null => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SubjectPage() {
+    const [mounted, setMounted] = useState(false);
+
   const router = useRouter();
   const { subject } = router.query;
   const subjectStr = String(subject || "");
@@ -194,6 +196,10 @@ export default function SubjectPage() {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
     };
+  }, []);
+
+    useEffect(() => {
+    setMounted(true);
   }, []);
 
   // ── load savedAt for this subject ──────────────────────────────────────────
@@ -298,7 +304,6 @@ export default function SubjectPage() {
     setSaveProgress({ done: 0, total: topics.length });
 
     try {
-      if (typeof window === "undefined") return;
 
       if (!("caches" in window)) {
         alert("Your browser does not support offline cache (Cache Storage).");
@@ -439,7 +444,29 @@ export default function SubjectPage() {
       ? `${btnBase} border border-slate-700 bg-slate-900 hover:bg-slate-800`
       : `${btnBase} border border-slate-200 bg-white hover:bg-slate-50`;
 
+      // ✅ Use a fixed format that's locale-independent
+const formatDate = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
   // ─── Render ─────────────────────────────────────────────────────────────────
+
+  // ✅ Suppress until client is ready
+  if (!mounted) {
+    return (
+      <div className={
+        // use a safe static class — no theme-dependent browser logic yet
+        "min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900"
+      }>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+          <div className="rounded-2xl p-6 bg-white border border-slate-200 shadow-sm">
+            Loading…
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className={pageBg}>
@@ -477,7 +504,7 @@ export default function SubjectPage() {
                         : "text-xs text-slate-600"
                     }
                   >
-                    Saved at: {new Date(offlineSavedAt).toLocaleString()}
+                    Saved at: {formatDate(offlineSavedAt)}
                   </div>
                 )}
               </div>

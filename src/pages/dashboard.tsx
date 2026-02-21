@@ -46,12 +46,13 @@ export default function Dashboard() {
   const router = useRouter();
   const { theme, toggleTheme } = useContext(ThemeContext);
 
-  const [isOffline, setIsOffline] = useState(false);
   const [subjects, setSubjects] = useState<CatalogSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [mounted, setMounted] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [offlineSubjects, setOfflineSubjects] = useState<OfflineSubjectMeta[]>([]);
-
+ 
   // ── online/offline watcher ─────────────────────────────────────────────────
   useEffect(() => {
     const update = () => setIsOffline(!navigator.onLine);
@@ -91,12 +92,53 @@ export default function Dashboard() {
       });
   }, []);
 
+  // ✅ Set mounted after first client render
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const update = () => setIsOffline(!navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
   const isSubjectOffline = (subjectName: string) =>
     offlineSubjects.some(
       (o) => o.subject.toLowerCase() === subjectName.toLowerCase()
     );
+const formatDate = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+    if (!mounted) {
+    return (
+      <div style={{ minHeight: "100vh" }}>
+        {/* Topbar without any browser-dependent values */}
+        <div className="card" style={{ borderRadius: 0, borderLeft: 0, borderRight: 0, borderTop: 0 }}>
+          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <img src="/favicon_new.png" alt="Tinitiate" style={{ width: 34, height: 34, borderRadius: 10 }} />
+              <div>
+                <div style={{ fontWeight: 800 }}>Tutorial Dashboard</div>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>Pick a subject like a docs site</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 16px" }}>
+          <div className="card" style={{ padding: 18 }}>Loading…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh" }}>
@@ -266,7 +308,7 @@ export default function Dashboard() {
                       color: "var(--muted)",
                     }}
                   >
-                    Saved {new Date(s.savedAt).toLocaleDateString()}
+                    Saved {formatDate(s.savedAt)}
                   </div>
                 </button>
               ))}
