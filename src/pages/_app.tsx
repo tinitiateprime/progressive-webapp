@@ -19,6 +19,12 @@ export default function App({ Component, pageProps }: AppProps) {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(console.error);
+  }
+}, []);
+
   const toggleTheme = () => setTheme((p) => (p === "light" ? "dark" : "light"));
 
   return (

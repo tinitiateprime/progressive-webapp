@@ -3,7 +3,17 @@
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { ThemeContext } from "../../context/ThemeContext";
-import { FaArrowLeft, FaMoon, FaSearch, FaSun, FaDownload, FaCheckCircle } from "react-icons/fa";
+import {
+  FaArrowLeft,
+  FaMoon,
+  FaSearch,
+  FaSun,
+  FaDownload,
+  FaCheckCircle,
+  FaWifi,
+} from "react-icons/fa";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Topic = { topic_name: string; md_url: string };
 
@@ -13,11 +23,22 @@ type FavTopic = {
   subject: string;
 };
 
-// ✅ Source: tinitiate_it_traning_app README (RAW)
+type OfflineSubjectMeta = {
+  subject: string;
+  savedAt: number;
+  topicCount: number;
+  topics: Topic[];
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const README_RAW_URL =
   "https://raw.githubusercontent.com/tinitiateprime/tinitiate_it_traning_app/main/README.md";
 
 const CACHE_NAME = "tinitiate-offline-v1";
+const OFFLINE_PREFIX = "offline_subject_";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const slugify = (text: string) =>
   text
@@ -28,7 +49,6 @@ const slugify = (text: string) =>
 
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** Convert GitHub blob URL -> raw URL (required for fetch) */
 const toRawGithub = (u: string) => {
   const m = u.match(
     /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
@@ -38,12 +58,12 @@ const toRawGithub = (u: string) => {
   return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
 };
 
-/** Extract first URL from a string; also convert blob->raw if needed */
 const extractUrl = (text: string) => {
   const m = text.match(/\bhttps?:\/\/[^\s)]+/);
   if (!m) return "";
   let url = m[0].replace(/[)\],]+$/g, "");
-  if (url.includes("github.com/") && url.includes("/blob/")) url = toRawGithub(url);
+  if (url.includes("github.com/") && url.includes("/blob/"))
+    url = toRawGithub(url);
   return url;
 };
 
@@ -53,15 +73,7 @@ const cleanTitle = (s: string) =>
     .replace(/\s*https?:\/\/.*$/i, "")
     .trim();
 
-/**
- * ✅ Parses YOUR README format:
- * Subject:
- *   ## Vue JS
- * Topics:
- *   ### Introduction
- *   https://raw....
- */
-const parseSubjectsFromReadme = (md: string) => {
+const parseSubjectsFromReadme = (md: string): Map<string, Topic[]> => {
   const lines = (md || "")
     .replace(/\r/g, "\n")
     .split("\n")
@@ -71,8 +83,8 @@ const parseSubjectsFromReadme = (md: string) => {
   const map = new Map<string, Topic[]>();
   let currentSubject = "";
 
-  const ensure = (subjectName: string) => {
-    const key = cleanTitle(subjectName);
+  const ensure = (name: string) => {
+    const key = cleanTitle(name);
     if (!map.has(key)) map.set(key, []);
     return key;
   };
@@ -80,7 +92,6 @@ const parseSubjectsFromReadme = (md: string) => {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // SUBJECT: "## Vue JS" but ignore "## Catalog 1/2/3"
     const h2 = line.match(/^##\s+(.*)$/);
     if (h2) {
       const heading = h2[1].trim();
@@ -89,12 +100,10 @@ const parseSubjectsFromReadme = (md: string) => {
       continue;
     }
 
-    // TOPIC: "### Introduction" and URL usually next line
     const h3 = line.match(/^###\s+(.*)$/);
     if (h3 && currentSubject) {
       const topicTitle = cleanTitle(h3[1]);
 
-      // URL can be on same line OR next lines until next heading
       let url = extractUrl(line);
       if (!url) {
         for (let j = i + 1; j < lines.length; j++) {
@@ -108,25 +117,54 @@ const parseSubjectsFromReadme = (md: string) => {
         }
       }
 
-      // keep only markdown links
       if (url && /\.md(\?|$)/i.test(url)) {
-        const arr = map.get(currentSubject) || [];
+        const arr = map.get(currentSubject)!;
         if (!arr.some((t) => t.md_url === url)) {
           arr.push({ topic_name: topicTitle, md_url: url });
-          map.set(currentSubject, arr);
         }
       }
     }
   }
 
-  return map; // Map<subject, topics[]>
+  return map;
 };
+
+// ─── Helpers: localStorage ────────────────────────────────────────────────────
+
+const readOfflineSubjects = (): OfflineSubjectMeta[] => {
+  const metas: OfflineSubjectMeta[] = [];
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith(OFFLINE_PREFIX)) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "");
+      if (Array.isArray(parsed?.topics) && typeof parsed.subject === "string") {
+        metas.push(parsed as OfflineSubjectMeta);
+      }
+    } catch {}
+  }
+  return metas;
+};
+
+const readOfflineMeta = (key: string): OfflineSubjectMeta | null => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.topics)) return parsed as OfflineSubjectMeta;
+  } catch {}
+  return null;
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SubjectPage() {
   const router = useRouter();
   const { subject } = router.query;
   const subjectStr = String(subject || "");
-  const subjectKey = useMemo(() => `offline_subject_${normalize(subjectStr)}`, [subjectStr]);
+  const subjectKey = useMemo(
+    () => `${OFFLINE_PREFIX}${normalize(subjectStr)}`,
+    [subjectStr]
+  );
 
   const { theme, toggleTheme } = useContext(ThemeContext);
 
@@ -138,15 +176,15 @@ export default function SubjectPage() {
 
   const [favorites, setFavorites] = useState<FavTopic[]>([]);
 
-  // ✅ offline save states
   const [savingOffline, setSavingOffline] = useState(false);
   const [offlineSavedAt, setOfflineSavedAt] = useState<number | null>(null);
-  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number }>({
-    done: 0,
-    total: 0,
-  });
+  const [saveProgress, setSaveProgress] = useState<{
+    done: number;
+    total: number;
+  }>({ done: 0, total: 0 });
 
-  // online/offline watcher (status only)
+
+  // ── online/offline watcher ──────────────────────────────────────────────────
   useEffect(() => {
     const update = () => setIsOffline(!navigator.onLine);
     update();
@@ -158,63 +196,54 @@ export default function SubjectPage() {
     };
   }, []);
 
-  // load offline meta (savedAt) for this subject
+  // ── load savedAt for this subject ──────────────────────────────────────────
   useEffect(() => {
     if (!subjectStr) return;
-    try {
-      const raw = localStorage.getItem(subjectKey);
-      if (!raw) {
-        setOfflineSavedAt(null);
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      setOfflineSavedAt(typeof parsed?.savedAt === "number" ? parsed.savedAt : null);
-    } catch {
-      setOfflineSavedAt(null);
-    }
+    const meta = readOfflineMeta(subjectKey);
+    setOfflineSavedAt(meta?.savedAt ?? null);
   }, [subjectStr, subjectKey]);
 
-  // load favorites
+ // ── load favorites ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const loadFavorites = async () => {
+    (async () => {
       try {
         const res = await fetch("/api/favorites", {
           cache: "no-store",
           headers: { "Cache-Control": "no-store" },
         });
         if (!res.ok) return;
-        const favs: FavTopic[] = await res.json();
-        setFavorites(favs);
+        setFavorites(await res.json());
       } catch (err) {
         console.error("Failed to load favorites:", err);
       }
-    };
-
-    loadFavorites();
+    })();
   }, []);
 
-  // ✅ fetch topics from README
+  // ── fetch topics (online → README, offline → localStorage) ────────────────
   useEffect(() => {
     if (!router.isReady || !subjectStr) return;
 
-    const loadFromOffline = () => {
-      try {
-        const raw = localStorage.getItem(subjectKey);
-        if (!raw) return false;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed?.topics)) {
-          setTopics(parsed.topics);
-          setError("");
-          setOfflineSavedAt(typeof parsed?.savedAt === "number" ? parsed.savedAt : null);
-          return true;
-        }
-      } catch {}
-      return false;
+    const loadFromOffline = (): boolean => {
+      const meta = readOfflineMeta(subjectKey);
+      if (!meta) return false;
+      setTopics(meta.topics);
+      setError("");
+      setOfflineSavedAt(meta.savedAt);
+      return true;
     };
 
     const run = async () => {
       setLoading(true);
       setError("");
+
+      // Short-circuit to offline cache immediately if no network
+      if (!navigator.onLine) {
+        const ok = loadFromOffline();
+        if (!ok)
+          setError("You're offline and no saved copy exists for this subject.");
+        setLoading(false);
+        return;
+      }
 
       try {
         const res = await fetch(README_RAW_URL, { cache: "no-store" });
@@ -225,37 +254,28 @@ export default function SubjectPage() {
 
         const wanted = normalize(subjectStr);
         const matchKey =
-          Array.from(map.keys()).find((k) => normalize(k) === wanted) || "";
+          Array.from(map.keys()).find((k) => normalize(k) === wanted) ?? "";
 
         if (!matchKey) {
           setTopics([]);
-          setError(`Subject "${subjectStr}" not found in README`);
+          setError(`Subject "${subjectStr}" not found in README.`);
           return;
         }
 
-        const subjectTopics = map.get(matchKey) || [];
-
-        // Introduction first
-        const introIdx = subjectTopics.findIndex(
+        const raw = map.get(matchKey)!;
+        const introIdx = raw.findIndex(
           (t) => normalize(t.topic_name) === "introduction"
         );
-
-        let ordered = subjectTopics;
-        if (introIdx > 0) {
-          const intro = subjectTopics[introIdx];
-          ordered = [intro, ...subjectTopics.filter((_, i) => i !== introIdx)];
-        }
+        const ordered =
+          introIdx > 0
+            ? [raw[introIdx], ...raw.filter((_, i) => i !== introIdx)]
+            : raw;
 
         setTopics(ordered);
       } catch (err) {
         console.error("Failed to load subject:", err);
-
-        // ✅ offline fallback
-        const ok = loadFromOffline();
-        if (!ok) {
-          setTopics([]);
-          setError("Failed to load subject (and no offline copy found)");
-        }
+        if (!loadFromOffline())
+          setError("Failed to load subject (and no offline copy found).");
       } finally {
         setLoading(false);
       }
@@ -264,13 +284,13 @@ export default function SubjectPage() {
     run();
   }, [router.isReady, subjectStr, subjectKey]);
 
+  // ── filtered topics ────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    if (!qq) return topics;
-    return topics.filter((t) => t.topic_name.toLowerCase().includes(qq));
+    return qq ? topics.filter((t) => t.topic_name.toLowerCase().includes(qq)) : topics;
   }, [topics, q]);
 
-  // ✅ Save Offline (cache markdown + store topic list)
+  // ── save offline ───────────────────────────────────────────────────────────
   const handleSaveOffline = async () => {
     if (!topics.length) return;
 
@@ -280,23 +300,21 @@ export default function SubjectPage() {
     try {
       if (typeof window === "undefined") return;
 
-      // Cache API support check
-      const hasCache = "caches" in window;
-      if (!hasCache) {
+      if (!("caches" in window)) {
         alert("Your browser does not support offline cache (Cache Storage).");
         return;
       }
 
       const cache = await caches.open(CACHE_NAME);
 
-      // (optional) cache README too
+      // Cache README
       try {
         const r = await fetch(README_RAW_URL, { cache: "no-store" });
         if (r.ok) await cache.put(README_RAW_URL, r.clone());
       } catch {}
 
-      // Save meta + topics list
-      const meta = {
+      // Write subject meta to localStorage
+      const meta: OfflineSubjectMeta = {
         subject: subjectStr,
         savedAt: Date.now(),
         topicCount: topics.length,
@@ -305,18 +323,16 @@ export default function SubjectPage() {
       localStorage.setItem(subjectKey, JSON.stringify(meta));
       setOfflineSavedAt(meta.savedAt);
 
-      // Cache each markdown url
+     // Cache each topic markdown
       for (let i = 0; i < topics.length; i++) {
         const url = topics[i].md_url;
         try {
           const res = await fetch(url, { cache: "no-store" });
-          if (res.ok) {
-            await cache.put(url, res.clone());
-          }
-        } catch (e) {
+          if (res.ok) await cache.put(url, res.clone());
+        } catch {
           // ignore per-file failures
         } finally {
-          setSaveProgress((p) => ({ ...p, done: i + 1 }));
+          setSaveProgress({ done: i + 1, total: topics.length });
         }
       }
     } finally {
@@ -324,16 +340,15 @@ export default function SubjectPage() {
     }
   };
 
-  // ✅ Favorites toggle (POST/DELETE)
+  // ── favorites toggle ───────────────────────────────────────────────────────
   const toggleFavorite = async (topic: FavTopic) => {
     const isFavorite = favorites.some((f) => f.slug === topic.slug);
-
-    // optimistic UI
-    const optimistic = isFavorite
-      ? favorites.filter((f) => f.slug !== topic.slug)
-      : [...favorites, topic];
     const prev = favorites;
-    setFavorites(optimistic);
+    setFavorites(
+      isFavorite
+        ? favorites.filter((f) => f.slug !== topic.slug)
+        : [...favorites, topic]
+    );
 
     try {
       const url = isFavorite
@@ -344,35 +359,34 @@ export default function SubjectPage() {
         method: isFavorite ? "DELETE" : "POST",
         headers: isFavorite
           ? { "Cache-Control": "no-store" }
-          : { "Content-Type": "application/json", "Cache-Control": "no-store" },
+          : {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store",
+            },
         body: isFavorite ? undefined : JSON.stringify(topic),
         cache: "no-store",
       });
 
       if (res.status === 404) {
-        console.error(
-          "API route not found: /api/favorites. Create pages/api/favorites.ts OR src/app/api/favorites/route.ts"
-        );
+        console.error("API route not found: /api/favorites");
         setFavorites(prev);
         return;
       }
-
       if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        console.error("Favorite toggle failed:", res.status, msg);
+        console.error("Favorite toggle failed:", res.status);
         setFavorites(prev);
         return;
       }
 
-      const updated: FavTopic[] = await res.json();
-      setFavorites(updated);
+      setFavorites(await res.json());
     } catch (err) {
       console.error("Error toggling favorite:", err);
       setFavorites(prev);
     }
   };
 
-  // --------- UI classes ----------
+  // ─── UI classes ─────────────────────────────────────────────────────────────
+
   const pageBg =
     theme === "dark"
       ? "min-h-screen bg-gradient-to-br from-slate-950 via-slate-950 to-slate-900 text-slate-100"
@@ -408,6 +422,16 @@ export default function SubjectPage() {
          bg-gradient-to-tr from-blue-100 via-white to-cyan-100 border border-blue-200
          hover:-translate-y-2 hover:shadow-2xl`;
 
+  const offlinePanelCard =
+    theme === "dark"
+      ? "rounded-2xl p-4 bg-slate-900 border border-slate-700 shadow-md"
+      : "rounded-2xl p-4 bg-white border border-slate-200 shadow-md";
+
+  const offlineSubjectBtn =
+    theme === "dark"
+      ? "w-full text-left rounded-xl px-4 py-3 text-sm font-medium bg-slate-800 hover:bg-slate-700 border border-slate-700 transition"
+      : "w-full text-left rounded-xl px-4 py-3 text-sm font-medium bg-slate-50 hover:bg-slate-100 border border-slate-200 transition";
+
   const btnBase =
     "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
   const btnOutline =
@@ -415,10 +439,13 @@ export default function SubjectPage() {
       ? `${btnBase} border border-slate-700 bg-slate-900 hover:bg-slate-800`
       : `${btnBase} border border-slate-200 bg-white hover:bg-slate-50`;
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className={pageBg}>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-6">
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div className={headerCard}>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -438,12 +465,18 @@ export default function SubjectPage() {
                       : "text-sm text-slate-700"
                   }
                 >
-                  {isOffline ? "Offline" : "Online"} • {topics.length} topics
+                  {isOffline ? "🔴 Offline" : "🟢 Online"} •{" "}
+                  {topics.length} topics
                   {offlineSavedAt ? " • Offline saved" : ""}
                 </div>
-
                 {offlineSavedAt && (
-                  <div className={theme === "dark" ? "text-xs text-slate-400" : "text-xs text-slate-600"}>
+                  <div
+                    className={
+                      theme === "dark"
+                        ? "text-xs text-slate-400"
+                        : "text-xs text-slate-600"
+                    }
+                  >
                     Saved at: {new Date(offlineSavedAt).toLocaleString()}
                   </div>
                 )}
@@ -451,22 +484,22 @@ export default function SubjectPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {/* ✅ Save Offline Button */}
+              {/* Save Offline */}
               <button
                 className={btnOutline}
                 onClick={handleSaveOffline}
                 type="button"
                 disabled={savingOffline || topics.length === 0}
-                title="Save all topic cards (markdown) for offline reading"
+                title="Save all topic markdown files for offline reading"
               >
                 {savingOffline ? (
                   <>
-                    <FaDownload />
+                    <FaDownload className="animate-bounce" />
                     Saving {saveProgress.done}/{saveProgress.total}
                   </>
                 ) : offlineSavedAt ? (
                   <>
-                    <FaCheckCircle />
+                    <FaCheckCircle className="text-green-500" />
                     Saved Offline
                   </>
                 ) : (
@@ -485,7 +518,11 @@ export default function SubjectPage() {
                 <FaArrowLeft /> Back
               </button>
 
-              <button className={btnOutline} onClick={toggleTheme} type="button">
+              <button
+                className={btnOutline}
+                onClick={toggleTheme}
+                type="button"
+              >
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
                 {theme === "dark" ? "Light" : "Dark"}
               </button>
@@ -496,7 +533,9 @@ export default function SubjectPage() {
           <div className="mt-4 flex flex-col lg:flex-row lg:items-center gap-3">
             <div className={`flex items-center gap-3 flex-1 ${searchCard}`}>
               <FaSearch
-                className={theme === "dark" ? "text-slate-300" : "text-slate-500"}
+                className={
+                  theme === "dark" ? "text-slate-300" : "text-slate-500"
+                }
               />
               <input
                 value={q}
@@ -512,19 +551,25 @@ export default function SubjectPage() {
           </div>
         </div>
 
-        {/* Content */}
-        {loading && <div className={searchCard + " p-6"}>Loading topics…</div>}
+               {/* ── Loading ── */}
+        {loading && (
+          <div className={searchCard + " p-6"}>Loading topics…</div>
+        )}
+
+        {/* ── Error ── */}
         {!loading && error && (
           <div className={searchCard + " p-6 text-red-500"}>{error}</div>
         )}
 
+        {/* ── Topics grid ── */}
         {!loading && !error && (
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((t, i) => {
                 const slug = slugify(t.topic_name);
                 const isFav = favorites.some((f) => f.slug === slug);
-                const isIntro = normalize(t.topic_name) === "introduction";
+                const isIntro =
+                  normalize(t.topic_name) === "introduction";
 
                 const href = `/topic/${encodeURIComponent(
                   t.topic_name
@@ -533,19 +578,26 @@ export default function SubjectPage() {
                 return (
                   <div
                     key={t.md_url}
-                    className={(isIntro ? introCard : topicCard) + " cursor-pointer"}
+                    className={
+                      (isIntro ? introCard : topicCard) + " cursor-pointer"
+                    }
                     role="button"
                     tabIndex={0}
                     onClick={(e) => {
-                      const el = e.target as HTMLElement;
-                      if (el.closest('[data-no-nav="true"]')) return;
+                      if (
+                        (e.target as HTMLElement).closest(
+                          '[data-no-nav="true"]'
+                        )
+                      )
+                        return;
                       router.push(href);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") router.push(href);
+                      if (e.key === "Enter" || e.key === " ")
+                        router.push(href);
                     }}
                   >
-                    {/* Favorite Star */}
+                    {/* Favorite star */}
                     <button
                       data-no-nav="true"
                       type="button"
@@ -563,22 +615,27 @@ export default function SubjectPage() {
                         });
                       }}
                       className={`absolute top-4 right-4 z-50 pointer-events-auto text-xl transition-transform hover:scale-125 ${
-                        theme === "dark" ? "text-yellow-300" : "text-yellow-400"
+                        theme === "dark"
+                          ? "text-yellow-300"
+                          : "text-yellow-400"
                       }`}
-                      title={isFav ? "Remove from favorites" : "Add to favorites"}
+                      title={
+                        isFav ? "Remove from favorites" : "Add to favorites"
+                      }
                     >
                       {isFav ? "★" : "☆"}
                     </button>
 
                     <div
                       className={
-                        theme === "dark" ? "text-xs text-slate-400" : "text-xs text-slate-500"
+                        theme === "dark"
+                          ? "text-xs text-slate-400"
+                          : "text-xs text-slate-500"
                       }
                     >
                       {isIntro ? "Start here" : `#${i + 1}`}
                     </div>
 
-                    {/* ✅ CARD NAME (Title) */}
                     <div className="mt-2">
                       <div
                         className={
@@ -589,7 +646,6 @@ export default function SubjectPage() {
                       >
                         Card Name
                       </div>
-
                       <h3 className="mt-1 text-lg font-semibold leading-snug line-clamp-2">
                         {t.topic_name}
                       </h3>

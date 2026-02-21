@@ -9,6 +9,11 @@ globalThis.__BUILD_MANIFEST = {
   "rootMainFiles": [],
   "rootMainFilesTree": {},
   "pages": {
+    "/": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/index.js"
+    ],
     "/_app": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
@@ -24,10 +29,15 @@ globalThis.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/dashboard.js"
     ],
-    "/subject/[subject]": [
+    "/offline": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/subject/[subject].js"
+      "static/chunks/pages/offline.js"
+    ],
+    "/topic/[topic]": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/topic/[topic].js"
     ]
   }
 };

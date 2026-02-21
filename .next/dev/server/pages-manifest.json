@@ -2,8 +2,10 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
-  "/dashboard": "pages/dashboard.js",
   "/subject/[subject]": "pages/subject/[subject].js",
-  "/api/favorites": "pages/api/favorites.js"
+  "/dashboard": "pages/dashboard.js",
+  "/topic/[topic]": "pages/topic/[topic].js",
+  "/api/favorites": "pages/api/favorites.js",
+  "/offline": "pages/offline.js",
+  "/": "pages/index.js"
 }
