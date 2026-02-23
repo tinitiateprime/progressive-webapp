@@ -1,5 +1,4 @@
-// File: pages/subject/[subject].tsx
-"use client";
+// File: src/pages/subject/[subject].tsx
 
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
@@ -11,7 +10,7 @@ import {
   FaSun,
   FaDownload,
   FaCheckCircle,
-  FaWifi,
+  FaHome,
 } from "react-icons/fa";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,13 +62,14 @@ const extractUrl = (text: string) => {
   const m = text.match(/\bhttps?:\/\/[^\s)]+/);
   if (!m) return "";
   let url = m[0].replace(/[)\],]+$/g, "");
-  if (url.includes("github.com/") && url.includes("/blob/"))
-    url = toRawGithub(url);
+  if (url.includes("github.com/") && url.includes("/blob/")) url = toRawGithub(url);
   return url;
 };
 
 const cleanTitle = (s: string) =>
-  s.replace(/\s*\*\s*https?:\/\/.*$/i, "").replace(/\s*https?:\/\/.*$/i, "").trim();
+  s.replace(/\s*\*\s*https?:\/\/.*$/i, "")
+    .replace(/\s*https?:\/\/.*$/i, "")
+    .trim();
 
 const parseSubjectsFromReadme = (md: string): Map<string, Topic[]> => {
   const lines = (md || "")
@@ -129,21 +129,8 @@ const parseSubjectsFromReadme = (md: string): Map<string, Topic[]> => {
 
 // ─── Helpers: localStorage ────────────────────────────────────────────────────
 
-const readOfflineSubjects = (): OfflineSubjectMeta[] => {
-  const metas: OfflineSubjectMeta[] = [];
-  for (const key of Object.keys(localStorage)) {
-    if (!key.startsWith(OFFLINE_PREFIX)) continue;
-    try {
-      const parsed = JSON.parse(localStorage.getItem(key) || "");
-      if (Array.isArray(parsed?.topics) && typeof parsed.subject === "string") {
-        metas.push(parsed as OfflineSubjectMeta);
-      }
-    } catch {}
-  }
-  return metas;
-};
-
 const readOfflineMeta = (key: string): OfflineSubjectMeta | null => {
+  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -153,14 +140,63 @@ const readOfflineMeta = (key: string): OfflineSubjectMeta | null => {
   return null;
 };
 
+const formatDate = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+};
+
+// ✅ Cache-first README loader (fast)
+async function loadReadmeCacheFirst(signal: AbortSignal) {
+  let cachedText: string | null = null;
+
+  if ("caches" in window) {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(README_RAW_URL);
+      if (cached) cachedText = await cached.text();
+    } catch {}
+  }
+
+  // return cached immediately (if available)
+  const result: { cached: string | null; fresh: string | null } = {
+    cached: cachedText,
+    fresh: null,
+  };
+
+  // fetch fresh in background
+  try {
+    const res = await fetch(README_RAW_URL, { signal }); // ✅ allow browser caching
+    if (res.ok) {
+      const fresh = await res.text();
+      result.fresh = fresh;
+
+      if ("caches" in window) {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(README_RAW_URL, new Response(fresh));
+        } catch {}
+      }
+    }
+  } catch {
+    // ignore network failures
+  }
+
+  return result;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SubjectPage() {
-    const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const router = useRouter();
   const { subject } = router.query;
   const subjectStr = String(subject || "");
+
   const subjectKey = useMemo(
     () => `${OFFLINE_PREFIX}${normalize(subjectStr)}`,
     [subjectStr]
@@ -170,6 +206,7 @@ export default function SubjectPage() {
 
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [isOffline, setIsOffline] = useState(false);
   const [q, setQ] = useState("");
@@ -178,13 +215,11 @@ export default function SubjectPage() {
 
   const [savingOffline, setSavingOffline] = useState(false);
   const [offlineSavedAt, setOfflineSavedAt] = useState<number | null>(null);
-  const [saveProgress, setSaveProgress] = useState<{
-    done: number;
-    total: number;
-  }>({ done: 0, total: 0 });
+  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number }>({
+    done: 0,
+    total: 0,
+  });
 
-
-  // ── online/offline watcher ──────────────────────────────────────────────────
   useEffect(() => {
     const update = () => setIsOffline(!navigator.onLine);
     update();
@@ -196,18 +231,16 @@ export default function SubjectPage() {
     };
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     setMounted(true);
   }, []);
 
-  // ── load savedAt for this subject ──────────────────────────────────────────
   useEffect(() => {
     if (!subjectStr) return;
     const meta = readOfflineMeta(subjectKey);
     setOfflineSavedAt(meta?.savedAt ?? null);
   }, [subjectStr, subjectKey]);
 
- // ── load favorites ─────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -217,15 +250,15 @@ export default function SubjectPage() {
         });
         if (!res.ok) return;
         setFavorites(await res.json());
-      } catch (err) {
-        console.error("Failed to load favorites:", err);
-      }
+      } catch {}
     })();
   }, []);
 
-  // ── fetch topics (online → README, offline → localStorage) ────────────────
+  // ── fetch topics: show offline meta immediately, then refresh from README ────
   useEffect(() => {
     if (!router.isReady || !subjectStr) return;
+
+    const ac = new AbortController();
 
     const loadFromOffline = (): boolean => {
       const meta = readOfflineMeta(subjectKey);
@@ -236,65 +269,71 @@ export default function SubjectPage() {
       return true;
     };
 
-    const run = async () => {
-      setLoading(true);
-      setError("");
+    const applyReadme = (md: string) => {
+      const map = parseSubjectsFromReadme(md);
+      const wanted = normalize(subjectStr);
+      const matchKey = Array.from(map.keys()).find((k) => normalize(k) === wanted) ?? "";
 
-      // Short-circuit to offline cache immediately if no network
-      if (!navigator.onLine) {
-        const ok = loadFromOffline();
-        if (!ok)
-          setError("You're offline and no saved copy exists for this subject.");
-        setLoading(false);
+      if (!matchKey) {
+        setTopics([]);
+        setError(`Subject "${subjectStr}" not found in README.`);
         return;
       }
 
-      try {
-        const res = await fetch(README_RAW_URL, { cache: "no-store" });
-        if (!res.ok) throw new Error(`README fetch failed: ${res.status}`);
+      const raw = map.get(matchKey)!;
+      const introIdx = raw.findIndex((t) => normalize(t.topic_name) === "introduction");
+      const ordered =
+        introIdx > 0 ? [raw[introIdx], ...raw.filter((_, i) => i !== introIdx)] : raw;
 
-        const text = await res.text();
-        const map = parseSubjectsFromReadme(text);
-
-        const wanted = normalize(subjectStr);
-        const matchKey =
-          Array.from(map.keys()).find((k) => normalize(k) === wanted) ?? "";
-
-        if (!matchKey) {
-          setTopics([]);
-          setError(`Subject "${subjectStr}" not found in README.`);
-          return;
-        }
-
-        const raw = map.get(matchKey)!;
-        const introIdx = raw.findIndex(
-          (t) => normalize(t.topic_name) === "introduction"
-        );
-        const ordered =
-          introIdx > 0
-            ? [raw[introIdx], ...raw.filter((_, i) => i !== introIdx)]
-            : raw;
-
-        setTopics(ordered);
-      } catch (err) {
-        console.error("Failed to load subject:", err);
-        if (!loadFromOffline())
-          setError("Failed to load subject (and no offline copy found).");
-      } finally {
-        setLoading(false);
-      }
+      setTopics(ordered);
+      setError("");
     };
 
-    run();
+    // ✅ show cached subject immediately if available
+    const hadOffline = loadFromOffline();
+    setLoading(!hadOffline);
+
+    // offline and no cache
+    if (!navigator.onLine) {
+      if (!hadOffline) {
+        setError("You're offline and no saved copy exists for this subject.");
+      }
+      setLoading(false);
+      return () => ac.abort();
+    }
+
+    (async () => {
+      try {
+        setRefreshing(true);
+
+        const { cached, fresh } = await loadReadmeCacheFirst(ac.signal);
+
+        // use cached README first (fast)
+        if (cached) {
+          applyReadme(cached);
+          setLoading(false);
+        }
+
+        // then apply fresh if different
+        if (fresh && fresh !== cached) {
+          applyReadme(fresh);
+        }
+      } catch {
+        if (!hadOffline) setError("Failed to load subject (and no offline copy found).");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    })();
+
+    return () => ac.abort();
   }, [router.isReady, subjectStr, subjectKey]);
 
-  // ── filtered topics ────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
     return qq ? topics.filter((t) => t.topic_name.toLowerCase().includes(qq)) : topics;
   }, [topics, q]);
 
-  // ── save offline ───────────────────────────────────────────────────────────
   const handleSaveOffline = async () => {
     if (!topics.length) return;
 
@@ -302,7 +341,6 @@ export default function SubjectPage() {
     setSaveProgress({ done: 0, total: topics.length });
 
     try {
-
       if (!("caches" in window)) {
         alert("Your browser does not support offline cache (Cache Storage).");
         return;
@@ -312,11 +350,11 @@ export default function SubjectPage() {
 
       // Cache README
       try {
-        const r = await fetch(README_RAW_URL, { cache: "no-store" });
+        const r = await fetch(README_RAW_URL);
         if (r.ok) await cache.put(README_RAW_URL, r.clone());
       } catch {}
 
-      // Write subject meta to localStorage
+      // Save subject meta
       const meta: OfflineSubjectMeta = {
         subject: subjectStr,
         savedAt: Date.now(),
@@ -326,31 +364,30 @@ export default function SubjectPage() {
       localStorage.setItem(subjectKey, JSON.stringify(meta));
       setOfflineSavedAt(meta.savedAt);
 
-     // Cache each topic markdown
+      // Cache each topic markdown
       for (let i = 0; i < topics.length; i++) {
         const url = topics[i].md_url;
         try {
-          const res = await fetch(url, { cache: "no-store" });
+          const res = await fetch(url);
           if (res.ok) await cache.put(url, res.clone());
         } catch {
-          // ignore per-file failures
+          // ignore
         } finally {
           setSaveProgress({ done: i + 1, total: topics.length });
         }
       }
     } finally {
+      // ✅ always re-enable after finishing
       setSavingOffline(false);
     }
   };
 
-  // ── favorites toggle ───────────────────────────────────────────────────────
   const toggleFavorite = async (topic: FavTopic) => {
     const isFavorite = favorites.some((f) => f.slug === topic.slug);
     const prev = favorites;
+
     setFavorites(
-      isFavorite
-        ? favorites.filter((f) => f.slug !== topic.slug)
-        : [...favorites, topic]
+      isFavorite ? favorites.filter((f) => f.slug !== topic.slug) : [...favorites, topic]
     );
 
     try {
@@ -362,28 +399,18 @@ export default function SubjectPage() {
         method: isFavorite ? "DELETE" : "POST",
         headers: isFavorite
           ? { "Cache-Control": "no-store" }
-          : {
-              "Content-Type": "application/json",
-              "Cache-Control": "no-store",
-            },
+          : { "Content-Type": "application/json", "Cache-Control": "no-store" },
         body: isFavorite ? undefined : JSON.stringify(topic),
         cache: "no-store",
       });
 
-      if (res.status === 404) {
-        console.error("API route not found: /api/favorites");
-        setFavorites(prev);
-        return;
-      }
       if (!res.ok) {
-        console.error("Favorite toggle failed:", res.status);
         setFavorites(prev);
         return;
       }
 
       setFavorites(await res.json());
-    } catch (err) {
-      console.error("Error toggling favorite:", err);
+    } catch {
       setFavorites(prev);
     }
   };
@@ -425,38 +452,19 @@ export default function SubjectPage() {
          bg-gradient-to-tr from-blue-100 via-white to-cyan-100 border border-blue-200
          hover:-translate-y-2 hover:shadow-2xl`;
 
-  const offlinePanelCard =
-    theme === "dark"
-      ? "rounded-2xl p-4 bg-slate-900 border border-slate-700 shadow-md"
-      : "rounded-2xl p-4 bg-white border border-slate-200 shadow-md";
-
-  const offlineSubjectBtn =
-    theme === "dark"
-      ? "w-full text-left rounded-xl px-4 py-3 text-sm font-medium bg-slate-800 hover:bg-slate-700 border border-slate-700 transition"
-      : "w-full text-left rounded-xl px-4 py-3 text-sm font-medium bg-slate-50 hover:bg-slate-100 border border-slate-200 transition";
-
   const btnBase =
     "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
+
   const btnOutline =
     theme === "dark"
       ? `${btnBase} border border-slate-700 bg-slate-900 hover:bg-slate-800`
       : `${btnBase} border border-slate-200 bg-white hover:bg-slate-50`;
 
-      // ✅ Use a fixed format that's locale-independent
-const formatDate = (ts: number) => {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
   // ─── Render ─────────────────────────────────────────────────────────────────
 
-  // ✅ Suppress until client is ready
   if (!mounted) {
     return (
-      <div className={
-        // use a safe static class — no theme-dependent browser logic yet
-        "min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900"
-      }>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
           <div className="rounded-2xl p-6 bg-white border border-slate-200 shadow-sm">
             Loading…
@@ -469,46 +477,35 @@ const formatDate = (ts: number) => {
   return (
     <div className={pageBg}>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-6">
-
-        {/* ── Header ── */}
         <div className={headerCard}>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <img
-                src="/favicon_new.png"
-                alt="Tinitiate"
-                className="w-10 h-10 rounded-xl"
-              />
+              <img src="/favicon_new.png" alt="Tinitiate" className="w-10 h-10 rounded-xl" />
               <div className="min-w-0">
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">
                   {subjectStr ? subjectStr.toUpperCase() : "SUBJECT"}
                 </h1>
-                <div
-                  className={
-                    theme === "dark"
-                      ? "text-sm text-slate-300"
-                      : "text-sm text-slate-700"
-                  }
-                >
-                  {isOffline ? "🔴 Offline" : "🟢 Online"} •{" "}
-                  {topics.length} topics
+
+                <div className={theme === "dark" ? "text-sm text-slate-300" : "text-sm text-slate-700"}>
+                  {isOffline ? "🔴 Offline" : "🟢 Online"}
+                  {refreshing ? " • Updating…" : ""} • {topics.length} topics
                   {offlineSavedAt ? " • Offline saved" : ""}
                 </div>
+
                 {offlineSavedAt && (
-                  <div
-                    className={
-                      theme === "dark"
-                        ? "text-xs text-slate-400"
-                        : "text-xs text-slate-600"
-                    }
-                  >
+                  <div className={theme === "dark" ? "text-xs text-slate-400" : "text-xs text-slate-600"}>
                     Saved at: {formatDate(offlineSavedAt)}
                   </div>
                 )}
               </div>
             </div>
-                
+
             <div className="flex flex-wrap items-center gap-3">
+              {/* Home icon */}
+              <button className={btnOutline} onClick={() => router.push("/")} type="button" title="Home">
+                <FaHome />
+              </button>
+
               {/* Save Offline */}
               <button
                 className={btnOutline}
@@ -525,7 +522,7 @@ const formatDate = (ts: number) => {
                 ) : offlineSavedAt ? (
                   <>
                     <FaCheckCircle className="text-green-500" />
-                    Saved Offline
+                    Update Offline
                   </>
                 ) : (
                   <>
@@ -535,19 +532,11 @@ const formatDate = (ts: number) => {
                 )}
               </button>
 
-              <button
-                className={btnOutline}
-                onClick={() => router.push("/dashboard")}
-                type="button"
-              >
+              <button className={btnOutline} onClick={() => router.push("/dashboard")} type="button">
                 <FaArrowLeft /> Back
               </button>
 
-              <button
-                className={btnOutline}
-                onClick={toggleTheme}
-                type="button"
-              >
+              <button className={btnOutline} onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
                 {theme === "dark" ? "Light" : "Dark"}
               </button>
@@ -557,72 +546,48 @@ const formatDate = (ts: number) => {
           {/* Search */}
           <div className="mt-4 flex flex-col lg:flex-row lg:items-center gap-3">
             <div className={`flex items-center gap-3 flex-1 ${searchCard}`}>
-              <FaSearch
-                className={
-                  theme === "dark" ? "text-slate-300" : "text-slate-500"
-                }
-              />
+              <FaSearch className={theme === "dark" ? "text-slate-300" : "text-slate-500"} />
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search topics…"
                 className={`w-full bg-transparent outline-none text-sm ${
-                  theme === "dark"
-                    ? "placeholder:text-slate-500"
-                    : "placeholder:text-slate-400"
+                  theme === "dark" ? "placeholder:text-slate-500" : "placeholder:text-slate-400"
                 }`}
               />
             </div>
           </div>
         </div>
 
-               {/* ── Loading ── */}
-        {loading && (
-          <div className={searchCard + " p-6"}>Loading topics…</div>
-        )}
+        {loading && <div className={searchCard + " p-6"}>Loading topics…</div>}
+        {!loading && error && <div className={searchCard + " p-6 text-red-500"}>{error}</div>}
 
-        {/* ── Error ── */}
-        {!loading && error && (
-          <div className={searchCard + " p-6 text-red-500"}>{error}</div>
-        )}
-
-        {/* ── Topics grid ── */}
         {!loading && !error && (
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((t, i) => {
                 const slug = slugify(t.topic_name);
                 const isFav = favorites.some((f) => f.slug === slug);
-                const isIntro =
-                  normalize(t.topic_name) === "introduction";
+                const isIntro = normalize(t.topic_name) === "introduction";
 
-                const href = `/topic/${encodeURIComponent(
-                  t.topic_name
-                )}?subject=${encodeURIComponent(subjectStr)}`;
+                const href = `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
+                  subjectStr
+                )}`;
 
                 return (
                   <div
                     key={t.md_url}
-                    className={
-                      (isIntro ? introCard : topicCard) + " cursor-pointer"
-                    }
+                    className={(isIntro ? introCard : topicCard) + " cursor-pointer"}
                     role="button"
                     tabIndex={0}
                     onClick={(e) => {
-                      if (
-                        (e.target as HTMLElement).closest(
-                          '[data-no-nav="true"]'
-                        )
-                      )
-                        return;
+                      if ((e.target as HTMLElement).closest('[data-no-nav="true"]')) return;
                       router.push(href);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ")
-                        router.push(href);
+                      if (e.key === "Enter" || e.key === " ") router.push(href);
                     }}
                   >
-                    {/* Favorite star */}
                     <button
                       data-no-nav="true"
                       type="button"
@@ -633,34 +598,17 @@ const formatDate = (ts: number) => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        toggleFavorite({
-                          slug,
-                          topic_name: t.topic_name,
-                          subject: subjectStr,
-                        });
+                        toggleFavorite({ slug, topic_name: t.topic_name, subject: subjectStr });
                       }}
                       className={`absolute top-4 right-4 z-50 pointer-events-auto text-xl transition-transform hover:scale-125 ${
-                        theme === "dark"
-                          ? "text-yellow-300"
-                          : "text-yellow-400"
+                        theme === "dark" ? "text-yellow-300" : "text-yellow-400"
                       }`}
-                      title={
-                        isFav ? "Remove from favorites" : "Add to favorites"
-                      }
+                      title={isFav ? "Remove from favorites" : "Add to favorites"}
                     >
                       {isFav ? "★" : "☆"}
                     </button>
 
-                    <div
-                      className={
-                        theme === "dark"
-                          ? "text-xs text-slate-400"
-                          : "text-xs text-slate-500"
-                        theme === "dark"
-                          ? "text-xs text-slate-400"
-                          : "text-xs text-slate-500"
-                      }
-                    >
+                    <div className={theme === "dark" ? "text-xs text-slate-400" : "text-xs text-slate-500"}>
                       {isIntro ? "Start here" : `#${i + 1}`}
                     </div>
 
@@ -704,13 +652,7 @@ const formatDate = (ts: number) => {
             </div>
 
             {filtered.length === 0 && (
-              <p
-                className={
-                  theme === "dark"
-                    ? "text-center text-slate-400 text-sm"
-                    : "text-center text-slate-500 text-sm"
-                }
-              >
+              <p className={theme === "dark" ? "text-center text-slate-400 text-sm" : "text-center text-slate-500 text-sm"}>
                 No topics found
               </p>
             )}

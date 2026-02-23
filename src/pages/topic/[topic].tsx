@@ -1,4 +1,4 @@
-// File: pages/topic/[topic].tsx  (or your existing TopicPage file)
+// File: pages/topic/[topic].tsx
 "use client";
 
 import { useRouter } from "next/router";
@@ -22,29 +22,22 @@ import {
   FaSearch,
 } from "react-icons/fa";
 
-import {
-  materialLight,
-  materialDark,
-} from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { materialLight, materialDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
-const SyntaxHighlighter = dynamic(
-  () => import("react-syntax-highlighter").then((mod) => mod.Prism),
-  { ssr: false }
-);
+const SyntaxHighlighter = dynamic(() => import("react-syntax-highlighter").then((mod) => mod.Prism), {
+  ssr: false,
+});
 
 type CatalogTopic = { topic_name: string; md_url: string };
 type CatalogSubject = { subject: string; topics: CatalogTopic[] };
 
 // ✅ README link (BLOB) - we convert to RAW for fetch
-const README_BLOB_URL =
-  "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
+const README_BLOB_URL = "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
 
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const toRawGithub = (u: string) => {
-  const m = u.match(
-    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
-  );
+  const m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
   if (!m) return u;
   const [, owner, repo, branch, path] = m;
   return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
@@ -63,9 +56,7 @@ async function fetchText(url: string) {
     if (r.ok) return await r.text();
   } catch {}
 
-  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
-    cache: "no-store",
-  });
+  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, { cache: "no-store" });
   if (!r2.ok) throw new Error(`Fetch failed (HTTP ${r2.status})`);
   return await r2.text();
 }
@@ -149,11 +140,39 @@ export default function TopicPage() {
   const [error, setError] = useState("");
   const [isOffline, setIsOffline] = useState(false);
 
-  const [sidebarOpen, setSidebarOpen] = useState(true); // desktop
-  const [mobileOpen, setMobileOpen] = useState(false); // drawer
-  const [q, setQ] = useState("");
+  // ✅ responsive (no tailwind needed)
+  const [isDesktop, setIsDesktop] = useState(false);
 
+  // ✅ Desktop sidebar open/close
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // ✅ mobile drawer only
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const [q, setQ] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // detect desktop
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setIsDesktop(mq.matches);
+
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
+
+  // when going desktop, force-close mobile drawer
+  useEffect(() => {
+    if (isDesktop) setMobileOpen(false);
+  }, [isDesktop]);
+
+  // ✅ prevent stale state when switching between mobile/desktop
+  useEffect(() => {
+    if (!isDesktop) setSidebarOpen(true);
+  }, [isDesktop]);
 
   useEffect(() => {
     const update = () => setIsOffline(!navigator.onLine);
@@ -166,7 +185,7 @@ export default function TopicPage() {
     };
   }, []);
 
-  // ✅ FIXED: load catalog + markdown from README (RAW), no JSON parsing
+  // ✅ load catalog + markdown from README (RAW), no JSON parsing
   useEffect(() => {
     if (!router.isReady) return;
     if (!topicStr || !subjectStr) return;
@@ -183,17 +202,13 @@ export default function TopicPage() {
 
         const catalogList = parseReadmeCatalog(readmeText);
 
-        const catalog = catalogList.find(
-          (s) => normalize(s.subject) === normalize(subjectStr)
-        );
+        const catalog = catalogList.find((s) => normalize(s.subject) === normalize(subjectStr));
         if (!catalog) throw new Error("Subject not found");
         if (cancelled) return;
 
         setCatalogData(catalog);
 
-        const found = catalog.topics.find(
-          (t) => normalize(t.topic_name) === normalize(topicStr)
-        );
+        const found = catalog.topics.find((t) => normalize(t.topic_name) === normalize(topicStr));
         if (!found) throw new Error("Topic not found");
 
         const mdUrl = toRawGithub(found.md_url);
@@ -226,20 +241,13 @@ export default function TopicPage() {
     return topics.filter((t) => t.topic_name.toLowerCase().includes(qq));
   }, [topics, q]);
 
-  const currentIndex = useMemo(
-    () => topics.findIndex((t) => t.topic_name === topicStr),
-    [topics, topicStr]
-  );
+  const currentIndex = useMemo(() => topics.findIndex((t) => t.topic_name === topicStr), [topics, topicStr]);
 
   const prevTopic = currentIndex > 0 ? topics[currentIndex - 1] : null;
-  const nextTopic =
-    currentIndex >= 0 && currentIndex < topics.length - 1
-      ? topics[currentIndex + 1]
-      : null;
+  const nextTopic = currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
 
   const saveOffline = async () => {
-    if (!catalogData || !("serviceWorker" in navigator))
-      return alert("Service Worker not supported");
+    if (!catalogData || !("serviceWorker" in navigator)) return alert("Service Worker not supported");
 
     const readmeRaw = toRawGithub(README_BLOB_URL);
     const urls = [readmeRaw, ...catalogData.topics.map((t) => toRawGithub(t.md_url))];
@@ -253,12 +261,9 @@ export default function TopicPage() {
     if (!src || typeof src !== "string") return "";
     let s = src.trim();
 
-    if (s.includes("github.com/") && s.includes("/blob/")) {
-      s = toRawGithub(s);
-    }
+    if (s.includes("github.com/") && s.includes("/blob/")) s = toRawGithub(s);
 
-    if (s.startsWith("http") || s.startsWith("/") || s.startsWith("data:"))
-      return s;
+    if (s.startsWith("http") || s.startsWith("/") || s.startsWith("data:")) return s;
 
     if (!mdBaseUrl) return s;
     try {
@@ -268,21 +273,13 @@ export default function TopicPage() {
     }
   };
 
-  // ✅ IMPORTANT FIXES: list formatting + code children handling
+  // ✅ markdown styling
   const markdownComponents: Components = {
     ul({ children }: any) {
-      return (
-        <ul style={{ paddingLeft: 18, margin: "10px 0", listStyle: "disc" }}>
-          {children}
-        </ul>
-      );
+      return <ul style={{ paddingLeft: 18, margin: "10px 0", listStyle: "disc" }}>{children}</ul>;
     },
     ol({ children }: any) {
-      return (
-        <ol style={{ paddingLeft: 18, margin: "10px 0", listStyle: "decimal" }}>
-          {children}
-        </ol>
-      );
+      return <ol style={{ paddingLeft: 18, margin: "10px 0", listStyle: "decimal" }}>{children}</ol>;
     },
     li({ children }: any) {
       return <li style={{ marginBottom: 6 }}>{children}</li>;
@@ -295,11 +292,7 @@ export default function TopicPage() {
       const match = /language-(\w+)/.exec(className || "");
 
       const rawText =
-        typeof children === "string"
-          ? children
-          : Array.isArray(children)
-          ? children.join("")
-          : String(children);
+        typeof children === "string" ? children : Array.isArray(children) ? children.join("") : String(children);
 
       const raw = rawText.replace(/\n$/, "");
       const key = `${match?.[1] ?? "text"}:${raw.slice(0, 80)}`;
@@ -395,53 +388,20 @@ export default function TopicPage() {
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <img
-            src="/favicon_new.png"
-            alt="Logo"
-            style={{ width: 32, height: 32, borderRadius: 10 }}
-          />
+          <img src="/favicon_new.png" alt="Logo" style={{ width: 32, height: 32, borderRadius: 10 }} />
           <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontWeight: 900,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
+            <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {subjectStr.toUpperCase()}
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>
-              {isOffline ? "Offline" : "Online"}
-            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>{isOffline ? "Offline" : "Online"}</div>
           </div>
         </div>
-
-        <button
-          className="btn btn-outline"
-          onClick={toggleTheme}
-          type="button"
-          aria-label="Toggle theme"
-        >
-          <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
-        </button>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Link
-          href={`/subject/${encodeURIComponent(subjectStr)}`}
-          onClick={onNavigate}
-          className="btn btn-outline"
-        >
+        <Link href={`/subject/${encodeURIComponent(subjectStr)}`} onClick={onNavigate} className="btn btn-outline">
           <FaArrowLeft /> Back
         </Link>
 
@@ -450,10 +410,7 @@ export default function TopicPage() {
         </Link>
       </div>
 
-      <div
-        className="card"
-        style={{ padding: 10, display: "flex", alignItems: "center", gap: 8 }}
-      >
+      <div className="card" style={{ padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
         <FaSearch />
         <input
           value={q}
@@ -475,9 +432,7 @@ export default function TopicPage() {
           return (
             <Link
               key={t.topic_name}
-              href={`/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
-                subjectStr
-              )}`}
+              href={`/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(subjectStr)}`}
               onClick={onNavigate}
               style={{
                 display: "block",
@@ -487,9 +442,7 @@ export default function TopicPage() {
                 color: "inherit",
                 fontWeight: active ? 900 : 600,
                 background: active ? "rgba(37,99,235,0.10)" : "transparent",
-                border: active
-                  ? "1px solid rgba(37,99,235,0.25)"
-                  : "1px solid transparent",
+                border: active ? "1px solid rgba(37,99,235,0.25)" : "1px solid transparent",
                 marginBottom: 4,
               }}
             >
@@ -498,12 +451,7 @@ export default function TopicPage() {
           );
         })}
 
-        <button
-          className="btn btn-primary"
-          onClick={saveOffline}
-          type="button"
-          style={{ width: "100%", marginTop: 8 }}
-        >
+        <button className="btn btn-primary" onClick={saveOffline} type="button" style={{ width: "100%", marginTop: 8 }}>
           <FaDownload /> Save Offline
         </button>
       </div>
@@ -511,28 +459,12 @@ export default function TopicPage() {
   );
 
   const CollapsedRail = () => (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        alignItems: "center",
-      }}
-    >
-      <button
-        className="btn btn-outline"
-        onClick={() => setSidebarOpen(true)}
-        type="button"
-        aria-label="Expand sidebar"
-      >
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+      <button className="btn btn-outline" onClick={() => setSidebarOpen(true)} type="button" aria-label="Expand sidebar">
         <FaChevronRight />
       </button>
 
-      <Link
-        href={`/subject/${encodeURIComponent(subjectStr)}`}
-        className="btn btn-outline"
-        aria-label="Back"
-      >
+      <Link href={`/subject/${encodeURIComponent(subjectStr)}`} className="btn btn-outline" aria-label="Back">
         <FaArrowLeft />
       </Link>
 
@@ -540,19 +472,13 @@ export default function TopicPage() {
         <FaHome />
       </Link>
 
-      <button
-        className="btn btn-outline"
-        onClick={toggleTheme}
-        type="button"
-        aria-label="Toggle theme"
-      >
+      <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
         {theme === "dark" ? <FaSun /> : <FaMoon />}
       </button>
     </div>
   );
 
-  const renderedMarkdown =
-    (content || "").trim().length >= 10 ? content : getFallbackMarkdown(subjectStr, topicStr);
+  const renderedMarkdown = (content || "").trim().length >= 10 ? content : getFallbackMarkdown(subjectStr, topicStr);
 
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
@@ -569,45 +495,23 @@ export default function TopicPage() {
           zIndex: 80,
         }}
       >
-        <div
-          style={{
-            maxWidth: 1400,
-            margin: "0 auto",
-            padding: "12px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-            }}
-          >
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "12px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <button
-                className="btn btn-outline lg:hidden"
-                onClick={() => setMobileOpen(true)}
-                type="button"
-                aria-label="Open sidebar"
-                style={{ padding: "8px 10px" }}
-              >
-                <span style={{ fontSize: 14 }}>
-                  <FaBars />
-                </span>
-              </button>
-
-              <button
-                className="btn btn-outline hidden lg:inline-flex"
-                onClick={() => setSidebarOpen((v) => !v)}
-                type="button"
-                aria-label="Toggle sidebar"
-              >
-                {sidebarOpen ? <FaChevronLeft /> : <FaChevronRight />}
-              </button>
+              {/* ✅ MOBILE ONLY: burger */}
+              {!isDesktop && (
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setMobileOpen(true)}
+                  type="button"
+                  aria-label="Open sidebar"
+                  style={{ padding: "8px 10px" }}
+                >
+                  <span style={{ fontSize: 14 }}>
+                    <FaBars />
+                  </span>
+                </button>
+              )}
 
               <div style={{ minWidth: 0 }}>
                 <div
@@ -624,83 +528,40 @@ export default function TopicPage() {
               </div>
             </div>
 
-            {/* ✅ RIGHT SIDE: Subject Home + Theme */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Link
                 className="btn btn-outline"
                 href={subjectStr ? `/subject/${encodeURIComponent(subjectStr)}` : "#"}
                 aria-label="Subject Home"
-                style={{
-                  opacity: subjectStr ? 1 : 0.5,
-                  pointerEvents: subjectStr ? "auto" : "none",
-                }}
+                style={{ opacity: subjectStr ? 1 : 0.5, pointerEvents: subjectStr ? "auto" : "none" }}
               >
                 <FaHome />
               </Link>
 
-              <button
-                className="btn btn-outline"
-                onClick={toggleTheme}
-                type="button"
-                aria-label="Toggle theme"
-              >
-                <span style={{ fontSize: 14 }}>
-                  {theme === "dark" ? <FaSun /> : <FaMoon />}
-                </span>
+              <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+                <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
               </button>
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="badge" style={{ display: "none" }}>
-                {isOffline ? "Offline" : "Online"}
-              </span>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+            <Link
+              className="btn btn-outline"
+              href={prevTopic ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}` : "#"}
+              style={{ opacity: prevTopic ? 1 : 0.5, pointerEvents: prevTopic ? "auto" : "none" }}
+              aria-label="Previous topic"
+            >
+              <FaChevronLeft />
+            </Link>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Link
-                className="btn btn-outline"
-                href={
-                  prevTopic
-                    ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
-                        subjectStr
-                      )}`
-                    : "#"
-                }
-                style={{
-                  opacity: prevTopic ? 1 : 0.5,
-                  pointerEvents: prevTopic ? "auto" : "none",
-                }}
-              >
-                <FaChevronLeft />
-              </Link>
-
-              <Link
-                className="btn btn-outline"
-                href={
-                  nextTopic
-                    ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
-                        subjectStr
-                      )}`
-                    : "#"
-                }
-                style={{
-                  opacity: nextTopic ? 1 : 0.5,
-                  pointerEvents: nextTopic ? "auto" : "none",
-                }}
-              >
-                <FaChevronRight />
-              </Link>
-            </div>
+            <Link
+              className="btn btn-outline"
+              href={nextTopic ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}` : "#"}
+              style={{ opacity: nextTopic ? 1 : 0.5, pointerEvents: nextTopic ? "auto" : "none" }}
+              aria-label="Next topic"
+            >
+              <FaChevronRight />
+            </Link>
           </div>
         </div>
       </div>
@@ -708,41 +569,49 @@ export default function TopicPage() {
       {/* MAIN CONTENT */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: 12 }}>
         <div style={{ display: "flex", gap: 12 }}>
-          <aside
-            className="card hidden lg:flex"
-            style={{
-              width: sidebarOpen ? 320 : 70,
-              overflow: "hidden",
-              transition: "width 180ms ease",
-              padding: 12,
-              flexDirection: "column",
-              alignSelf: "stretch",
-              position: "relative",
-            }}
-          >
-            <button
-              className="btn btn-outline"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+          {/* ✅ DESKTOP ONLY sidebar (WITH open/close button inside sidebar) */}
+          {isDesktop && (
+            <aside
+              className="card"
               style={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                zIndex: 10,
-                width: 30,
-                height: 30,
+                width: sidebarOpen ? 320 : 70,
+                overflow: "hidden",
+                transition: "width 180ms ease",
+                padding: 12,
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "50%",
-                padding: 0,
+                flexDirection: "column",
+                alignSelf: "stretch",
+                position: "relative",
               }}
-              aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
             >
-              {sidebarOpen ? <FaChevronLeft /> : <FaChevronRight />}
-            </button>
+              {/* ✅ Show this button ONLY when sidebar is OPEN (prevents double chevron when closed) */}
+              {sidebarOpen && (
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setSidebarOpen(false)}
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    zIndex: 10,
+                    width: 30,
+                    height: 30,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    padding: 0,
+                  }}
+                  aria-label="Collapse sidebar"
+                  type="button"
+                >
+                  <FaChevronLeft />
+                </button>
+              )}
 
-            {sidebarOpen ? <Sidebar /> : <CollapsedRail />}
-          </aside>
+              {sidebarOpen ? <Sidebar /> : <CollapsedRail />}
+            </aside>
+          )}
 
           <main className="card" style={{ flex: 1, padding: 14, minWidth: 0 }}>
             {loading && <div style={{ color: "var(--muted)" }}>Loading content…</div>}
@@ -758,41 +627,42 @@ export default function TopicPage() {
         </div>
       </div>
 
-      {/* MOBILE SIDEBAR */}
-      {mobileOpen && (
+      {/* ✅ MOBILE DRAWER */}
+      {!isDesktop && mobileOpen && (
         <div
-          className="card lg:hidden"
           style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            height: "100%",
-            width: "86vw",
-            maxWidth: 360,
-            padding: 12,
+            position: "fixed",
+            inset: 0,
+            zIndex: 120,
+            background: theme === "dark" ? "rgba(2,6,23,0.55)" : "rgba(15,23,42,0.25)",
+            backdropFilter: "blur(6px)",
             display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            zIndex: 90,
           }}
+          onClick={() => setMobileOpen(false)}
         >
           <div
+            className="card"
             style={{
+              width: "86vw",
+              maxWidth: 360,
+              height: "100%",
+              padding: 12,
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 10,
-              flex: "0 0 auto",
+              flexDirection: "column",
+              overflow: "hidden",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontWeight: 900 }}>Topics</div>
-            <button className="btn btn-outline" onClick={() => setMobileOpen(false)} type="button">
-              <FaTimes />
-            </button>
-          </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flex: "0 0 auto" }}>
+              <div style={{ fontWeight: 900 }}>Topics</div>
+              <button className="btn btn-outline" onClick={() => setMobileOpen(false)} type="button" aria-label="Close sidebar">
+                <FaTimes />
+              </button>
+            </div>
 
-          <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
-            <Sidebar onNavigate={() => setMobileOpen(false)} />
+            <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
+              <Sidebar onNavigate={() => setMobileOpen(false)} />
+            </div>
           </div>
         </div>
       )}
