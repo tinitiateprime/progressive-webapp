@@ -1,3 +1,4 @@
+// File: pages/topic/[topic].tsx  (or your existing TopicPage file)
 "use client";
 
 import { useRouter } from "next/router";
@@ -21,7 +22,10 @@ import {
   FaSearch,
 } from "react-icons/fa";
 
-import { materialLight, materialDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import {
+  materialLight,
+  materialDark,
+} from "react-syntax-highlighter/dist/cjs/styles/prism";
 
 const SyntaxHighlighter = dynamic(
   () => import("react-syntax-highlighter").then((mod) => mod.Prism),
@@ -38,7 +42,9 @@ const README_BLOB_URL =
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const toRawGithub = (u: string) => {
-  const m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+  const m = u.match(
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
+  );
   if (!m) return u;
   const [, owner, repo, branch, path] = m;
   return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
@@ -57,7 +63,9 @@ async function fetchText(url: string) {
     if (r.ok) return await r.text();
   } catch {}
 
-  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, { cache: "no-store" });
+  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+    cache: "no-store",
+  });
   if (!r2.ok) throw new Error(`Fetch failed (HTTP ${r2.status})`);
   return await r2.text();
 }
@@ -225,7 +233,9 @@ export default function TopicPage() {
 
   const prevTopic = currentIndex > 0 ? topics[currentIndex - 1] : null;
   const nextTopic =
-    currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
+    currentIndex >= 0 && currentIndex < topics.length - 1
+      ? topics[currentIndex + 1]
+      : null;
 
   const saveOffline = async () => {
     if (!catalogData || !("serviceWorker" in navigator))
@@ -247,7 +257,8 @@ export default function TopicPage() {
       s = toRawGithub(s);
     }
 
-    if (s.startsWith("http") || s.startsWith("/") || s.startsWith("data:")) return s;
+    if (s.startsWith("http") || s.startsWith("/") || s.startsWith("data:"))
+      return s;
 
     if (!mdBaseUrl) return s;
     try {
@@ -259,7 +270,6 @@ export default function TopicPage() {
 
   // ✅ IMPORTANT FIXES: list formatting + code children handling
   const markdownComponents: Components = {
-    // ✅ make lists readable even if global CSS hides bullets
     ul({ children }: any) {
       return (
         <ul style={{ paddingLeft: 18, margin: "10px 0", listStyle: "disc" }}>
@@ -284,7 +294,6 @@ export default function TopicPage() {
     code({ inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || "");
 
-      // ✅ FIX: children can be string[] in some versions → join("") preserves newlines
       const rawText =
         typeof children === "string"
           ? children
@@ -386,38 +395,77 @@ export default function TopicPage() {
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <img src="/favicon_new.png" alt="Logo" style={{ width: 32, height: 32, borderRadius: 10 }} />
+          <img
+            src="/favicon_new.png"
+            alt="Logo"
+            style={{ width: 32, height: 32, borderRadius: 10 }}
+          />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div
+              style={{
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
               {subjectStr.toUpperCase()}
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>{isOffline ? "Offline" : "Online"}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>
+              {isOffline ? "Offline" : "Online"}
+            </div>
           </div>
         </div>
 
-        <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+        <button
+          className="btn btn-outline"
+          onClick={toggleTheme}
+          type="button"
+          aria-label="Toggle theme"
+        >
           <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
         </button>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Link href={`/subject/${encodeURIComponent(subjectStr)}`} onClick={onNavigate} className="btn btn-outline">
+        <Link
+          href={`/subject/${encodeURIComponent(subjectStr)}`}
+          onClick={onNavigate}
+          className="btn btn-outline"
+        >
           <FaArrowLeft /> Back
         </Link>
+
         <Link href="/" onClick={onNavigate} className="btn btn-outline" aria-label="Home">
           <FaHome />
         </Link>
       </div>
 
-      <div className="card" style={{ padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      <div
+        className="card"
+        style={{ padding: 10, display: "flex", alignItems: "center", gap: 8 }}
+      >
         <FaSearch />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search topics…"
-          style={{ width: "100%", border: "none", outline: "none", background: "transparent", color: "var(--text)" }}
+          style={{
+            width: "100%",
+            border: "none",
+            outline: "none",
+            background: "transparent",
+            color: "var(--text)",
+          }}
         />
       </div>
 
@@ -427,7 +475,9 @@ export default function TopicPage() {
           return (
             <Link
               key={t.topic_name}
-              href={`/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(subjectStr)}`}
+              href={`/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
+                subjectStr
+              )}`}
               onClick={onNavigate}
               style={{
                 display: "block",
@@ -437,7 +487,9 @@ export default function TopicPage() {
                 color: "inherit",
                 fontWeight: active ? 900 : 600,
                 background: active ? "rgba(37,99,235,0.10)" : "transparent",
-                border: active ? "1px solid rgba(37,99,235,0.25)" : "1px solid transparent",
+                border: active
+                  ? "1px solid rgba(37,99,235,0.25)"
+                  : "1px solid transparent",
                 marginBottom: 4,
               }}
             >
@@ -446,7 +498,12 @@ export default function TopicPage() {
           );
         })}
 
-        <button className="btn btn-primary" onClick={saveOffline} type="button" style={{ width: "100%", marginTop: 8 }}>
+        <button
+          className="btn btn-primary"
+          onClick={saveOffline}
+          type="button"
+          style={{ width: "100%", marginTop: 8 }}
+        >
           <FaDownload /> Save Offline
         </button>
       </div>
@@ -454,17 +511,41 @@ export default function TopicPage() {
   );
 
   const CollapsedRail = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
-      <button className="btn btn-outline" onClick={() => setSidebarOpen(true)} type="button" aria-label="Expand sidebar">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        alignItems: "center",
+      }}
+    >
+      <button
+        className="btn btn-outline"
+        onClick={() => setSidebarOpen(true)}
+        type="button"
+        aria-label="Expand sidebar"
+      >
         <FaChevronRight />
       </button>
-      <Link href={`/subject/${encodeURIComponent(subjectStr)}`} className="btn btn-outline" aria-label="Back">
+
+      <Link
+        href={`/subject/${encodeURIComponent(subjectStr)}`}
+        className="btn btn-outline"
+        aria-label="Back"
+      >
         <FaArrowLeft />
       </Link>
+
       <Link href="/" className="btn btn-outline" aria-label="Home">
         <FaHome />
       </Link>
-      <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+
+      <button
+        className="btn btn-outline"
+        onClick={toggleTheme}
+        type="button"
+        aria-label="Toggle theme"
+      >
         {theme === "dark" ? <FaSun /> : <FaMoon />}
       </button>
     </div>
@@ -498,7 +579,14 @@ export default function TopicPage() {
             gap: 10,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               <button
                 className="btn btn-outline lg:hidden"
@@ -536,12 +624,42 @@ export default function TopicPage() {
               </div>
             </div>
 
-            <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
-              <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
-            </button>
+            {/* ✅ RIGHT SIDE: Subject Home + Theme */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Link
+                className="btn btn-outline"
+                href={subjectStr ? `/subject/${encodeURIComponent(subjectStr)}` : "#"}
+                aria-label="Subject Home"
+                style={{
+                  opacity: subjectStr ? 1 : 0.5,
+                  pointerEvents: subjectStr ? "auto" : "none",
+                }}
+              >
+                <FaHome />
+              </Link>
+
+              <button
+                className="btn btn-outline"
+                onClick={toggleTheme}
+                type="button"
+                aria-label="Toggle theme"
+              >
+                <span style={{ fontSize: 14 }}>
+                  {theme === "dark" ? <FaSun /> : <FaMoon />}
+                </span>
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="badge" style={{ display: "none" }}>
                 {isOffline ? "Offline" : "Online"}
@@ -553,10 +671,15 @@ export default function TopicPage() {
                 className="btn btn-outline"
                 href={
                   prevTopic
-                    ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
+                    ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
+                        subjectStr
+                      )}`
                     : "#"
                 }
-                style={{ opacity: prevTopic ? 1 : 0.5, pointerEvents: prevTopic ? "auto" : "none" }}
+                style={{
+                  opacity: prevTopic ? 1 : 0.5,
+                  pointerEvents: prevTopic ? "auto" : "none",
+                }}
               >
                 <FaChevronLeft />
               </Link>
@@ -565,10 +688,15 @@ export default function TopicPage() {
                 className="btn btn-outline"
                 href={
                   nextTopic
-                    ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
+                    ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
+                        subjectStr
+                      )}`
                     : "#"
                 }
-                style={{ opacity: nextTopic ? 1 : 0.5, pointerEvents: nextTopic ? "auto" : "none" }}
+                style={{
+                  opacity: nextTopic ? 1 : 0.5,
+                  pointerEvents: nextTopic ? "auto" : "none",
+                }}
               >
                 <FaChevronRight />
               </Link>

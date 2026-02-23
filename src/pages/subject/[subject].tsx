@@ -1,3 +1,4 @@
+// File: pages/subject/[subject].tsx
 "use client";
 
 import { useRouter } from "next/router";
@@ -68,10 +69,7 @@ const extractUrl = (text: string) => {
 };
 
 const cleanTitle = (s: string) =>
-  s
-    .replace(/\s*\*\s*https?:\/\/.*$/i, "")
-    .replace(/\s*https?:\/\/.*$/i, "")
-    .trim();
+  s.replace(/\s*\*\s*https?:\/\/.*$/i, "").replace(/\s*https?:\/\/.*$/i, "").trim();
 
 const parseSubjectsFromReadme = (md: string): Map<string, Topic[]> => {
   const lines = (md || "")
@@ -509,7 +507,7 @@ const formatDate = (ts: number) => {
                 )}
               </div>
             </div>
-
+                
             <div className="flex flex-wrap items-center gap-3">
               {/* Save Offline */}
               <button
@@ -655,6 +653,9 @@ const formatDate = (ts: number) => {
 
                     <div
                       className={
+                        theme === "dark"
+                          ? "text-xs text-slate-400"
+                          : "text-xs text-slate-500"
                         theme === "dark"
                           ? "text-xs text-slate-400"
                           : "text-xs text-slate-500"
