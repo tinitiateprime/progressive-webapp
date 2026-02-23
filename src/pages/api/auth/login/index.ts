@@ -1,6 +1,17 @@
-import { findUserByEmail, normalizeEmail, verifyPassword } from "../../../../../src/lib/userStore";
+import type { NextApiRequest, NextApiResponse } from "next";
+import { findUserByEmail, normalizeEmail, verifyPassword } from "../../../../lib/userStore";
 
-export default async function handler(req, res) {
+type Success = {
+  ok: true;
+  user: { id: string; fullName: string; email: string };
+};
+
+type Fail = {
+  ok: false;
+  message: string;
+};
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse<Success | Fail>) {
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, message: "Method not allowed" });
   }
@@ -15,9 +26,13 @@ export default async function handler(req, res) {
 
   const user = await findUserByEmail(email);
 
-  // ✅ new users must sign up first
   if (!user) {
     return res.status(404).json({ ok: false, message: "No account found. Please sign up first." });
+  }
+
+  // If user is Google-only (no passwordHash), block password login
+  if (!user.passwordHash) {
+    return res.status(401).json({ ok: false, message: "Please sign in with Google." });
   }
 
   const ok = verifyPassword(password, user.passwordHash);
@@ -25,7 +40,6 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, message: "Invalid credentials." });
   }
 
-  // ✅ existing user -> frontend redirects to dashboard
   return res.status(200).json({
     ok: true,
     user: { id: user.id, fullName: user.fullName, email: user.email },

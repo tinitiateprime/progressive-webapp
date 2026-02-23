@@ -1,14 +1,16 @@
+// src/lib/authOptions.ts
+import type { NextAuthOptions } from "next-auth";
+import type { Account, Profile, User } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import crypto from "crypto";
+
 import { addUser, findUserByEmail, normalizeEmail, verifyPassword } from "./userStore";
 
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
 
-  session: {
-    strategy: "jwt",
-  },
+  session: { strategy: "jwt" },
 
   providers: [
     GoogleProvider({
@@ -26,30 +28,29 @@ export const authOptions = {
       async authorize(credentials) {
         const email = normalizeEmail(credentials?.email);
         const password = String(credentials?.password || "");
-
         if (!email || !password) return null;
 
         const user = await findUserByEmail(email);
-        if (!user) return null;
-
-        // If user has no passwordHash (google-only), block credentials login
-        if (!user.passwordHash) return null;
+        if (!user || !user.passwordHash) return null;
 
         const ok = verifyPassword(password, user.passwordHash);
         if (!ok) return null;
 
-        return {
-          id: user.id,
-          name: user.fullName,
-          email: user.email,
-        };
+        return { id: user.id, name: user.fullName, email: user.email };
       },
     }),
   ],
 
   callbacks: {
-    // ✅ When user logs in using Google, create them in your userStore if not exists
-    async signIn({ user, account }) {
+    // ✅ FIXED: typed params
+    async signIn({
+      user,
+      account,
+    }: {
+      user: User;
+      account: Account | null;
+      profile?: Profile;
+    }) {
       if (account?.provider === "google") {
         const email = normalizeEmail(user?.email);
         if (!email) return false;
@@ -58,9 +59,7 @@ export const authOptions = {
 
         if (!existing) {
           const fullName = user?.name || "Google User";
-
-          // random password (user won't know it; they will login via Google)
-          const randomPassword = crypto.randomUUID();
+          const randomPassword = crypto.randomUUID(); // user won’t use this
 
           await addUser({ fullName, email, password: randomPassword });
         }
@@ -69,18 +68,17 @@ export const authOptions = {
     },
 
     async jwt({ token, user, account }) {
-      if (user?.id) token.uid = user.id;
-      if (account?.provider) token.provider = account.provider;
+      if (user?.id) (token as any).uid = user.id;
+      if (account?.provider) (token as any).provider = account.provider;
       return token;
     },
 
     async session({ session, token }) {
       if (session?.user) {
-        session.user.id = token.uid || null;
-        session.user.provider = token.provider || null;
+        (session.user as any).id = (token as any).uid || null;
+        (session.user as any).provider = (token as any).provider || null;
       }
       return session;
     },
   },
 };
-

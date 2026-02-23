@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "src/app/subject/[subject]", "src/app/subject/[subject]"  ],
+, "src/app/subject/[subject]", "src/app/subject/[subject]", "src/lib/userStore.ts"  ],
   "exclude": ["node_modules"]
 }
