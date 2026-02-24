@@ -1,4 +1,4 @@
-// File: pages/topic/[topic].tsx
+// File: src/pages/topic/[topic].tsx
 "use client";
 
 import { useRouter } from "next/router";
@@ -24,90 +24,85 @@ import {
 
 import { materialLight, materialDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
-const SyntaxHighlighter = dynamic(() => import("react-syntax-highlighter").then((mod) => mod.Prism), {
-  ssr: false,
-});
+import {
+  normalize,
+  parseMainCatalogReadme,
+  parseSubjectTopicsFromReadme, // ✅ add this
+  toRawGithub,
+} from "../../lib/readme-utils";
 
-type CatalogTopic = { topic_name: string; md_url: string };
+const SyntaxHighlighter = dynamic(
+  () => import("react-syntax-highlighter").then((mod) => mod.Prism),
+  { ssr: false }
+);
+
+type CatalogTopic = {
+  topic_name: string;
+  md_url: string;
+  section_markdown?: string;
+  bullets?: string[];
+};
+
 type CatalogSubject = { subject: string; topics: CatalogTopic[] };
 
-// ✅ README link (BLOB) - we convert to RAW for fetch
-const README_BLOB_URL = "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
-
-const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-const toRawGithub = (u: string) => {
-  const m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
-  if (!m) return u;
-  const [, owner, repo, branch, path] = m;
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
-};
-
-const extractUrl = (text: string) => {
-  const m = text.match(/\bhttps?:\/\/[^\s)]+/);
-  if (!m) return "";
-  return m[0].replace(/[)\],.]+$/g, "");
-};
+// ✅ Main catalog README (subject list)
+const README_BLOB_URL =
+  "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
+const README_RAW_URL = toRawGithub(README_BLOB_URL);
+const CACHE_NAME = "tinitiate-offline-v1";
 
 // ✅ Robust fetch: try direct, fallback to same-origin proxy
-async function fetchText(url: string) {
+async function fetchText(url: string, signal?: AbortSignal) {
   try {
-    const r = await fetch(url, { cache: "no-store" });
+    const r = await fetch(url, { cache: "no-store", signal });
     if (r.ok) return await r.text();
   } catch {}
 
-  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, { cache: "no-store" });
+  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+    cache: "no-store",
+    signal,
+  });
   if (!r2.ok) throw new Error(`Fetch failed (HTTP ${r2.status})`);
   return await r2.text();
 }
 
-// ✅ Parse README format:
-// ## Vue JS
-// ### Introduction
-// https://raw....
-function parseReadmeCatalog(md: string): CatalogSubject[] {
-  const lines = (md || "")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+// ✅ cache-first text loader (for README / subject README / markdown)
+async function loadTextCacheFirst(url: string, signal: AbortSignal) {
+  let cachedText: string | null = null;
 
-  const subjects = new Map<string, CatalogSubject>();
-  let current: CatalogSubject | null = null;
-  let pendingTopic = "";
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    const h2 = line.match(/^##\s+(.*)$/);
-    if (h2) {
-      const name = h2[1].trim();
-      if (/^catalog\s*\d*/i.test(name)) continue; // ignore "Catalog 1/2/3"
-      current = { subject: name, topics: [] };
-      subjects.set(name, current);
-      pendingTopic = "";
-      continue;
-    }
-
-    const h3 = line.match(/^###\s+(.*)$/);
-    if (h3 && current) {
-      pendingTopic = h3[1].trim();
-      continue;
-    }
-
-    if (current && pendingTopic) {
-      const url = extractUrl(line);
-      if (url) {
-        const rawUrl = toRawGithub(url);
-        if (/\.md(\?|$)/i.test(rawUrl)) {
-          current.topics.push({ topic_name: pendingTopic, md_url: rawUrl });
-          pendingTopic = "";
-        }
-      }
-    }
+  if (typeof window !== "undefined" && "caches" in window) {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(url);
+      if (cached) cachedText = await cached.text();
+    } catch {}
   }
 
-  return Array.from(subjects.values()).filter((s) => s.topics.length > 0);
+  const result: { cached: string | null; fresh: string | null } = {
+    cached: cachedText,
+    fresh: null,
+  };
+
+  try {
+    const fresh = await fetchText(url, signal);
+    result.fresh = fresh;
+
+    if (typeof window !== "undefined" && "caches" in window) {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(
+          url,
+          new Response(fresh, {
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          })
+        );
+      } catch {}
+    }
+  } catch {
+    // ignore network failure
+  }
+
+  return result;
 }
 
 /** ✅ fallback markdown if file is empty */
@@ -120,19 +115,26 @@ This page is still being prepared.
 - Explanation of the concept
 - One practical example
 - Common mistakes + best practices
+
+> Subject: ${subject}
 `;
 }
 
 export default function TopicPage() {
   const router = useRouter();
-  const { topic, subject } = router.query;
+  const { topic, subject, readme } = router.query;
 
   const topicStr = String(topic || "");
   const subjectStr = String(subject || "");
+  const readmeQuery = typeof readme === "string" ? readme : "";
 
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   const [catalogData, setCatalogData] = useState<CatalogSubject | null>(null);
+
+  const [subjectReadmeUrl, setSubjectReadmeUrl] = useState<string>("");
+  const [subjectReadmeOutlineMd, setSubjectReadmeOutlineMd] = useState<string>("");
+
   const [content, setContent] = useState("");
   const [mdBaseUrl, setMdBaseUrl] = useState<string>("");
 
@@ -185,40 +187,91 @@ export default function TopicPage() {
     };
   }, []);
 
-  // ✅ load catalog + markdown from README (RAW), no JSON parsing
+  // ✅ load catalog + subject README + topic markdown
   useEffect(() => {
     if (!router.isReady) return;
     if (!topicStr || !subjectStr) return;
 
     let cancelled = false;
+    const ac = new AbortController();
 
     (async () => {
       try {
         setLoading(true);
         setError("");
+        setSubjectReadmeOutlineMd("");
 
-        const readmeRaw = toRawGithub(README_BLOB_URL);
-        const readmeText = await fetchText(readmeRaw);
+        // 1) Resolve subject README URL
+        let resolvedSubjectReadmeUrl = "";
 
-        const catalogList = parseReadmeCatalog(readmeText);
+        if (readmeQuery) {
+          resolvedSubjectReadmeUrl = toRawGithub(readmeQuery);
+        } else {
+          const mainRes = await loadTextCacheFirst(README_RAW_URL, ac.signal);
+          const mainMd = mainRes.fresh || mainRes.cached || "";
 
-        const catalog = catalogList.find((s) => normalize(s.subject) === normalize(subjectStr));
-        if (!catalog) throw new Error("Subject not found");
+          const mainSubjects = parseMainCatalogReadme(mainMd);
+          const match = mainSubjects.find(
+            (s) => normalize(s.subject) === normalize(subjectStr)
+          );
+
+          if (!match) throw new Error("Subject not found in main README");
+
+          resolvedSubjectReadmeUrl = toRawGithub(match.readme_url);
+        }
+
         if (cancelled) return;
+        setSubjectReadmeUrl(resolvedSubjectReadmeUrl);
 
+        // 2) Load subject README (the one that contains topic links + bullets)
+        const subjectRes = await loadTextCacheFirst(resolvedSubjectReadmeUrl, ac.signal);
+        const subjectReadmeText = subjectRes.fresh || subjectRes.cached || "";
+        if (!subjectReadmeText) throw new Error("Subject README empty or unavailable");
+
+        const parsedTopics = parseSubjectTopicsFromReadme(
+          subjectReadmeText,
+          resolvedSubjectReadmeUrl
+        );
+
+        const catalog: CatalogSubject = {
+          subject: subjectStr,
+          topics: parsedTopics.map((t) => ({
+            topic_name: t.topic_name,
+            md_url: t.md_url,
+            section_markdown: t.section_markdown,
+            bullets: t.bullets,
+          })),
+        };
+
+        if (cancelled) return;
         setCatalogData(catalog);
 
-        const found = catalog.topics.find((t) => normalize(t.topic_name) === normalize(topicStr));
-        if (!found) throw new Error("Topic not found");
+        // 3) Find current topic from parsed subject README
+        const found = catalog.topics.find(
+          (t) => normalize(t.topic_name) === normalize(topicStr)
+        );
+        if (!found) throw new Error("Topic not found in subject README");
 
+        // ✅ Save bullet/outline markdown from subject README section
+        setSubjectReadmeOutlineMd((found.section_markdown || "").trim());
+
+        // 4) Load actual topic markdown file
         const mdUrl = toRawGithub(found.md_url);
         const base = mdUrl.slice(0, mdUrl.lastIndexOf("/") + 1);
         setMdBaseUrl(base);
 
-        const md = await fetchText(mdUrl);
+        let topicMd = "";
+        try {
+          const topicRes = await loadTextCacheFirst(mdUrl, ac.signal);
+          topicMd = topicRes.fresh || topicRes.cached || "";
+        } catch {
+          // If topic file fetch fails but README outline exists, don't fail the whole page
+          topicMd = "";
+        }
+
         if (cancelled) return;
 
-        setContent(md || "");
+        setContent(topicMd || "");
         setLoading(false);
       } catch {
         if (!cancelled) {
@@ -230,8 +283,9 @@ export default function TopicPage() {
 
     return () => {
       cancelled = true;
+      ac.abort();
     };
-  }, [router.isReady, topicStr, subjectStr]);
+  }, [router.isReady, topicStr, subjectStr, readmeQuery]);
 
   const topics = catalogData?.topics ?? [];
 
@@ -241,19 +295,30 @@ export default function TopicPage() {
     return topics.filter((t) => t.topic_name.toLowerCase().includes(qq));
   }, [topics, q]);
 
-  const currentIndex = useMemo(() => topics.findIndex((t) => t.topic_name === topicStr), [topics, topicStr]);
+  const currentIndex = useMemo(
+    () => topics.findIndex((t) => normalize(t.topic_name) === normalize(topicStr)),
+    [topics, topicStr]
+  );
 
   const prevTopic = currentIndex > 0 ? topics[currentIndex - 1] : null;
-  const nextTopic = currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
+  const nextTopic =
+    currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
 
   const saveOffline = async () => {
-    if (!catalogData || !("serviceWorker" in navigator)) return alert("Service Worker not supported");
+    if (!catalogData || !("serviceWorker" in navigator)) {
+      alert("Service Worker not supported");
+      return;
+    }
 
-    const readmeRaw = toRawGithub(README_BLOB_URL);
-    const urls = [readmeRaw, ...catalogData.topics.map((t) => toRawGithub(t.md_url))];
+    const urls = [
+      README_RAW_URL,
+      ...(subjectReadmeUrl ? [subjectReadmeUrl] : []),
+      ...catalogData.topics.map((t) => toRawGithub(t.md_url)),
+    ];
 
     const reg = await navigator.serviceWorker.ready;
     reg.active?.postMessage({ type: "PREFETCH_URLS", urls });
+
     alert(`Saved "${subjectStr}" for offline ✅`);
   };
 
@@ -292,7 +357,11 @@ export default function TopicPage() {
       const match = /language-(\w+)/.exec(className || "");
 
       const rawText =
-        typeof children === "string" ? children : Array.isArray(children) ? children.join("") : String(children);
+        typeof children === "string"
+          ? children
+          : Array.isArray(children)
+          ? children.join("")
+          : String(children);
 
       const raw = rawText.replace(/\n$/, "");
       const key = `${match?.[1] ?? "text"}:${raw.slice(0, 80)}`;
@@ -395,13 +464,23 @@ export default function TopicPage() {
             <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {subjectStr.toUpperCase()}
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>{isOffline ? "Offline" : "Online"}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>
+              {isOffline ? "Offline" : "Online"}
+            </div>
           </div>
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Link href={`/subject/${encodeURIComponent(subjectStr)}`} onClick={onNavigate} className="btn btn-outline">
+        <Link
+          href={
+            subjectReadmeUrl
+              ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
+              : `/subject/${encodeURIComponent(subjectStr)}`
+          }
+          onClick={onNavigate}
+          className="btn btn-outline"
+        >
           <FaArrowLeft /> Back
         </Link>
 
@@ -428,11 +507,17 @@ export default function TopicPage() {
 
       <div className="soft" style={{ padding: 8, overflowY: "auto", flex: 1 }}>
         {filteredTopics.map((t) => {
-          const active = t.topic_name === topicStr;
+          const active = normalize(t.topic_name) === normalize(topicStr);
+          const href = subjectReadmeUrl
+            ? `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
+                subjectStr
+              )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
+            : `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(subjectStr)}`;
+
           return (
             <Link
-              key={t.topic_name}
-              href={`/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(subjectStr)}`}
+              key={`${t.topic_name}-${t.md_url}`}
+              href={href}
               onClick={onNavigate}
               style={{
                 display: "block",
@@ -464,7 +549,15 @@ export default function TopicPage() {
         <FaChevronRight />
       </button>
 
-      <Link href={`/subject/${encodeURIComponent(subjectStr)}`} className="btn btn-outline" aria-label="Back">
+      <Link
+        href={
+          subjectReadmeUrl
+            ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
+            : `/subject/${encodeURIComponent(subjectStr)}`
+        }
+        className="btn btn-outline"
+        aria-label="Back"
+      >
         <FaArrowLeft />
       </Link>
 
@@ -478,7 +571,31 @@ export default function TopicPage() {
     </div>
   );
 
-  const renderedMarkdown = (content || "").trim().length >= 10 ? content : getFallbackMarkdown(subjectStr, topicStr);
+  // ✅ Combine README bullet-outline + actual topic markdown
+  const renderedMarkdown = useMemo(() => {
+    const topicMd = (content || "").trim();
+    const outlineMd = (subjectReadmeOutlineMd || "").trim();
+
+    if (topicMd && outlineMd) {
+      return `## Quick Outline (from ${subjectStr} README)
+
+${outlineMd}
+
+---
+
+${topicMd}`;
+    }
+
+    if (topicMd) return topicMd;
+
+    if (outlineMd) {
+      return `# ${topicStr}
+
+${outlineMd}`;
+    }
+
+    return getFallbackMarkdown(subjectStr, topicStr);
+  }, [content, subjectReadmeOutlineMd, subjectStr, topicStr]);
 
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
@@ -495,7 +612,16 @@ export default function TopicPage() {
           zIndex: 80,
         }}
       >
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "12px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div
+          style={{
+            maxWidth: 1400,
+            margin: "0 auto",
+            padding: "12px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               {/* ✅ MOBILE ONLY: burger */}
@@ -525,13 +651,24 @@ export default function TopicPage() {
                 >
                   {topicStr || (loading ? "Loading…" : "")}
                 </div>
+                {!!subjectReadmeOutlineMd?.trim() && (
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                    README outline loaded ✅
+                  </div>
+                )}
               </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Link
                 className="btn btn-outline"
-                href={subjectStr ? `/subject/${encodeURIComponent(subjectStr)}` : "#"}
+                href={
+                  subjectStr
+                    ? subjectReadmeUrl
+                      ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
+                      : `/subject/${encodeURIComponent(subjectStr)}`
+                    : "#"
+                }
                 aria-label="Subject Home"
                 style={{ opacity: subjectStr ? 1 : 0.5, pointerEvents: subjectStr ? "auto" : "none" }}
               >
@@ -547,7 +684,15 @@ export default function TopicPage() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
             <Link
               className="btn btn-outline"
-              href={prevTopic ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}` : "#"}
+              href={
+                prevTopic
+                  ? subjectReadmeUrl
+                    ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
+                        subjectStr
+                      )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
+                    : `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
+                  : "#"
+              }
               style={{ opacity: prevTopic ? 1 : 0.5, pointerEvents: prevTopic ? "auto" : "none" }}
               aria-label="Previous topic"
             >
@@ -556,7 +701,15 @@ export default function TopicPage() {
 
             <Link
               className="btn btn-outline"
-              href={nextTopic ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}` : "#"}
+              href={
+                nextTopic
+                  ? subjectReadmeUrl
+                    ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
+                        subjectStr
+                      )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
+                    : `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
+                  : "#"
+              }
               style={{ opacity: nextTopic ? 1 : 0.5, pointerEvents: nextTopic ? "auto" : "none" }}
               aria-label="Next topic"
             >
@@ -569,7 +722,7 @@ export default function TopicPage() {
       {/* MAIN CONTENT */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: 12 }}>
         <div style={{ display: "flex", gap: 12 }}>
-          {/* ✅ DESKTOP ONLY sidebar (WITH open/close button inside sidebar) */}
+          {/* ✅ DESKTOP ONLY sidebar */}
           {isDesktop && (
             <aside
               className="card"
@@ -584,7 +737,6 @@ export default function TopicPage() {
                 position: "relative",
               }}
             >
-              {/* ✅ Show this button ONLY when sidebar is OPEN (prevents double chevron when closed) */}
               {sidebarOpen && (
                 <button
                   className="btn btn-outline"

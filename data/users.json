@@ -1,0 +1,18 @@
+{
+  "users": [
+    {
+      "id": "0eac6aac-59f1-43d3-be4d-3d8c7335f04f",
+      "fullName": "eswar",
+      "email": "eswar@gmail.com",
+      "passwordHash": "a5b810a3190a39033de4d82052fdf6f4c9765516d6b7eeb0c496adf8a3d3efc9",
+      "createdAt": "2026-02-23T13:26:08.807Z"
+    },
+    {
+      "id": "9dc9d99f-03e5-4ec3-9b18-3295cb19bfa9",
+      "fullName": "Eswar Reddy",
+      "email": "neswar215@gmail.com",
+      "passwordHash": "11d533cb51809fafb5127f8b2cd64b30a974d46d39622dec12f2a6c0de860ad8",
+      "createdAt": "2026-02-24T05:13:37.448Z"
+    }
+  ]
+}

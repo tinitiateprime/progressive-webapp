@@ -1,8 +1,6 @@
 "use client";
 
 // File: src/pages/dashboard.tsx
-// ✅ Added Logout button
-// ✅ On logout: clears local auth + redirects to /login (fallback to / if not found)
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
@@ -11,10 +9,18 @@ import { useRouter } from "next/router";
 import { ThemeContext } from "../context/ThemeContext";
 import { FaMoon, FaSun, FaSearch, FaTimes, FaHome, FaSignOutAlt } from "react-icons/fa";
 
+import {
+  fetchTextStrict,
+  normalize as normalizeKey,
+  parseMainCatalogReadme,
+  parseSubjectTopicsFromReadme,
+  toRawGithub,
+} from "../lib/readme-utils";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type CatalogTopic = { topic_name: string; md_url: string };
-type CatalogSubject = { subject: string; topics: CatalogTopic[] };
+type CatalogSubject = { subject: string; readme_url: string; topics: CatalogTopic[] };
 
 type OfflineSubjectMeta = {
   subject: string;
@@ -42,86 +48,6 @@ const readOfflineSubjects = (): OfflineSubjectMeta[] => {
     } catch {}
   }
   return metas.sort((a, b) => a.subject.localeCompare(b.subject));
-};
-
-const toRawGithub = (u: string) => {
-  const m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
-  if (!m) return u;
-  const [, owner, repo, branch, path] = m;
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
-};
-
-const extractUrl = (text: string) => {
-  const m = text.match(/\bhttps?:\/\/[^\s)]+/);
-  if (!m) return "";
-  let url = m[0].replace(/[)\],]+$/g, "");
-  if (url.includes("github.com/") && url.includes("/blob/")) url = toRawGithub(url);
-  return url;
-};
-
-const cleanTitle = (s: string) =>
-  s.replace(/\s*\*\s*https?:\/\/.*$/i, "").replace(/\s*https?:\/\/.*$/i, "").trim();
-
-const parseCatalogFromReadme = (md: string): CatalogSubject[] => {
-  const text = (md || "").replace(/\r/g, "\n");
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  const map = new Map<string, CatalogSubject>();
-  const ensureSubject = (name: string) => {
-    const key = cleanTitle(name);
-    if (!map.has(key)) map.set(key, { subject: key, topics: [] });
-    return map.get(key)!;
-  };
-
-  let currentSubject: CatalogSubject | null = null;
-
-  const addTopic = (sub: CatalogSubject, topic_name: string, md_url: string) => {
-    const tn = cleanTitle(topic_name);
-    const url = md_url.trim();
-    if (!tn || !url) return;
-    if (sub.topics.some((t) => t.topic_name === tn)) return;
-    sub.topics.push({ topic_name: tn, md_url: url });
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    const h2 = line.match(/^##\s+(.*)$/);
-    if (h2) {
-      const heading = h2[1].trim();
-      if (/^catalog\s*\d*/i.test(heading)) continue;
-      currentSubject = ensureSubject(heading);
-      continue;
-    }
-
-    const h3 = line.match(/^###\s+(.*)$/);
-    if (h3) {
-      if (!currentSubject) continue;
-
-      const topicTitle = h3[1].trim();
-      let url = extractUrl(line);
-
-      if (!url) {
-        for (let j = i + 1; j < lines.length; j++) {
-          const next = lines[j];
-          if (/^#{1,6}\s+/.test(next)) break;
-          const candidate = extractUrl(next);
-          if (candidate) {
-            url = candidate;
-            break;
-          }
-        }
-      }
-
-      if (url) addTopic(currentSubject, topicTitle, url);
-      continue;
-    }
-  }
-
-  return Array.from(map.values()).filter((s) => s.subject && (s.topics?.length ?? 0) > 0);
 };
 
 const formatDate = (ts: number) => {
@@ -184,28 +110,53 @@ export default function Dashboard() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // ── load catalog from network ──────────────────────────────────────────────
+  // ── load main catalog (subjects) + each subject topics ─────────────────────
   useEffect(() => {
-    const readmeBlob = "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
-    const readmeRaw = toRawGithub(readmeBlob);
+    let cancelled = false;
 
-    fetch(readmeRaw)
-      .then((r) => r.text())
-      .then((text) => {
-        const catalog = parseCatalogFromReadme(text);
-        setSubjects(catalog);
+    (async () => {
+      try {
+        setLoading(true);
+        setErr("");
+
+        const readmeBlob = "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
+        const readmeRaw = toRawGithub(readmeBlob);
+
+        const mainReadme = await fetchTextStrict(readmeRaw);
+        const mainSubjects = parseMainCatalogReadme(mainReadme); // ✅ subjects + subject README URLs
+
+        const enriched = await Promise.all(
+          mainSubjects.map(async (s) => {
+            try {
+              const subjectReadmeText = await fetchTextStrict(s.readme_url);
+              const topics = parseSubjectTopicsFromReadme(subjectReadmeText, s.readme_url);
+              return { subject: s.subject, readme_url: s.readme_url, topics };
+            } catch {
+              // keep subject even if topic parsing fails
+              return { subject: s.subject, readme_url: s.readme_url, topics: [] as CatalogTopic[] };
+            }
+          })
+        );
+
+        if (cancelled) return;
+        setSubjects(enriched);
         setLoading(false);
-      })
-      .catch(() => {
+      } catch (e) {
+        if (cancelled) return;
         setErr("Failed to load catalog");
         setLoading(false);
-      });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => setMounted(true), []);
 
   const isSubjectOffline = (subjectName: string) =>
-    offlineSubjects.some((o) => o.subject.toLowerCase() === subjectName.toLowerCase());
+    offlineSubjects.some((o) => normalizeKey(o.subject) === normalizeKey(subjectName));
 
   const lastOfflineSavedAt = useMemo(() => {
     if (!offlineSubjects.length) return null;
@@ -225,17 +176,13 @@ export default function Dashboard() {
 
   // ✅ Logout handler (supports both custom token + NextAuth if present)
   const handleLogout = async () => {
-    // 1) If you use NextAuth in this project, this will work automatically.
     try {
       const mod = await import("next-auth/react");
       if (typeof mod?.signOut === "function") {
         await mod.signOut({ redirect: false });
       }
-    } catch {
-      // project may not have next-auth - ignore
-    }
+    } catch {}
 
-    // 2) Clear any common auth keys you might be storing (custom auth)
     try {
       localStorage.removeItem("token");
       localStorage.removeItem("access_token");
@@ -246,11 +193,8 @@ export default function Dashboard() {
       sessionStorage.removeItem("access_token");
       sessionStorage.removeItem("auth");
       sessionStorage.removeItem("user");
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // 3) Clear cookies quickly (best effort)
     try {
       document.cookie
         .split(";")
@@ -260,11 +204,8 @@ export default function Dashboard() {
           const name = eq > -1 ? c.slice(0, eq) : c;
           document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
         });
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // 4) Redirect
     await safeRedirectAfterLogout(router);
   };
 
@@ -339,8 +280,7 @@ export default function Dashboard() {
                 <h3 className="text-2xl sm:text-2xl font-bold tracking-tight truncate">Tutorial Dashboard</h3>
 
                 <div className={theme === "dark" ? "text-sm text-slate-300" : "text-sm text-slate-700"}>
-                  {isOffline ? "🔴 Offline" : "🟢 Online"} • {subjects.length} subjects • {offlineSubjects.length} offline
-                  saved
+                  {isOffline ? "🔴 Offline" : "🟢 Online"} • {subjects.length} subjects • {offlineSubjects.length} offline saved
                 </div>
 
                 {lastOfflineSavedAt && (
@@ -361,10 +301,8 @@ export default function Dashboard() {
                 {theme === "dark" ? "Light" : "Dark"}
               </button>
 
-              {/* ✅ Logout */}
               <button className={btnOutline} onClick={handleLogout} type="button" title="Logout">
                 <FaSignOutAlt />
-                
               </button>
             </div>
           </div>
@@ -376,7 +314,7 @@ export default function Dashboard() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search topics..."
+                placeholder="Search subjects or topics..."
                 className={`w-full bg-transparent outline-none text-sm ${
                   theme === "dark" ? "placeholder:text-slate-500" : "placeholder:text-slate-400"
                 }`}
@@ -534,16 +472,20 @@ export default function Dashboard() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
                 {filteredSubjects.map((s) => {
                   const savedOffline = isSubjectOffline(s.subject);
-                  const hint = q.trim()
-                    ? `${(s.topics || [])
-                        .filter((t) => normalizeSearch(t.topic_name).includes(normalizeSearch(q)))
-                        .slice(0, 2)
-                        .map((t) => t.topic_name)
-                        .join(" • ")}`
-                    : "";
+                  const matchingTopics = (s.topics || []).filter((t) =>
+                    normalizeSearch(t.topic_name).includes(normalizeSearch(q))
+                  );
+                  const hint = q.trim() ? matchingTopics.slice(0, 2).map((t) => t.topic_name).join(" • ") : "";
 
                   return (
-                    <Link key={s.subject} href={`/subject/${encodeURIComponent(s.subject)}`} style={{ textDecoration: "none", color: "inherit" }}>
+                    <Link
+                      key={s.subject}
+                      href={{
+                        pathname: `/subject/${encodeURIComponent(s.subject)}`,
+                        query: { readme: s.readme_url }, // ✅ helps subject page if it reads query.readme
+                      }}
+                      style={{ textDecoration: "none", color: "inherit" }}
+                    >
                       <div
                         className="card"
                         style={{
@@ -598,10 +540,20 @@ export default function Dashboard() {
                           </div>
 
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 16, fontWeight: 900, textTransform: "capitalize", paddingRight: savedOffline ? 60 : 0, lineHeight: 1.2 }}>
+                            <div
+                              style={{
+                                fontSize: 16,
+                                fontWeight: 900,
+                                textTransform: "capitalize",
+                                paddingRight: savedOffline ? 60 : 0,
+                                lineHeight: 1.2,
+                              }}
+                            >
                               {s.subject}
                             </div>
-                            <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)" }}>{s.topics?.length || 0} topics</div>
+                            <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)" }}>
+                              {s.topics?.length || 0} topics
+                            </div>
                           </div>
                         </div>
 
