@@ -1,0 +1,325 @@
+// File: src/lib/readme-utils.ts
+
+export type ParsedTopic = {
+  topic_name: string;
+  md_url: string;
+  bullets?: string[];
+  section_markdown?: string;
+};
+
+export type ParsedTopicSection = {
+  heading: string;
+  level: number; // 2 | 3 | 4
+  content: string;
+};
+
+export type MainCatalogSubjectLink = {
+  subject: string;
+  readme_url: string;
+};
+
+export const normalize = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+export const toRawGithub = (u: string) => {
+  const m = (u || "").match(
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
+  );
+  if (!m) return u;
+  const [, owner, repo, branch, path] = m;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+};
+
+const cleanTitle = (s: string) =>
+  (s || "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\s*\*\s*https?:\/\/.*$/i, "")
+    .replace(/\s*https?:\/\/.*$/i, "")
+    .trim();
+
+const stripMdSyntax = (s: string) =>
+  (s || "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .trim();
+
+const resolveMaybeRelativeUrl = (url: string, baseUrl?: string) => {
+  if (!url) return "";
+  const v = url.trim();
+
+  if (/^https?:\/\//i.test(v)) return toRawGithub(v);
+
+  if (baseUrl) {
+    try {
+      return toRawGithub(new URL(v, baseUrl).toString());
+    } catch {
+      return v;
+    }
+  }
+
+  return v;
+};
+
+const extractMarkdownLinkAnywhere = (
+  text: string,
+  baseUrl?: string
+): { title: string; url: string } | null => {
+  const m = (text || "").match(/\[([^\]]+)\]\(([^)]+)\)/);
+  if (!m) return null;
+
+  const title = cleanTitle(m[1]);
+  const url = resolveMaybeRelativeUrl(m[2], baseUrl);
+
+  if (!url) return null;
+  return { title, url };
+};
+
+const parseBulletsFromSection = (sectionText: string): string[] => {
+  const bullets: string[] = [];
+  const lines = (sectionText || "").split("\n");
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line === "---") continue;
+
+    let m = line.match(/^[-*+]\s+(.+)$/);
+    if (m) {
+      bullets.push(stripMdSyntax(m[1].trim()));
+      continue;
+    }
+
+    m = line.match(/^\d+\.\s+(.+)$/);
+    if (m) {
+      bullets.push(stripMdSyntax(m[1].trim()));
+      continue;
+    }
+  }
+
+  return bullets;
+};
+
+/**
+ * Normalize markdown so inline headings become real lines.
+ * Example:
+ * "... ## CONTENTS ### [A](a.md) ### [B](b.md)"
+ * =>
+ * "... \n## CONTENTS\n### [A](a.md)\n### [B](b.md)"
+ */
+export const normalizeMarkdownForHeadingParsing = (md: string): string => {
+  return (md || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    // Insert newline before inline heading tokens (## / ### / ####...) if not already at line start
+    .replace(/([^\n])\s+((?:[-*+]\s+)?#{1,6}\s+)/g, "$1\n$2")
+    .replace(/\n{3,}/g, "\n\n");
+};
+
+// ✅ Parses main app catalog README (subject list)
+// Supports headings like ## [Next JS](...README.md) and inline/minified variants.
+export function parseMainCatalogReadme(md: string): MainCatalogSubjectLink[] {
+  const normalizedMd = normalizeMarkdownForHeadingParsing(md);
+
+  const lines = normalizedMd
+    .split("\n")
+    .map((l) => l.trim());
+
+  const results: MainCatalogSubjectLink[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    const h2 = line.match(/^##\s+(.*)$/);
+    if (!h2) continue;
+
+    const link = extractMarkdownLinkAnywhere(h2[1].trim());
+    if (!link) continue;
+
+    const key = `${normalize(link.title)}|${link.url}`;
+    if (seen.has(key)) continue;
+
+    results.push({
+      subject: link.title,
+      readme_url: toRawGithub(link.url),
+    });
+    seen.add(key);
+  }
+
+  return results;
+}
+
+/**
+ * ✅ Subject README topic parser
+ * Supports topic headings with 2 / 3 / 4 hashes:
+ * - ## [Topic](./topic.md)
+ * - ### [Topic](./topic.md)
+ * - #### [Topic](./topic.md)
+ * - * ### [Topic](./topic.md)
+ * - * #### [Topic](./topic.md)
+ *
+ * Rules:
+ * - Heading must contain markdown link to an .md file
+ * - Works even if README is single-line/minified (inline headings)
+ */
+export function parseSubjectTopicsFromReadme(
+  md: string,
+  subjectReadmeUrl?: string
+): ParsedTopic[] {
+  const normalizedMd = normalizeMarkdownForHeadingParsing(md);
+  const lines = normalizedMd.split("\n");
+
+  type Hit = {
+    index: number;
+    level: number; // 2 | 3 | 4
+    title: string;
+    url: string;
+  };
+
+  const hits: Hit[] = [];
+  const seen = new Set<string>();
+
+  // ✅ CHANGED: #{2,3} -> #{2,4}
+  const TOPIC_HEADING_RE = /^(?:[-*+]\s+)?(#{2,4})\s+(.+)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = (lines[i] || "").trim();
+    if (!line) continue;
+
+    const h = line.match(TOPIC_HEADING_RE);
+    if (!h) continue;
+
+    const level = h[1].length; // 2 / 3 / 4
+    const headingBody = h[2].trim();
+
+    const mdLink = extractMarkdownLinkAnywhere(headingBody, subjectReadmeUrl);
+    if (!mdLink) continue;
+
+    const title = cleanTitle(mdLink.title);
+    const url = toRawGithub(mdLink.url);
+
+    // only markdown links
+    if (!title || !url || !/\.md(\?|#|$)/i.test(url)) continue;
+
+    const key = `${normalize(title)}|${url}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    hits.push({
+      index: i,
+      level,
+      title,
+      url,
+    });
+  }
+
+  if (!hits.length) return [];
+
+  const topics: ParsedTopic[] = [];
+
+  for (let i = 0; i < hits.length; i++) {
+    const hit = hits[i];
+    const start = hit.index + 1;
+    const end = i + 1 < hits.length ? hits[i + 1].index : lines.length;
+
+    const sectionContent = lines.slice(start, end).join("\n").trim();
+    const bullets = parseBulletsFromSection(sectionContent);
+
+    topics.push({
+      topic_name: hit.title,
+      md_url: hit.url,
+      bullets,
+      section_markdown: sectionContent,
+    });
+  }
+
+  return topics;
+}
+
+/**
+ * ✅ Topic page section parser (for rendering sub-sections / TOC)
+ * Supports headings with 2 / 3 / 4 hashes.
+ *
+ * If no 2/3/4 headings are found, returns one fallback section with full content
+ * so content still loads (important for inconsistent markdown files).
+ */
+export function parseTopicSectionsFromMarkdown(md: string): ParsedTopicSection[] {
+  const normalizedMd = normalizeMarkdownForHeadingParsing(md);
+  const lines = normalizedMd.split("\n");
+
+  type Hit = {
+    index: number;
+    level: number;
+    heading: string;
+  };
+
+  const hits: Hit[] = [];
+
+  // ✅ CHANGED: #{2,3} -> #{2,4}
+  const HEADING_RE = /^(#{2,4})\s+(.+)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = (lines[i] || "").trim();
+    if (!line) continue;
+
+    const m = line.match(HEADING_RE);
+    if (!m) continue;
+
+    const level = m[1].length;
+    const heading = stripMdSyntax(cleanTitle(m[2]));
+
+    if (!heading) continue;
+
+    hits.push({ index: i, level, heading });
+  }
+
+  // ✅ Fallback: no sections => return full content section
+  if (!hits.length) {
+    const full = normalizedMd.trim();
+    return full
+      ? [
+          {
+            heading: "Content",
+            level: 2,
+            content: full,
+          },
+        ]
+      : [];
+  }
+
+  const sections: ParsedTopicSection[] = [];
+
+  for (let i = 0; i < hits.length; i++) {
+    const hit = hits[i];
+    const start = hit.index + 1;
+    const end = i + 1 < hits.length ? hits[i + 1].index : lines.length;
+
+    sections.push({
+      heading: hit.heading,
+      level: hit.level,
+      content: lines.slice(start, end).join("\n").trim(),
+    });
+  }
+
+  return sections;
+}
+
+// ✅ direct fetch + proxy fallback
+export async function fetchTextStrict(url: string, signal?: AbortSignal): Promise<string> {
+  try {
+    const r = await fetch(url, { cache: "no-store", signal });
+    if (r.ok) return await r.text();
+  } catch {
+    // fallback below
+  }
+
+  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+    cache: "no-store",
+    signal,
+  });
+
+  if (!r2.ok) {
+    throw new Error(`Fetch failed (HTTP ${r2.status}) for ${url}`);
+  }
+
+  return await r2.text();
+}
