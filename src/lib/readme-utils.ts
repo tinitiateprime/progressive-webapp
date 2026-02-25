@@ -7,15 +7,21 @@ export type ParsedTopic = {
   section_markdown?: string;
 };
 
+export type ParsedTopicSection = {
+  heading: string;
+  level: number; // 2 | 3 | 4
+  content: string;
+};
+
 export type MainCatalogSubjectLink = {
   subject: string;
   readme_url: string;
 };
 
-export const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+export const normalize = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 export const toRawGithub = (u: string) => {
-  const m = u.match(
+  const m = (u || "").match(
     /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
   );
   if (!m) return u;
@@ -24,19 +30,20 @@ export const toRawGithub = (u: string) => {
 };
 
 const cleanTitle = (s: string) =>
-  s
+  (s || "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/\s*\*\s*https?:\/\/.*$/i, "")
     .replace(/\s*https?:\/\/.*$/i, "")
     .trim();
 
-const extractFirstUrl = (text: string) => {
-  const m = text.match(/\bhttps?:\/\/[^\s)]+/);
-  if (!m) return "";
-  let url = m[0].replace(/[)\],]+$/g, "");
-  if (url.includes("github.com/") && url.includes("/blob/")) url = toRawGithub(url);
-  return url;
-};
+const stripMdSyntax = (s: string) =>
+  (s || "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .trim();
 
 const resolveMaybeRelativeUrl = (url: string, baseUrl?: string) => {
   if (!url) return "";
@@ -59,7 +66,7 @@ const extractMarkdownLinkAnywhere = (
   text: string,
   baseUrl?: string
 ): { title: string; url: string } | null => {
-  const m = text.match(/\[([^\]]+)\]\(([^)]+)\)/);
+  const m = (text || "").match(/\[([^\]]+)\]\(([^)]+)\)/);
   if (!m) return null;
 
   const title = cleanTitle(m[1]);
@@ -79,13 +86,13 @@ const parseBulletsFromSection = (sectionText: string): string[] => {
 
     let m = line.match(/^[-*+]\s+(.+)$/);
     if (m) {
-      bullets.push(m[1].trim());
+      bullets.push(stripMdSyntax(m[1].trim()));
       continue;
     }
 
     m = line.match(/^\d+\.\s+(.+)$/);
     if (m) {
-      bullets.push(m[1].trim());
+      bullets.push(stripMdSyntax(m[1].trim()));
       continue;
     }
   }
@@ -93,10 +100,28 @@ const parseBulletsFromSection = (sectionText: string): string[] => {
   return bullets;
 };
 
-// ✅ Parses main app catalog README (subject list)
-export function parseMainCatalogReadme(md: string): MainCatalogSubjectLink[] {
-  const lines = (md || "")
+/**
+ * Normalize markdown so inline headings become real lines.
+ * Example:
+ * "... ## CONTENTS ### [A](a.md) ### [B](b.md)"
+ * =>
+ * "... \n## CONTENTS\n### [A](a.md)\n### [B](b.md)"
+ */
+export const normalizeMarkdownForHeadingParsing = (md: string): string => {
+  return (md || "")
+    .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
+    // Insert newline before inline heading tokens (## / ### / ####...) if not already at line start
+    .replace(/([^\n])\s+((?:[-*+]\s+)?#{1,6}\s+)/g, "$1\n$2")
+    .replace(/\n{3,}/g, "\n\n");
+};
+
+// ✅ Parses main app catalog README (subject list)
+// Supports headings like ## [Next JS](...README.md) and inline/minified variants.
+export function parseMainCatalogReadme(md: string): MainCatalogSubjectLink[] {
+  const normalizedMd = normalizeMarkdownForHeadingParsing(md);
+
+  const lines = normalizedMd
     .split("\n")
     .map((l) => l.trim());
 
@@ -124,109 +149,80 @@ export function parseMainCatalogReadme(md: string): MainCatalogSubjectLink[] {
 }
 
 /**
- * ✅ Parses subject README topics like:
- * ## 📘 [Introduction](./01-introduction.md)
- * - What is Vue?
- * - SPA vs MPA
- * ---
- * ## 🚀 [Getting Started](./02-getting-started.md)
+ * ✅ Subject README topic parser
+ * Supports topic headings with 2 / 3 / 4 hashes:
+ * - ## [Topic](./topic.md)
+ * - ### [Topic](./topic.md)
+ * - #### [Topic](./topic.md)
+ * - * ### [Topic](./topic.md)
+ * - * #### [Topic](./topic.md)
  *
- * Supports relative .md links using subjectReadmeUrl as base.
+ * Rules:
+ * - Heading must contain markdown link to an .md file
+ * - Works even if README is single-line/minified (inline headings)
  */
 export function parseSubjectTopicsFromReadme(
   md: string,
   subjectReadmeUrl?: string
 ): ParsedTopic[] {
-  const lines = (md || "").replace(/\r/g, "\n").split("\n");
+  const normalizedMd = normalizeMarkdownForHeadingParsing(md);
+  const lines = normalizedMd.split("\n");
 
   type Hit = {
     index: number;
-    level: number;
+    level: number; // 2 | 3 | 4
     title: string;
     url: string;
   };
 
   const hits: Hit[] = [];
+  const seen = new Set<string>();
+
+  // ✅ CHANGED: #{2,3} -> #{2,4}
+  const TOPIC_HEADING_RE = /^(?:[-*+]\s+)?(#{2,4})\s+(.+)$/;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const line = (lines[i] || "").trim();
     if (!line) continue;
 
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    const h = line.match(TOPIC_HEADING_RE);
     if (!h) continue;
 
-    const level = h[1].length;
+    const level = h[1].length; // 2 / 3 / 4
     const headingBody = h[2].trim();
 
-    // skip page title (# Vue.js Tutorial ...)
-    if (level === 1) continue;
-
-    let title = "";
-    let url = "";
-
     const mdLink = extractMarkdownLinkAnywhere(headingBody, subjectReadmeUrl);
-    if (mdLink) {
-      title = mdLink.title;
-      url = mdLink.url;
-    } else {
-      // fallback: heading text + URL on nearby following lines
-      title = cleanTitle(headingBody);
+    if (!mdLink) continue;
 
-      for (let j = i + 1; j < lines.length; j++) {
-        const next = lines[j].trim();
-        if (!next) continue;
-        if (/^#{1,6}\s+/.test(next)) break;
+    const title = cleanTitle(mdLink.title);
+    const url = toRawGithub(mdLink.url);
 
-        const nextMdLink = extractMarkdownLinkAnywhere(next, subjectReadmeUrl);
-        if (nextMdLink) {
-          url = nextMdLink.url;
-          break;
-        }
-
-        const direct = extractFirstUrl(next);
-        if (direct) {
-          url = resolveMaybeRelativeUrl(direct, subjectReadmeUrl);
-          break;
-        }
-      }
-    }
-
+    // only markdown links
     if (!title || !url || !/\.md(\?|#|$)/i.test(url)) continue;
 
+    const key = `${normalize(title)}|${url}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
     hits.push({
       index: i,
       level,
       title,
-      url: toRawGithub(url),
+      url,
     });
   }
 
+  if (!hits.length) return [];
+
   const topics: ParsedTopic[] = [];
-  const seen = new Set<string>();
 
   for (let i = 0; i < hits.length; i++) {
     const hit = hits[i];
-
     const start = hit.index + 1;
-    let end = lines.length;
-
-    for (let j = start; j < lines.length; j++) {
-      const m = lines[j].trim().match(/^(#{1,6})\s+(.*)$/);
-      if (!m) continue;
-
-      const nextLevel = m[1].length;
-      if (nextLevel <= hit.level) {
-        end = j;
-        break;
-      }
-    }
+    const end = i + 1 < hits.length ? hits[i + 1].index : lines.length;
 
     const sectionContent = lines.slice(start, end).join("\n").trim();
     const bullets = parseBulletsFromSection(sectionContent);
-
-    const key = `${normalize(hit.title)}|${hit.url}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
 
     topics.push({
       topic_name: hit.title,
@@ -237,6 +233,74 @@ export function parseSubjectTopicsFromReadme(
   }
 
   return topics;
+}
+
+/**
+ * ✅ Topic page section parser (for rendering sub-sections / TOC)
+ * Supports headings with 2 / 3 / 4 hashes.
+ *
+ * If no 2/3/4 headings are found, returns one fallback section with full content
+ * so content still loads (important for inconsistent markdown files).
+ */
+export function parseTopicSectionsFromMarkdown(md: string): ParsedTopicSection[] {
+  const normalizedMd = normalizeMarkdownForHeadingParsing(md);
+  const lines = normalizedMd.split("\n");
+
+  type Hit = {
+    index: number;
+    level: number;
+    heading: string;
+  };
+
+  const hits: Hit[] = [];
+
+  // ✅ CHANGED: #{2,3} -> #{2,4}
+  const HEADING_RE = /^(#{2,4})\s+(.+)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = (lines[i] || "").trim();
+    if (!line) continue;
+
+    const m = line.match(HEADING_RE);
+    if (!m) continue;
+
+    const level = m[1].length;
+    const heading = stripMdSyntax(cleanTitle(m[2]));
+
+    if (!heading) continue;
+
+    hits.push({ index: i, level, heading });
+  }
+
+  // ✅ Fallback: no sections => return full content section
+  if (!hits.length) {
+    const full = normalizedMd.trim();
+    return full
+      ? [
+          {
+            heading: "Content",
+            level: 2,
+            content: full,
+          },
+        ]
+      : [];
+  }
+
+  const sections: ParsedTopicSection[] = [];
+
+  for (let i = 0; i < hits.length; i++) {
+    const hit = hits[i];
+    const start = hit.index + 1;
+    const end = i + 1 < hits.length ? hits[i + 1].index : lines.length;
+
+    sections.push({
+      heading: hit.heading,
+      level: hit.level,
+      content: lines.slice(start, end).join("\n").trim(),
+    });
+  }
+
+  return sections;
 }
 
 // ✅ direct fetch + proxy fallback
