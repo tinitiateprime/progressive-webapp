@@ -760,7 +760,7 @@ export default function SubjectPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button className={btnOutline} onClick={() => router.push("/")} type="button" title="Home">
+              <button className={btnOutline} onClick={() => router.push("/dashboard")} type="button" title="Home">
                 <FaHome />
               </button>
 

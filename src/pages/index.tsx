@@ -13,6 +13,9 @@ import {
   FaFacebookF,
   FaInstagram,
   FaEnvelope,
+  FaPhoneAlt,
+  FaMapMarkerAlt,
+  FaBuilding,
 } from "react-icons/fa";
 
 export default function Home() {
@@ -105,192 +108,171 @@ export default function Home() {
       </main>
 
       {/* Footer (responsive, modern, moderate UI) */}
-      <footer className="mx-auto max-w-6xl w-full py-8 sm:py-10">
-        <div className="glass rounded-3xl p-5 sm:p-8">
-          <div className="grid gap-8 lg:grid-cols-12">
-            {/* Left */}
-            <div className="lg:col-span-5">
-              <div className="flex items-start gap-3 sm:gap-4">
-                <img
-                  src="/favicon_new.png"
-                  alt="Tinitiate"
-                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl shrink-0"
-                />
-                <div className="min-w-0">
-                  <div className="text-xl sm:text-2xl font-extrabold tracking-tight">
-                    TINITIATE
-                  </div>
-                  <div className="mt-1 text-xs sm:text-sm font-semibold">
-                    TECHNICAL INITIATE Technologies Pvt Ltd
-                  </div>
-                </div>
-              </div>
+     <footer className="mt-10 sm:mt-14 w-full border-t border-[color:var(--border)]">
+  <div className="mx-auto max-w-6xl w-full px-1 pt-5 sm:pt-6 pb-7 sm:pb-8">
+    {/* subtle footer label */}
+    <div className="text-[10px] sm:text-[11px] font-bold tracking-[0.22em] uppercase text-[color:var(--text-muted)]">
+      Footer
+    </div>
 
-              <p className="mt-4 text-xs sm:text-sm leading-6 text-[color:var(--text-muted)]">
-                TINITIATE is a leading IT consulting, development and training
-                company, dedicated to empowering businesses with cutting-edge
-                technology solutions and high-quality professional training.
-                We deliver tailored solutions to meet the evolving demands of
-                enterprises worldwide.
-              </p>
-
-              <div className="mt-6 text-[11px] sm:text-xs font-bold tracking-widest text-[color:var(--text-muted)]">
-                FOLLOW US
-              </div>
-
-              <div className="mt-3 flex items-center gap-3 text-[color:var(--text-muted)]">
-                {[
-                  {
-                    href: "https://www.linkedin.com/company/tinitiate/",
-                    label: "LinkedIn",
-                    icon: <FaLinkedinIn />,
-                  },
-                  {
-                    href: "https://www.youtube.com/",
-                    label: "YouTube",
-                    icon: <FaYoutube />,
-                  },
-                  {
-                    href: "https://twitter.com/",
-                    label: "X / Twitter",
-                    icon: <FaTwitter />,
-                  },
-                  {
-                    href: "https://www.facebook.com/",
-                    label: "Facebook",
-                    icon: <FaFacebookF />,
-                  },
-                  {
-                    href: "https://www.instagram.com/",
-                    label: "Instagram",
-                    icon: <FaInstagram />,
-                  },
-                ].map((s) => (
-                  <a
-                    key={s.label}
-                    href={s.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={s.label}
-                    className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-[color:var(--border)] hover:opacity-80 transition"
-                    title={s.label}
-                  >
-                    {s.icon}
-                  </a>
-                ))}
-              </div>
+    <div className="mt-4 grid gap-6 lg:grid-cols-12">
+      {/* Left */}
+      <div className="lg:col-span-5">
+        <div className="flex items-start gap-3">
+          <img
+            src="/favicon_new.png"
+            alt="Tinitiate"
+            className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl shrink-0"
+          />
+          <div className="min-w-0">
+            <div className="text-sm sm:text-base font-extrabold tracking-tight">
+              TINITIATE
             </div>
-
-            {/* Company */}
-            <div className="lg:col-span-3">
-              <div className="text-base sm:text-lg font-bold">Company</div>
-              <div className="mt-3 sm:mt-4 grid gap-2.5 text-xs sm:text-sm">
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/about"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  About Us
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/pricing-policy"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Pricing Policy
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/privacy-policy"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Privacy Policy
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/refund-policy"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Refund Policy
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/terms-and-conditions"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Terms &amp; Conditions
-                </a>
-              </div>
+            <div className="mt-0.5 text-[10px] sm:text-xs font-medium text-[color:var(--text-muted)]">
+              TECHNICAL INITIATE Technologies Pvt Ltd
             </div>
-
-            {/* Contact */}
-            <div className="lg:col-span-4">
-              <div className="text-base sm:text-lg font-bold">Contact Us</div>
-
-              <div className="mt-3 sm:mt-4 grid gap-4 text-xs sm:text-sm text-[color:var(--text-muted)]">
-                <div className="flex items-center gap-2">
-                  <FaEnvelope className="shrink-0" />
-                  <a
-                    className="hover:underline break-all"
-                    href="mailto:contact@tinitiate.com"
-                  >
-                    contact@tinitiate.com
-                  </a>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-[color:var(--text)]">
-                    USA:
-                  </div>
-                  <div className="break-words">
-                    +1 (973) 653-6870, +1 (206) 802-4102
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-[color:var(--text)]">
-                    India:
-                  </div>
-                  <div>+91 95534 95553</div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-[color:var(--text)]">
-                    Head Office:
-                  </div>
-                  <div className="break-words">
-                    Plot No. B 503, Ace Ajanta, Beside Indu Aranya, Nagole,
-                    Hayathnagar, R.R. – 500068, Telangana, India
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-[color:var(--text)]">
-                    Corporate Office:
-                  </div>
-                  <div className="break-words">
-                    1-2/10 Sbh Colony Mohan Nagar, SBH Colony, Kothapet, 500036,
-                    Telangana, India
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 sm:mt-10 border-t border-[color:var(--border)] pt-5 sm:pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
-            <span>
-              © {new Date().getFullYear()} TINITIATE Technologies Pvt Ltd. All
-              rights reserved.
-            </span>
-            <span className="opacity-80">tinitiate.com</span>
           </div>
         </div>
-      </footer>
+
+        <p className="mt-3 text-[11px] sm:text-xs leading-5 text-[color:var(--text-muted)]">
+          TINITIATE is a leading IT consulting, development and training
+          company, helping businesses and learners with modern technology
+          solutions and high-quality professional training.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-[color:var(--text-muted)]">
+          {[
+            {
+              href: "https://www.linkedin.com/company/tinitiate/",
+              label: "LinkedIn",
+              icon: <FaLinkedinIn />,
+            },
+            {
+              href: "https://www.youtube.com/",
+              label: "YouTube",
+              icon: <FaYoutube />,
+            },
+            {
+              href: "https://twitter.com/",
+              label: "X / Twitter",
+              icon: <FaTwitter />,
+            },
+            {
+              href: "https://www.facebook.com/",
+              label: "Facebook",
+              icon: <FaFacebookF />,
+            },
+            {
+              href: "https://www.instagram.com/",
+              label: "Instagram",
+              icon: <FaInstagram />,
+            },
+          ].map((s) => (
+            <a
+              key={s.label}
+              href={s.href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={s.label}
+              title={s.label}
+              className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-[color:var(--border)] text-[12px] transition hover:text-[color:var(--text)] hover:border-[color:var(--text-muted)]"
+            >
+              {s.icon}
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Company */}
+      <div className="lg:col-span-3">
+        <div className="text-sm sm:text-base font-bold">Company</div>
+        <div className="mt-3 grid gap-2 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
+          {[
+            { label: "About Us", href: "https://tinitiate.com/about" },
+            {
+              label: "Pricing Policy",
+              href: "https://tinitiate.com/pricing-policy",
+            },
+            {
+              label: "Privacy Policy",
+              href: "https://tinitiate.com/privacy-policy",
+            },
+            {
+              label: "Refund Policy",
+              href: "https://tinitiate.com/refund-policy",
+            },
+            {
+              label: "Terms & Conditions",
+              href: "https://tinitiate.com/terms-and-conditions",
+            },
+          ].map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 hover:text-[color:var(--text)] transition"
+            >
+              <FaArrowRight className="text-[9px] opacity-70" />
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Contact */}
+      <div className="lg:col-span-4">
+        <div className="text-sm sm:text-base font-bold">Contact</div>
+
+        <div className="mt-3 grid gap-3 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
+          <div className="flex items-center gap-2">
+            <FaEnvelope className="shrink-0 text-[11px]" />
+            <a
+              className="hover:text-[color:var(--text)] transition break-all"
+              href="mailto:contact@tinitiate.com"
+            >
+              contact@tinitiate.com
+            </a>
+          </div>
+
+          <div>
+            <span className="font-semibold text-[color:var(--text)]">USA:</span>{" "}
+            +1 (973) 653-6870, +1 (206) 802-4102
+          </div>
+
+          <div>
+            <span className="font-semibold text-[color:var(--text)]">India:</span>{" "}
+            +91 95534 95553
+          </div>
+
+          <div className="leading-5">
+            <span className="font-semibold text-[color:var(--text)]">
+              Head Office:
+            </span>{" "}
+            Plot No. B 503, Ace Ajanta, Beside Indu Aranya, Nagole,
+            Hayathnagar, R.R. – 500068, Telangana, India
+          </div>
+
+          <div className="leading-5">
+            <span className="font-semibold text-[color:var(--text)]">
+              Corporate Office:
+            </span>{" "}
+            1-2/10 Sbh Colony Mohan Nagar, SBH Colony, Kothapet, 500036,
+            Telangana, India
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div className="mt-5 sm:mt-6 border-t border-[color:var(--border)] pt-3 sm:pt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] sm:text-[11px] text-[color:var(--text-muted)]">
+      <span>
+        © {new Date().getFullYear()} TINITIATE Technologies Pvt Ltd. All rights
+        reserved.
+      </span>
+      <span className="opacity-80">tinitiate.com</span>
+    </div>
+  </div>
+</footer>
     </div>
   );
 }

@@ -484,9 +484,10 @@ export default function TopicPage() {
           <FaArrowLeft /> Back
         </Link>
 
-        <Link href="/" onClick={onNavigate} className="btn btn-outline" aria-label="Home">
+        <Link href="/dashboard" onClick={onNavigate} className="btn btn-outline" aria-label="Home">
           <FaHome />
         </Link>
+        
       </div>
 
       <div className="card" style={{ padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
@@ -600,124 +601,199 @@ ${outlineMd}`;
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
       {/* HEADER (sticky) */}
+     {/* HEADER (sticky) */}
+<div
+  className="card"
+  style={{
+    borderRadius: 0,
+    borderLeft: 0,
+    borderRight: 0,
+    borderTop: 0,
+    position: "sticky",
+    top: 0,
+    zIndex: 80,
+  }}
+>
+  <div
+    style={{
+      maxWidth: 1400,
+      margin: "0 auto",
+      padding: "12px 12px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+    }}
+  >
+    {/* top row */}
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: isDesktop ? "1fr auto 1fr" : "auto 1fr auto",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
+      {/* left side */}
       <div
-        className="card"
         style={{
-          borderRadius: 0,
-          borderLeft: 0,
-          borderRight: 0,
-          borderTop: 0,
-          position: "sticky",
-          top: 0,
-          zIndex: 80,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          justifyContent: "flex-start",
+          minWidth: 0,
         }}
       >
+        {!isDesktop && (
+          <button
+            className="btn btn-outline"
+            onClick={() => setMobileOpen(true)}
+            type="button"
+            aria-label="Open sidebar"
+            style={{ padding: "8px 10px" }}
+          >
+            <span style={{ fontSize: 14 }}>
+              <FaBars />
+            </span>
+          </button>
+        )}
+
+        {/* mobile title: left beside burger */}
+        {!isDesktop && (
+          <div
+            style={{
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {topicStr || (loading ? "Loading…" : "")}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* desktop title: centered */}
+      {isDesktop ? (
         <div
           style={{
-            maxWidth: 1400,
-            margin: "0 auto",
-            padding: "12px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
+            minWidth: 0,
+            textAlign: "center",
+            justifySelf: "center",
+            maxWidth: "70vw",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              {/* ✅ MOBILE ONLY: burger */}
-              {!isDesktop && (
-                <button
-                  className="btn btn-outline"
-                  onClick={() => setMobileOpen(true)}
-                  type="button"
-                  aria-label="Open sidebar"
-                  style={{ padding: "8px 10px" }}
-                >
-                  <span style={{ fontSize: 14 }}>
-                    <FaBars />
-                  </span>
-                </button>
-              )}
-
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontWeight: 900,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: "70vw",
-                  }}
-                >
-                  {topicStr || (loading ? "Loading…" : "")}
-                </div>
-                {!!subjectReadmeOutlineMd?.trim() && (
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-                    README outline loaded ✅
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Link
-                className="btn btn-outline"
-                href={
-                  subjectStr
-                    ? subjectReadmeUrl
-                      ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
-                      : `/subject/${encodeURIComponent(subjectStr)}`
-                    : "#"
-                }
-                aria-label="Subject Home"
-                style={{ opacity: subjectStr ? 1 : 0.5, pointerEvents: subjectStr ? "auto" : "none" }}
-              >
-                <FaHome />
-              </Link>
-
-              <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
-                <span style={{ fontSize: 14 }}>{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-            <Link
-              className="btn btn-outline"
-              href={
-                prevTopic
-                  ? subjectReadmeUrl
-                    ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
-                        subjectStr
-                      )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-                    : `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
-                  : "#"
-              }
-              style={{ opacity: prevTopic ? 1 : 0.5, pointerEvents: prevTopic ? "auto" : "none" }}
-              aria-label="Previous topic"
-            >
-              <FaChevronLeft />
-            </Link>
-
-            <Link
-              className="btn btn-outline"
-              href={
-                nextTopic
-                  ? subjectReadmeUrl
-                    ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
-                        subjectStr
-                      )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-                    : `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(subjectStr)}`
-                  : "#"
-              }
-              style={{ opacity: nextTopic ? 1 : 0.5, pointerEvents: nextTopic ? "auto" : "none" }}
-              aria-label="Next topic"
-            >
-              <FaChevronRight />
-            </Link>
+          <div
+            style={{
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {topicStr || (loading ? "Loading…" : "")}
           </div>
         </div>
+      ) : (
+        <div />
+      )}
+
+      {/* right side */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: 8,
+        }}
+      >
+        <Link
+          className="btn btn-outline"
+          href={
+            subjectStr
+              ? subjectReadmeUrl
+                ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
+                : `/subject/${encodeURIComponent(subjectStr)}`
+              : "#"
+          }
+          aria-label="Subject Home"
+          style={{
+            opacity: subjectStr ? 1 : 0.5,
+            pointerEvents: subjectStr ? "auto" : "none",
+          }}
+        >
+          <FaHome />
+        </Link>
+
+        <button
+          className="btn btn-outline"
+          onClick={toggleTheme}
+          type="button"
+          aria-label="Toggle theme"
+        >
+          <span style={{ fontSize: 14 }}>
+            {theme === "dark" ? <FaSun /> : <FaMoon />}
+          </span>
+        </button>
       </div>
+    </div>
+
+    {/* bottom row: prev / next */}
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 8,
+        flexWrap: "wrap",
+      }}
+    >
+      <Link
+        className="btn btn-outline"
+        href={
+          prevTopic
+            ? subjectReadmeUrl
+              ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
+                  subjectStr
+                )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
+              : `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
+                  subjectStr
+                )}`
+            : "#"
+        }
+        style={{ opacity: prevTopic ? 1 : 0.5, pointerEvents: prevTopic ? "auto" : "none" }}
+        aria-label="Previous topic"
+      >
+        <FaChevronLeft />
+      </Link>
+
+      <Link
+        className="btn btn-outline"
+        href={
+          nextTopic
+            ? subjectReadmeUrl
+              ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
+                  subjectStr
+                )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
+              : `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
+                  subjectStr
+                )}`
+            : "#"
+        }
+        style={{ opacity: nextTopic ? 1 : 0.5, pointerEvents: nextTopic ? "auto" : "none" }}
+        aria-label="Next topic"
+      >
+        <FaChevronRight />
+      </Link>
+    </div>
+  </div>
+</div>
 
       {/* MAIN CONTENT */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: 12 }}>

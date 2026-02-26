@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect, ReactNode } from "react";
 import { useRouter } from "next/router";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { ThemeContext } from "../context/ThemeContext";
 import {
   FaMoon,
@@ -16,12 +16,21 @@ import {
   FaGoogle,
 } from "react-icons/fa";
 
-function Field({ label, icon, children, hint }: any) {
+type FieldProps = {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  hint?: string;
+};
+
+function Field({ label, icon, children, hint }: FieldProps) {
   return (
     <div className="grid gap-2">
       <div className="flex items-end justify-between gap-3">
         <label className="text-sm font-semibold tracking-tight">{label}</label>
-        {hint ? <span className="text-xs text-[color:var(--text-muted)]">{hint}</span> : null}
+        {hint ? (
+          <span className="text-xs text-[color:var(--text-muted)]">{hint}</span>
+        ) : null}
       </div>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]">
@@ -35,6 +44,7 @@ function Field({ label, icon, children, hint }: any) {
 
 export default function SignupPage() {
   const router = useRouter();
+  const { status } = useSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   const [fullName, setFullName] = useState("");
@@ -48,6 +58,12 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/dashboard");
+    }
+  }, [status, router]);
+
   async function onGoogle() {
     setError("");
     setLoading(true);
@@ -59,7 +75,7 @@ export default function SignupPage() {
     }
   }
 
-  async function onSubmit(e: any) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -67,10 +83,12 @@ export default function SignupPage() {
       setError("Please fill all fields.");
       return;
     }
+
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
     }
+
     if (password !== confirm) {
       setError("Passwords do not match.");
       return;
@@ -91,6 +109,7 @@ export default function SignupPage() {
         return;
       }
 
+      // Auto login after successful signup
       const result = await signIn("credentials", {
         email,
         password,
@@ -99,16 +118,28 @@ export default function SignupPage() {
       });
 
       if (result?.error) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
-      router.push(result?.url || "/dashboard");
+      router.replace("/dashboard");
     } catch {
       setError("Signup failed. Please try again.");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  if (status === "authenticated") {
+    return null;
   }
 
   return (
@@ -128,6 +159,9 @@ export default function SignupPage() {
             onClick={() => router.push("/")}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") router.push("/");
+            }}
           >
             <img
               src="/favicon_new.png"
@@ -136,7 +170,9 @@ export default function SignupPage() {
             />
             <div className="leading-tight min-w-0">
               <div className="text-sm font-semibold truncate">Tinitiate</div>
-              <div className="text-xs text-[color:var(--text-muted)] truncate">Create your account</div>
+              <div className="text-xs text-[color:var(--text-muted)] truncate">
+                Create your account
+              </div>
             </div>
           </div>
 
@@ -146,7 +182,9 @@ export default function SignupPage() {
             type="button"
             aria-label="Toggle theme"
           >
-            <span className="text-[14px]">{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
+            <span className="text-[14px]">
+              {theme === "dark" ? <FaSun /> : <FaMoon />}
+            </span>
           </button>
         </div>
       </header>
@@ -266,7 +304,11 @@ export default function SignupPage() {
                   </div>
                 </Field>
 
-                <Field label="Confirm password" icon={<FaLock />} hint="Must match password">
+                <Field
+                  label="Confirm password"
+                  icon={<FaLock />}
+                  hint="Must match password"
+                >
                   <div className="relative">
                     <input
                       className="w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-12 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
