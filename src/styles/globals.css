@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+/* ===== Tokens (docs-site style) ===== */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #fbfbfc;
+  --border: rgba(15, 23, 42, 0.12);
+
+  --text: #0b1220;
+  --muted: #556277;
+
+  --brand: #16a34a;   /* GFG-ish green */
+  --brand-2: #2563eb; /* docs blue */
+}
+
+.dark {
+  --bg: #0b1020;
+  --surface: #0f172a;
+  --surface-2: #0b1328;
+  --border: rgba(148, 163, 184, 0.18);
+
+  --text: #eaf0ff;
+  --muted: #a5b4d0;
+
+  --brand: #22c55e;
+  /* --brand-2: #60a5fa; */
+  --brand-2: #2563eb;
+}
+
+/* ===== Base ===== */
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+/* ===== Small reusable helpers (NO @apply) ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.dark .card {
+  background: var(--surface);
+}
+
+.soft {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 160ms ease;
+  user-select: none;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover {
+  background: rgba(0,0,0,0.04);
+}
+.dark .btn-outline:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.btn-primary {
+  background: var(--brand-2);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  color: #fff;
+}
+.btn-primary:hover { filter: brightness(1.03); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.6);
+}
+.dark .badge {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+/* ===== Markdown readability (docs-like) ===== */
+.prose {
+  max-width: none;
+  line-height: 1.75;
+}
+.prose h1 { font-size: 32px; margin-top: 18px; margin-bottom: 10px; }
+.prose h2 { font-size: 24px; margin-top: 18px; margin-bottom: 8px; }
+.prose h3 { font-size: 18px; margin-top: 16px; margin-bottom: 6px; }
+.prose p, .prose li { color: var(--text); }
+.prose a { color: var(--brand-2); font-weight: 600; }
+.prose code { background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 8px; }
+.dark .prose code { background: rgba(255,255,255,0.08); }
+
+/* ===== Scrollbar subtle ===== */
+*::-webkit-scrollbar { width: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(100,116,139,0.25);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ===== Prevent page from expanding horizontally ===== */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Allow content area to shrink in flex layouts (critical) */
+main, .prose, .card {
+  min-width: 0;
+}
+
+/* ===== Markdown / code overflow containment ===== */
+.prose pre,
+.prose code,
+.prose table,
+.prose img {
+  max-width: 100%;
+}
+
+/* Code blocks: keep inside container, allow horizontal scroll if needed */
+.prose pre {
+  overflow-x: auto;
+  white-space: pre; /* keep formatting */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Avoid long tokens blowing up width */
+.prose code {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Tables should never widen the page */
+.prose table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+}
