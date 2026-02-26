@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect, ReactNode } from "react";
 import { useRouter } from "next/router";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { ThemeContext } from "../context/ThemeContext";
 import {
   FaMoon,
@@ -15,12 +15,21 @@ import {
   FaGoogle,
 } from "react-icons/fa";
 
-function Field({ label, icon, children, hint }: any) {
+type FieldProps = {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  hint?: string;
+};
+
+function Field({ label, icon, children, hint }: FieldProps) {
   return (
     <div className="grid gap-2">
       <div className="flex items-end justify-between gap-3">
         <label className="text-sm font-semibold tracking-tight">{label}</label>
-        {hint ? <span className="text-xs text-[color:var(--text-muted)]">{hint}</span> : null}
+        {hint ? (
+          <span className="text-xs text-[color:var(--text-muted)]">{hint}</span>
+        ) : null}
       </div>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]">
@@ -34,11 +43,13 @@ function Field({ label, icon, children, hint }: any) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { status } = useSession();
+  const { theme, toggleTheme } = useContext(ThemeContext);
 
   const callbackUrl =
-    typeof router.query.callbackUrl === "string" ? router.query.callbackUrl : "/dashboard";
-
-  const { theme, toggleTheme } = useContext(ThemeContext);
+    typeof router.query.callbackUrl === "string"
+      ? router.query.callbackUrl
+      : "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,7 +58,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function onSubmit(e: any) {
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/dashboard");
+    }
+  }, [status, router]);
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -58,6 +75,24 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
+      // First verify with your custom API so you get custom messages:
+      // - No account found. Please sign up first.
+      // - Please sign in with Google.
+      // - Invalid credentials.
+      const verifyRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const verifyData = await verifyRes.json().catch(() => ({}));
+
+      if (!verifyRes.ok) {
+        setError(verifyData?.message || "Login failed.");
+        return;
+      }
+
+      // Then create NextAuth session
       const result = await signIn("credentials", {
         email,
         password,
@@ -66,11 +101,11 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError("Invalid credentials.");
+        setError("Login failed. Please try again.");
         return;
       }
 
-      router.push(result?.url || callbackUrl);
+      router.replace("/dashboard");
     } catch {
       setError("Login failed. Please try again.");
     } finally {
@@ -82,12 +117,23 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      // Redirect handled by NextAuth
-      await signIn("google", { callbackUrl });
+      await signIn("google", { callbackUrl: "/dashboard" });
     } catch {
       setError("Google sign-in failed.");
       setLoading(false);
     }
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  if (status === "authenticated") {
+    return null;
   }
 
   return (
@@ -107,6 +153,9 @@ export default function LoginPage() {
             onClick={() => router.push("/")}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") router.push("/");
+            }}
           >
             <img
               src="/favicon_new.png"
@@ -115,7 +164,9 @@ export default function LoginPage() {
             />
             <div className="leading-tight min-w-0">
               <div className="text-sm font-semibold truncate">Tinitiate</div>
-              <div className="text-xs text-[color:var(--text-muted)] truncate">Secure sign in</div>
+              <div className="text-xs text-[color:var(--text-muted)] truncate">
+                Secure sign in
+              </div>
             </div>
           </div>
 
@@ -125,7 +176,9 @@ export default function LoginPage() {
             type="button"
             aria-label="Toggle theme"
           >
-            <span className="text-[14px]">{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
+            <span className="text-[14px]">
+              {theme === "dark" ? <FaSun /> : <FaMoon />}
+            </span>
           </button>
         </div>
       </header>
@@ -144,15 +197,17 @@ export default function LoginPage() {
                 Futuristic
               </div>
 
-              <h2 className="mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">Welcome back</h2>
+              <h2 className="mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">
+                Welcome back
+              </h2>
 
               <p className="mt-3 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-prose">
-                Sign in to access your dashboard, manage your workspace, and continue where you left off — with a modern,
-                distraction-free experience.
+                Sign in to access your dashboard, manage your workspace, and continue
+                where you left off — with a modern, distraction-free experience.
               </p>
 
               <div className="mt-6 text-xs text-[color:var(--text-muted)]">
-                New here? You can create an account in one step.
+                New here? Create your account first.
               </div>
 
               <button
@@ -175,7 +230,9 @@ export default function LoginPage() {
                 Existing users login
               </div>
 
-              <h1 className="mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">Sign in</h1>
+              <h1 className="mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">
+                Sign in
+              </h1>
               <p className="mt-2 text-sm text-[color:var(--text-muted)]">
                 Continue with Google or use email/password.
               </p>
