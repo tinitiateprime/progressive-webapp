@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import NextAuth, { type NextAuthOptions } from "next-auth";
+import NextAuth, { type NextAuthOptions, type Session } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
@@ -9,6 +10,16 @@ import {
   normalizeEmail,
   verifyPassword,
 } from "../../../lib/userStore";
+
+type AppToken = JWT & {
+  id?: string;
+};
+
+type AppSession = Session & {
+  user?: Session["user"] & {
+    id?: string;
+  };
+};
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -85,16 +96,23 @@ export const authOptions: NextAuthOptions = {
 
         if (!existing) {
           const fullName =
-            String(user.name || "").trim() || email.split("@")[0] || "Google User";
+            String(user.name || "").trim() ||
+            email.split("@")[0] ||
+            "Google User";
 
-          const created = await addUser({
-            fullName,
-            email,
-            password: "",
-          });
-
-          if (!created.ok && created.message !== "User already exists") {
-            return false;
+          try {
+            await addUser({
+              fullName,
+              email,
+              password: "",
+            });
+          } catch (error) {
+            // If user was created in parallel or addUser throws,
+            // allow sign-in only if the user now exists.
+            const createdLater = await findUserByEmail(email);
+            if (!createdLater) {
+              return false;
+            }
           }
         }
 
@@ -105,37 +123,44 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt({ token, user, account }) {
+      const appToken = token as AppToken;
+
       if (account?.provider === "credentials" && user) {
-        token.id = user.id;
-        token.name = user.name;
-        token.email = user.email;
+        appToken.id = String(user.id || "");
+        appToken.name = user.name || "";
+        appToken.email = user.email || "";
       }
 
       if (account?.provider === "google") {
-        const email = normalizeEmail(token.email || user?.email);
+        const email = normalizeEmail(appToken.email || user?.email);
 
         if (email) {
           const existing = await findUserByEmail(email);
 
           if (existing) {
-            token.id = existing.id;
-            token.name = existing.fullName;
-            token.email = existing.email;
+            appToken.id = existing.id;
+            appToken.name = existing.fullName;
+            appToken.email = existing.email;
           }
         }
       }
 
-      return token;
+      return appToken;
     },
 
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = String(token.id || "");
-        session.user.name = String(token.name || session.user.name || "");
-        session.user.email = String(token.email || session.user.email || "");
+      const appSession = session as AppSession;
+      const appToken = token as AppToken;
+
+      if (appSession.user) {
+        appSession.user.id = String(appToken.id || "");
+        appSession.user.name = String(appToken.name || appSession.user.name || "");
+        appSession.user.email = String(
+          appToken.email || appSession.user.email || ""
+        );
       }
 
-      return session;
+      return appSession;
     },
 
     async redirect({ url, baseUrl }) {
