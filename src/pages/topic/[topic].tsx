@@ -22,12 +22,15 @@ import {
   FaSearch,
 } from "react-icons/fa";
 
-import { materialLight, materialDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import {
+  materialLight,
+  materialDark,
+} from "react-syntax-highlighter/dist/cjs/styles/prism";
 
 import {
   normalize,
   parseMainCatalogReadme,
-  parseSubjectTopicsFromReadme, // ✅ add this
+  parseSubjectTopicsFromReadme,
   toRawGithub,
 } from "../../lib/readme-utils";
 
@@ -45,13 +48,11 @@ type CatalogTopic = {
 
 type CatalogSubject = { subject: string; topics: CatalogTopic[] };
 
-// ✅ Main catalog README (subject list)
 const README_BLOB_URL =
   "https://github.com/tinitiateprime/tinitiate_it_traning_app/blob/main/README.md";
 const README_RAW_URL = toRawGithub(README_BLOB_URL);
 const CACHE_NAME = "tinitiate-offline-v1";
 
-// ✅ Robust fetch: try direct, fallback to same-origin proxy
 async function fetchText(url: string, signal?: AbortSignal) {
   try {
     const r = await fetch(url, { cache: "no-store", signal });
@@ -66,7 +67,6 @@ async function fetchText(url: string, signal?: AbortSignal) {
   return await r2.text();
 }
 
-// ✅ cache-first text loader (for README / subject README / markdown)
 async function loadTextCacheFirst(url: string, signal: AbortSignal) {
   let cachedText: string | null = null;
 
@@ -105,7 +105,6 @@ async function loadTextCacheFirst(url: string, signal: AbortSignal) {
   return result;
 }
 
-/** ✅ fallback markdown if file is empty */
 function getFallbackMarkdown(subject: string, topic: string) {
   return `# ${topic}
 
@@ -131,9 +130,9 @@ export default function TopicPage() {
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   const [catalogData, setCatalogData] = useState<CatalogSubject | null>(null);
-
   const [subjectReadmeUrl, setSubjectReadmeUrl] = useState<string>("");
-  const [subjectReadmeOutlineMd, setSubjectReadmeOutlineMd] = useState<string>("");
+  const [subjectReadmeOutlineMd, setSubjectReadmeOutlineMd] =
+    useState<string>("");
 
   const [content, setContent] = useState("");
   const [mdBaseUrl, setMdBaseUrl] = useState<string>("");
@@ -142,19 +141,13 @@ export default function TopicPage() {
   const [error, setError] = useState("");
   const [isOffline, setIsOffline] = useState(false);
 
-  // ✅ responsive (no tailwind needed)
   const [isDesktop, setIsDesktop] = useState(false);
-
-  // ✅ Desktop sidebar open/close
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  // ✅ mobile drawer only
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const [q, setQ] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // detect desktop
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -166,12 +159,10 @@ export default function TopicPage() {
     return () => mq.removeEventListener?.("change", apply);
   }, []);
 
-  // when going desktop, force-close mobile drawer
   useEffect(() => {
     if (isDesktop) setMobileOpen(false);
   }, [isDesktop]);
 
-  // ✅ prevent stale state when switching between mobile/desktop
   useEffect(() => {
     if (!isDesktop) setSidebarOpen(true);
   }, [isDesktop]);
@@ -187,7 +178,6 @@ export default function TopicPage() {
     };
   }, []);
 
-  // ✅ load catalog + subject README + topic markdown
   useEffect(() => {
     if (!router.isReady) return;
     if (!topicStr || !subjectStr) return;
@@ -201,7 +191,6 @@ export default function TopicPage() {
         setError("");
         setSubjectReadmeOutlineMd("");
 
-        // 1) Resolve subject README URL
         let resolvedSubjectReadmeUrl = "";
 
         if (readmeQuery) {
@@ -223,10 +212,13 @@ export default function TopicPage() {
         if (cancelled) return;
         setSubjectReadmeUrl(resolvedSubjectReadmeUrl);
 
-        // 2) Load subject README (the one that contains topic links + bullets)
-        const subjectRes = await loadTextCacheFirst(resolvedSubjectReadmeUrl, ac.signal);
+        const subjectRes = await loadTextCacheFirst(
+          resolvedSubjectReadmeUrl,
+          ac.signal
+        );
         const subjectReadmeText = subjectRes.fresh || subjectRes.cached || "";
-        if (!subjectReadmeText) throw new Error("Subject README empty or unavailable");
+        if (!subjectReadmeText)
+          throw new Error("Subject README empty or unavailable");
 
         const parsedTopics = parseSubjectTopicsFromReadme(
           subjectReadmeText,
@@ -246,16 +238,13 @@ export default function TopicPage() {
         if (cancelled) return;
         setCatalogData(catalog);
 
-        // 3) Find current topic from parsed subject README
         const found = catalog.topics.find(
           (t) => normalize(t.topic_name) === normalize(topicStr)
         );
         if (!found) throw new Error("Topic not found in subject README");
 
-        // ✅ Save bullet/outline markdown from subject README section
         setSubjectReadmeOutlineMd((found.section_markdown || "").trim());
 
-        // 4) Load actual topic markdown file
         const mdUrl = toRawGithub(found.md_url);
         const base = mdUrl.slice(0, mdUrl.lastIndexOf("/") + 1);
         setMdBaseUrl(base);
@@ -265,7 +254,6 @@ export default function TopicPage() {
           const topicRes = await loadTextCacheFirst(mdUrl, ac.signal);
           topicMd = topicRes.fresh || topicRes.cached || "";
         } catch {
-          // If topic file fetch fails but README outline exists, don't fail the whole page
           topicMd = "";
         }
 
@@ -302,7 +290,9 @@ export default function TopicPage() {
 
   const prevTopic = currentIndex > 0 ? topics[currentIndex - 1] : null;
   const nextTopic =
-    currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
+    currentIndex >= 0 && currentIndex < topics.length - 1
+      ? topics[currentIndex + 1]
+      : null;
 
   const saveOffline = async () => {
     if (!catalogData || !("serviceWorker" in navigator)) {
@@ -328,7 +318,8 @@ export default function TopicPage() {
 
     if (s.includes("github.com/") && s.includes("/blob/")) s = toRawGithub(s);
 
-    if (s.startsWith("http") || s.startsWith("/") || s.startsWith("data:")) return s;
+    if (s.startsWith("http") || s.startsWith("/") || s.startsWith("data:"))
+      return s;
 
     if (!mdBaseUrl) return s;
     try {
@@ -338,13 +329,24 @@ export default function TopicPage() {
     }
   };
 
-  // ✅ markdown styling
   const markdownComponents: Components = {
     ul({ children }: any) {
-      return <ul style={{ paddingLeft: 18, margin: "10px 0", listStyle: "disc" }}>{children}</ul>;
+      return (
+        <ul
+          style={{ paddingLeft: 18, margin: "10px 0", listStyle: "disc" }}
+        >
+          {children}
+        </ul>
+      );
     },
     ol({ children }: any) {
-      return <ol style={{ paddingLeft: 18, margin: "10px 0", listStyle: "decimal" }}>{children}</ol>;
+      return (
+        <ol
+          style={{ paddingLeft: 18, margin: "10px 0", listStyle: "decimal" }}
+        >
+          {children}
+        </ol>
+      );
     },
     li({ children }: any) {
       return <li style={{ marginBottom: 6 }}>{children}</li>;
@@ -389,7 +391,9 @@ export default function TopicPage() {
         };
 
         return (
-          <div style={{ position: "relative", maxWidth: "100%", overflowX: "auto" }}>
+          <div
+            style={{ position: "relative", maxWidth: "100%", overflowX: "auto" }}
+          >
             <button
               type="button"
               onClick={onCopy}
@@ -457,11 +461,31 @@ export default function TopicPage() {
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <img src="/favicon_new.png" alt="Logo" style={{ width: 32, height: 32, borderRadius: 10 }} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}
+        >
+          <img
+            src="/favicon_new.png"
+            alt="Logo"
+            style={{ width: 32, height: 32, borderRadius: 10 }}
+          />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div
+              style={{
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
               {subjectStr.toUpperCase()}
             </div>
             <div style={{ fontSize: 12, color: "var(--muted)" }}>
@@ -475,7 +499,9 @@ export default function TopicPage() {
         <Link
           href={
             subjectReadmeUrl
-              ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
+              ? `/subject/${encodeURIComponent(
+                  subjectStr
+                )}?readme=${encodeURIComponent(subjectReadmeUrl)}`
               : `/subject/${encodeURIComponent(subjectStr)}`
           }
           onClick={onNavigate}
@@ -484,13 +510,20 @@ export default function TopicPage() {
           <FaArrowLeft /> Back
         </Link>
 
-        <Link href="/dashboard" onClick={onNavigate} className="btn btn-outline" aria-label="Home">
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          className="btn btn-outline"
+          aria-label="Home"
+        >
           <FaHome />
         </Link>
-        
       </div>
 
-      <div className="card" style={{ padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      <div
+        className="card"
+        style={{ padding: 10, display: "flex", alignItems: "center", gap: 8 }}
+      >
         <FaSearch />
         <input
           value={q}
@@ -510,10 +543,14 @@ export default function TopicPage() {
         {filteredTopics.map((t) => {
           const active = normalize(t.topic_name) === normalize(topicStr);
           const href = subjectReadmeUrl
-            ? `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(
+            ? `/topic/${encodeURIComponent(
+                t.topic_name
+              )}?subject=${encodeURIComponent(
                 subjectStr
               )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-            : `/topic/${encodeURIComponent(t.topic_name)}?subject=${encodeURIComponent(subjectStr)}`;
+            : `/topic/${encodeURIComponent(
+                t.topic_name
+              )}?subject=${encodeURIComponent(subjectStr)}`;
 
           return (
             <Link
@@ -528,7 +565,9 @@ export default function TopicPage() {
                 color: "inherit",
                 fontWeight: active ? 900 : 600,
                 background: active ? "rgba(37,99,235,0.10)" : "transparent",
-                border: active ? "1px solid rgba(37,99,235,0.25)" : "1px solid transparent",
+                border: active
+                  ? "1px solid rgba(37,99,235,0.25)"
+                  : "1px solid transparent",
                 marginBottom: 4,
               }}
             >
@@ -537,7 +576,12 @@ export default function TopicPage() {
           );
         })}
 
-        <button className="btn btn-primary" onClick={saveOffline} type="button" style={{ width: "100%", marginTop: 8 }}>
+        <button
+          className="btn btn-primary"
+          onClick={saveOffline}
+          type="button"
+          style={{ width: "100%", marginTop: 8 }}
+        >
           <FaDownload /> Save Offline
         </button>
       </div>
@@ -545,15 +589,24 @@ export default function TopicPage() {
   );
 
   const CollapsedRail = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
-      <button className="btn btn-outline" onClick={() => setSidebarOpen(true)} type="button" aria-label="Expand sidebar">
+    <div
+      style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}
+    >
+      <button
+        className="btn btn-outline"
+        onClick={() => setSidebarOpen(true)}
+        type="button"
+        aria-label="Expand sidebar"
+      >
         <FaChevronRight />
       </button>
 
       <Link
         href={
           subjectReadmeUrl
-            ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
+            ? `/subject/${encodeURIComponent(
+                subjectStr
+              )}?readme=${encodeURIComponent(subjectReadmeUrl)}`
             : `/subject/${encodeURIComponent(subjectStr)}`
         }
         className="btn btn-outline"
@@ -562,17 +615,17 @@ export default function TopicPage() {
         <FaArrowLeft />
       </Link>
 
-      <Link href="/" className="btn btn-outline" aria-label="Home">
-        <FaHome />
-      </Link>
-
-      <button className="btn btn-outline" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+      <button
+        className="btn btn-outline"
+        onClick={toggleTheme}
+        type="button"
+        aria-label="Toggle theme"
+      >
         {theme === "dark" ? <FaSun /> : <FaMoon />}
       </button>
     </div>
   );
 
-  // ✅ Combine README bullet-outline + actual topic markdown
   const renderedMarkdown = useMemo(() => {
     const topicMd = (content || "").trim();
     const outlineMd = (subjectReadmeOutlineMd || "").trim();
@@ -601,204 +654,193 @@ ${outlineMd}`;
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
       {/* HEADER (sticky) */}
-     {/* HEADER (sticky) */}
-<div
-  className="card"
-  style={{
-    borderRadius: 0,
-    borderLeft: 0,
-    borderRight: 0,
-    borderTop: 0,
-    position: "sticky",
-    top: 0,
-    zIndex: 80,
-  }}
->
-  <div
-    style={{
-      maxWidth: 1400,
-      margin: "0 auto",
-      padding: "12px 12px",
-      display: "flex",
-      flexDirection: "column",
-      gap: 10,
-    }}
-  >
-    {/* top row */}
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: isDesktop ? "1fr auto 1fr" : "auto 1fr auto",
-        alignItems: "center",
-        gap: 10,
-      }}
-    >
-      {/* left side */}
       <div
+        className="card"
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          justifyContent: "flex-start",
-          minWidth: 0,
+          borderRadius: 0,
+          borderLeft: 0,
+          borderRight: 0,
+          borderTop: 0,
+          position: "sticky",
+          top: 0,
+          zIndex: 80,
         }}
       >
-        {!isDesktop && (
-          <button
-            className="btn btn-outline"
-            onClick={() => setMobileOpen(true)}
-            type="button"
-            aria-label="Open sidebar"
-            style={{ padding: "8px 10px" }}
-          >
-            <span style={{ fontSize: 14 }}>
-              <FaBars />
-            </span>
-          </button>
-        )}
-
-        {/* mobile title: left beside burger */}
-        {!isDesktop && (
-          <div
-            style={{
-              minWidth: 0,
-              flex: 1,
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 900,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {topicStr || (loading ? "Loading…" : "")}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* desktop title: centered */}
-      {isDesktop ? (
         <div
           style={{
-            minWidth: 0,
-            textAlign: "center",
-            justifySelf: "center",
-            maxWidth: "70vw",
+            maxWidth: 1400,
+            margin: "0 auto",
+            padding: "12px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
           }}
         >
+          {/* top row */}
           <div
             style={{
-              fontWeight: 900,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
+              display: "grid",
+              gridTemplateColumns: isDesktop ? "1fr auto 1fr" : "auto 1fr auto",
+              alignItems: "center",
+              gap: 10,
             }}
           >
-            {topicStr || (loading ? "Loading…" : "")}
+            {/* left side */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                justifyContent: "flex-start",
+                minWidth: 0,
+              }}
+            >
+              {!isDesktop && (
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setMobileOpen(true)}
+                  type="button"
+                  aria-label="Open sidebar"
+                  style={{ padding: "8px 10px" }}
+                >
+                  <span style={{ fontSize: 14 }}>
+                    <FaBars />
+                  </span>
+                </button>
+              )}
+
+              {!isDesktop && (
+                <div
+                  style={{
+                    minWidth: 0,
+                    flex: 1,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {topicStr || (loading ? "Loading…" : "")}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* desktop title: centered */}
+            {isDesktop ? (
+              <div
+                style={{
+                  minWidth: 0,
+                  textAlign: "center",
+                  justifySelf: "center",
+                  maxWidth: "70vw",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 900,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {topicStr || (loading ? "Loading…" : "")}
+                </div>
+              </div>
+            ) : (
+              <div />
+            )}
+
+            {/* right side */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 8,
+              }}
+            >
+              <button
+                className="btn btn-outline"
+                onClick={toggleTheme}
+                type="button"
+                aria-label="Toggle theme"
+              >
+                <span style={{ fontSize: 14 }}>
+                  {theme === "dark" ? <FaSun /> : <FaMoon />}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* bottom row: prev / next */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <Link
+              className="btn btn-outline"
+              href={
+                prevTopic
+                  ? subjectReadmeUrl
+                    ? `/topic/${encodeURIComponent(
+                        prevTopic.topic_name
+                      )}?subject=${encodeURIComponent(
+                        subjectStr
+                      )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
+                    : `/topic/${encodeURIComponent(
+                        prevTopic.topic_name
+                      )}?subject=${encodeURIComponent(subjectStr)}`
+                  : "#"
+              }
+              style={{
+                opacity: prevTopic ? 1 : 0.5,
+                pointerEvents: prevTopic ? "auto" : "none",
+              }}
+              aria-label="Previous topic"
+            >
+              <FaChevronLeft />
+            </Link>
+
+            <Link
+              className="btn btn-outline"
+              href={
+                nextTopic
+                  ? subjectReadmeUrl
+                    ? `/topic/${encodeURIComponent(
+                        nextTopic.topic_name
+                      )}?subject=${encodeURIComponent(
+                        subjectStr
+                      )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
+                    : `/topic/${encodeURIComponent(
+                        nextTopic.topic_name
+                      )}?subject=${encodeURIComponent(subjectStr)}`
+                  : "#"
+              }
+              style={{
+                opacity: nextTopic ? 1 : 0.5,
+                pointerEvents: nextTopic ? "auto" : "none",
+              }}
+              aria-label="Next topic"
+            >
+              <FaChevronRight />
+            </Link>
           </div>
         </div>
-      ) : (
-        <div />
-      )}
-
-      {/* right side */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: 8,
-        }}
-      >
-        <Link
-          className="btn btn-outline"
-          href={
-            subjectStr
-              ? subjectReadmeUrl
-                ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
-                : `/subject/${encodeURIComponent(subjectStr)}`
-              : "#"
-          }
-          aria-label="Subject Home"
-          style={{
-            opacity: subjectStr ? 1 : 0.5,
-            pointerEvents: subjectStr ? "auto" : "none",
-          }}
-        >
-          <FaHome />
-        </Link>
-
-        <button
-          className="btn btn-outline"
-          onClick={toggleTheme}
-          type="button"
-          aria-label="Toggle theme"
-        >
-          <span style={{ fontSize: 14 }}>
-            {theme === "dark" ? <FaSun /> : <FaMoon />}
-          </span>
-        </button>
       </div>
-    </div>
-
-    {/* bottom row: prev / next */}
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-end",
-        gap: 8,
-        flexWrap: "wrap",
-      }}
-    >
-      <Link
-        className="btn btn-outline"
-        href={
-          prevTopic
-            ? subjectReadmeUrl
-              ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
-                  subjectStr
-                )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-              : `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
-                  subjectStr
-                )}`
-            : "#"
-        }
-        style={{ opacity: prevTopic ? 1 : 0.5, pointerEvents: prevTopic ? "auto" : "none" }}
-        aria-label="Previous topic"
-      >
-        <FaChevronLeft />
-      </Link>
-
-      <Link
-        className="btn btn-outline"
-        href={
-          nextTopic
-            ? subjectReadmeUrl
-              ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
-                  subjectStr
-                )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-              : `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
-                  subjectStr
-                )}`
-            : "#"
-        }
-        style={{ opacity: nextTopic ? 1 : 0.5, pointerEvents: nextTopic ? "auto" : "none" }}
-        aria-label="Next topic"
-      >
-        <FaChevronRight />
-      </Link>
-    </div>
-  </div>
-</div>
 
       {/* MAIN CONTENT */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: 12 }}>
         <div style={{ display: "flex", gap: 12 }}>
-          {/* ✅ DESKTOP ONLY sidebar */}
           {isDesktop && (
             <aside
               className="card"
@@ -846,7 +888,10 @@ ${outlineMd}`;
             {!loading && error && <div style={{ color: "crimson" }}>{error}</div>}
             {!loading && !error && (
               <div className="prose">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
                   {renderedMarkdown}
                 </ReactMarkdown>
               </div>
@@ -855,14 +900,17 @@ ${outlineMd}`;
         </div>
       </div>
 
-      {/* ✅ MOBILE DRAWER */}
+      {/* MOBILE DRAWER */}
       {!isDesktop && mobileOpen && (
         <div
           style={{
             position: "fixed",
             inset: 0,
             zIndex: 120,
-            background: theme === "dark" ? "rgba(2,6,23,0.55)" : "rgba(15,23,42,0.25)",
+            background:
+              theme === "dark"
+                ? "rgba(2,6,23,0.55)"
+                : "rgba(15,23,42,0.25)",
             backdropFilter: "blur(6px)",
             display: "flex",
           }}
@@ -881,9 +929,22 @@ ${outlineMd}`;
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flex: "0 0 auto" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10,
+                flex: "0 0 auto",
+              }}
+            >
               <div style={{ fontWeight: 900 }}>Topics</div>
-              <button className="btn btn-outline" onClick={() => setMobileOpen(false)} type="button" aria-label="Close sidebar">
+              <button
+                className="btn btn-outline"
+                onClick={() => setMobileOpen(false)}
+                type="button"
+                aria-label="Close sidebar"
+              >
                 <FaTimes />
               </button>
             </div>
