@@ -1,296 +1,316 @@
-
 # Tinitiate PWA Documentation
+
+Scroll+ Tinitiate PWA is a Progressive Web App (PWA) that provides subject-wise learning content using Markdown files. This documentation is divided into two main parts:
+
+- **Developer Guide** - for contributors who maintain subjects, README files, and topic Markdown files.
+- **User Guide** - for learners who use the application to sign up, log in, browse subjects, save content offline, and read topics.
+
+---
+## Table of Contents
+
+- [Overview](#overview)
+- [Main GitHub Repository](https://github.com/tinitiateprime/tinitiate_it_traning_app)
+    In this Github link we can add new subject ReadMe
+    
+  - [How Markdown Topic Linking Works](#how-markdown-topic-linking-works)
+  - [How to Add a New Topic](#how-to-add-a-new-topic)
+  - [User Guide](#user-guide)
+  - [Signup Flow](#signup-flow)
+  - [Login Flow](#login-flow)
+  - [Dashboard Flow](#dashboard-flow)
+  - [Subject Navigation Flow](#subject-navigation-flow)
+  - [Topic Navigation Flow](#topic-navigation-flow)
+  - [Complete Application Flow](#complete-application-flow)
+  - [Mobile View](#mobile-view)
+- [Summary](#summary)
 
 ## Overview
 
-- Scroll+ Tinitiate PWA is a Progressive Web App (PWA) that provides subject-wise learning content using Markdown files.
+- Scroll+ Tinitiate PWA is a Progressive Web App (PWA) built to deliver subject-wise learning content.
+- Learning content is organized using Markdown (`.md`) files.
+- Each subject has its own main `README.md` file that acts as a topic index.
+- Users can navigate from the Dashboard to a Subject, then to a Topic, and read the topic content directly in the application.
+- The application also supports **Save Offline** so users can access selected subject content later.
 
+---
+
+## Subject Catalog Links
+
+If you want to add another subject, its main subject `README.md` link should be added here in github
+
+### Catalog 1
+- **Vue.js**  
+  `https://github.com/tinitiateprime/vue-Js/blob/main/README.md`
+
+### Catalog 2
+- **Next.js**  
+  `https://github.com/tinitiateprime/Next-Js/blob/main/README.md`
+
+### Catalog 3
+- **SQL Server**  
+  `https://github.com/tinitiateprime/sqlserver/blob/main/README.md`
+
+---
+
+# Developer Guide
 
 ## How the README Structure Works
 
 - Each subject contains a main `README.md` file.
-
 - This README works as the main index for that subject.
+- It contains clickable topic links written in Markdown format.
+- If you want to add another subject, the subject's main README link should be added in the main catalog section.
 
-- It contains clickable topic links written in Markdown format 
+![Main README Structure](./public/main_Readme_files.png)
 
-- if you want add another Subject we have to add here main Link here
+### Example
 
-![Vue.js Image](./public/main_Readme_files.png) 
+Below is an example of one topic link written inside a subject `README.md`:
 
-### Example : 
+## [Reactivity System](./05-reactivity-basics.md)
 
-- we have taken one topic which is inside in the README link
+### Meaning of Each Part
 
-⚙️ Reactivity System
+- `##` -> Defines a level-2 heading in Markdown.
+- `[Reactivity System]` -> The visible clickable topic name.
+- `(./05-reactivity-basics.md)` -> The relative file path to the topic file.
 
-**Meaning of Each Part**
+### Purpose
 
-- `##`-> Defines a level-2 heading in Markdown
-
-- `[Reactivity System]` -> The visible clickable topic name
-
-- `(./05-reactivity-basics.md)` -> The relative file path to the topic file
-
-**Purpose**  
-
-- This structure ensures that:
+This structure ensures that:
 
 - the README remains organized
-
 - topic names are clearly visible
-
 - each topic is clickable
-
 - each topic connects to its own Markdown file
 
-
+---
 
 ## Why `##` Is Required for Every Topic
 
-- For every topic inside a README, it is compulsory to use ## before the topic name.
+- For every topic inside a README, it is compulsory to use `##` before the topic name.
 
-**Correct Format**
+### Correct Format
 
-- => Topic Name
+## [Topic Name](./file-name.md)
 
-**Why This Is Important**
+### Why This Is Important
 
-- It creates a proper heading in Markdown
-
-- It keeps the README structured
-
-- It improves readability
-
-- It maintains consistency across all subjects
-
-- It makes the document easier to scan
-
+- It creates a proper heading in Markdown.
+- It keeps the README structured.
+- It improves readability.
+- It maintains consistency across all subjects.
+- It makes the document easier to scan.
 - If `##` is not used, the topic may not appear as a proper section heading.
 
-
+---
 
 ## How Markdown Topic Linking Works
 
-- The linking pattern used in the README is:
+The linking pattern used in the README is:
 
-`[Topic Name](./file-name.md)`  
+`[Topic Name](./file-name.md)`
 
-Rules
+### Rules
 
-- The topic name must be inside square brackets [ ]
+- The topic name must be inside square brackets `[ ]`.
+- The file path must be inside parentheses `( )`.
+- The file path should usually be a relative path like `./file-name.md`.
+- The file name must match the actual Markdown file exactly.
 
-- The file path must be inside parentheses ( )
-
-- The file path should usually be a relative path like ./file-name.md
-
-- The file name must match the actual Markdown file exactly
-
-**Purpose**
+### Purpose
 
 - This allows the application and GitHub to correctly connect the topic name to its content file.
 
+---
 
 ## How to Add a New Topic
 
 If a contributor wants to add a new topic, they must follow the same structure.
 
-**Steps**
+### Steps
 
-- Create a `new .md` file in the correct subject folder 
+1. Create a new `.md` file in the correct subject folder.
+2. Add the topic content inside that file.
+3. Open the subject's main `README.md`.
+4. Add a new line using the correct Markdown format.
 
-- Add the topic content inside that file
+### Format
 
-- Open the subject’s main README.md
+## [New Topic Name](./new-topic-file.md)
 
-- Add a new line using the correct Markdown format
+### Checklist
 
-**Format**
+- `##` must be present.
+- The topic name must be inside `[ ]`.
+- The file path must be inside `( )`.
+- The file name must match exactly.
+- The file must exist in the correct folder.
 
-- New Topic Name
+### Purpose
 
-**Checklist**
+- This ensures that the new topic becomes visible and accessible in the subject topic list.
+- Everything explained above is shown in the screenshot below.
 
-- `##` must be present
+![Vue.js Markdown Example](./public/Vuejsmarkdown.png)
 
-- The topic name must be inside [ ]
+---
 
-- The file path must be inside ( )
+# User Guide
 
-- The file name must match exactly
-
-- The file must exist in the correct folder
-
-**Purpose**
-
-- This ensures that the new topic becomes visible and accessible in the subject’s topic list.
-
-- Everything that was explained above is shown in this  screenshot
-
-![Vue.js Image](./public/Vuejsmarkdown.png) 
-
-
-
-## 1. Signup Flow
+## Signup Flow
 
 When a new user opens the application for the first time, they must create an account using the Signup page.
 
-**Steps**
+### Steps
 
-- The user opens the application.
+1. The user opens the application.
+2. The user navigates to the Signup page.
+3. The user enters the required registration details.
+4. The application stores the user details in the configured database.
+5. After successful signup, the user is automatically redirected to the Dashboard.
 
-- The user navigates to the Signup page.
-
-- The user enters the required registration details.
-
-- The application stores the user details in the configured database.
-
-- After successful signup, the user is automatically redirected to the Dashboard.
-
-**Purpose**
+### Purpose
 
 - The signup flow allows a new user to create an account and access the learning platform.
 
+---
 
 ## Login Flow
 
 If the user already has an account, they can use the Login page.
 
-**Steps**
+### Steps
 
-- The user opens the application.
+1. The user opens the application.
+2. The user navigates to the Login page.
+3. The user enters valid credentials.
+4. The application verifies the credentials.
+5. If authentication is successful, the user is redirected to the Dashboard.
+6. If authentication fails, the user remains on the login page and sees an error message.
 
-- The user navigates to the Login page.
- 
-- The user enters valid credentials.
-
-- The application verifies the credentials.
-
-- If authentication is successful, the user is redirected to the Dashboard.
-
-- If authentication fails, the user remains on the login page and sees an error message.
-
-**Purpose**
+### Purpose
 
 - The login flow allows existing users to securely access the application.
 
+---
 
-## Dashboard Flow 
+## Dashboard Flow
 
 After successful signup or login, the user is redirected to the Dashboard.
 
-**Steps**
+### Steps
 
-- The user reaches the dashboard after authentication.
+1. The user reaches the dashboard after authentication.
+2. The dashboard displays the available subjects.
+3. The user can select any subject from the list.
+4. If any subject has been saved offline, those saved cards are also visible on the dashboard.
 
-- The dashboard displays the available subjects.
-
-- The user can select any subject from the list. 
-
-**Purpose**
+### Purpose
 
 - The dashboard acts as the main entry point after authentication and allows users to navigate to subject content.
 
-- Everything that was explained above is shown in this screenshot
-![Vue.js Image](./public/dashboard.png) 
+![Dashboard](./public/dashboard.png)
 
+---
 
 ## Subject Navigation Flow
 
 When the user selects a subject from the dashboard, the application opens the corresponding Subject Page.
 
-**Steps**
+### Steps
 
-- The user clicks a subject on the dashboard.
+1. The user clicks a subject on the dashboard.
+2. The application opens the subject page.
+3. The subject page loads the subject's main `README.md`.
+4. The README displays the list of available topics for that subject.
 
-- The application opens the subject page.
+### Save Offline
 
-- The subject page loads the subject’s main README.md.
+- Each subject page includes a **Save Offline** option.
+- To save the subject for offline access, click the **Save Offline** button on the subject page.
+- Once saved, the saved subject cards become visible on the Dashboard.
+- This allows the user to reopen saved content later, even when internet access is limited.
 
-- The README displays the list of available topics for that subject.
-
-**Save Offline**
-
-- This subject also has a Save Offline option.
-- If you want to save it for offline access, click the Save Offline  button on the subject page.
-
-- Once saved, the saved cards will be visible on the Dashboard.”
-
-**Purpose**
+### Purpose
 
 - The subject page acts as the bridge between the dashboard and the individual topic content.
 
-- Everything that was explained above is shown in this screenshot
+**Before Save Offline**
 
-![Vue.js Image](./public/Vuejs_subject_before_offline.png)
+![Subject Before Offline Save](./public/Vuejs_subject_before_offline.png)
 
-**After Save offline**
+**After Save Offline**
 
-![Vue.js Image](./public/Vuejs_after_offline.png)
+![Subject After Offline Save](./public/Vuejs_after_offline.png)
+
+---
 
 ## Topic Navigation Flow
 
 Inside the subject page, the user can choose a topic.
 
-**Steps**
+### Steps
 
-- The user sees the list of topics from the subject README.
+1. The user sees the list of topics from the subject README.
+2. The user clicks a topic.
+3. The application loads the linked Markdown (`.md`) file for that topic.
+4. The topic content is rendered and displayed on the screen.
 
-- The user clicks a topic.
-
-- The application loads the linked Markdown (.md) file for that topic.
-
-- The topic content is rendered and displayed on the screen.
-
-**Purpose**
+### Purpose
 
 - This flow allows users to read the selected learning material topic by topic.
 
-![Vue.js Image](./public/topic.png)
+![Topic View](./public/topic.png)
+
+---
 
 ## Complete Application Flow
 
 The full user journey in the application is:
 
-- Open the application
+1. Open the application.
+2. Signup (for new users) or Login (for existing users).
+3. Redirect to Dashboard.
+4. Select a Subject.
+5. Load Subject README.
+6. Select a Topic.
+7. Load Topic Markdown File.
+8. Display Topic Content.
 
-- Signup (for new users) or Login (for existing users)
-
-- Redirect to Dashboard
-
-- Select a Subject
-
-- Load Subject README
-
-- Select a Topic
-
-- Load Topic Markdown File
-
-- Display Topic Content
-
-**Flow Summary**
+### Flow Summary
 
 - Signup / Login -> Dashboard -> Subject -> Topic -> Markdown Content
 
+---
 
-**Mobile view**
+## Mobile View
 
-- The following screenshots show the mobile view of the application, including the Subject page, Topic page, and Sidebar layout
+The following screenshots show the mobile view of the application, including the Topic page, Dashboard, Sidebar, and Subject page.
 
-**Mobile view Topic page view**
+### Mobile View - Topic Page
 
-![Vue.js Image](./public/mobile_topic.png)
+![Mobile Topic Page](./public/mobile_topic.png)
 
-**Mobile View Dashboard View**
+### Mobile View - Dashboard
 
-![Vue.js Image](./public/mobile-viewdashboard.png)
+![Mobile Dashboard](./public/mobile-viewdashboard.png)
 
-**Mobile View sidebar**
+### Mobile View - Sidebar
 
-![Vue.js Image](./public/mobile-viewsidebar.png)
+![Mobile Sidebar](./public/mobile-viewsidebar.png)
 
-**Mobile view Subject page**
+### Mobile View - Subject Page
 
-![Vue.js Image](./public/mobile-viewsubject.png)
+![Mobile Subject Page](./public/mobile-viewsubject.png)
 
+---
 
+## Summary
+
+This documentation now covers both:
+
+- **Developer Guide** for maintaining subject README structure and topic links.
+- **User Guide** for understanding how learners use the application from signup to topic reading.
+
+This makes the main `README.md` more complete, easier to understand, and useful for both contributors and end users.
