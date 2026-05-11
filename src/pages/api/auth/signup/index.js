@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     return res.status(400).json({
       ok: false,
       message: `Missing fields: ${missing.join(", ")}`,
-      receivedKeys: Object.keys(body),
     });
   }
 
@@ -30,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(result.status || 400).json({ ok: false, message: result.message });
   }
 
-  return res.status(200).json({
+  return res.status(result.status).json({
     ok: true,
     user: { id: result.user.id, fullName: result.user.fullName, email: result.user.email },
   });

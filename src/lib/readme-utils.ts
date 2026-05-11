@@ -165,12 +165,15 @@ export function parseSubjectTopicsFromReadme(
   md: string,
   subjectReadmeUrl?: string
 ): ParsedTopic[] {
-  const normalizedMd = normalizeMarkdownForHeadingParsing(md);
-  const lines = normalizedMd.split("\n");
+  const rawMd = (md || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const rawLines = rawMd.split("\n");
+  const normalizedMd = normalizeMarkdownForHeadingParsing(rawMd);
+  const lines = rawLines.length > 1 ? rawLines : normalizedMd.split("\n");
 
   type Hit = {
     index: number;
     level: number; // 2 | 3 | 4
+    indent: number;
     title: string;
     url: string;
   };
@@ -182,13 +185,15 @@ export function parseSubjectTopicsFromReadme(
   const TOPIC_HEADING_RE = /^(?:[-*+]\s+)?(#{2,4})\s+(.+)$/;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = (lines[i] || "").trim();
+    const rawLine = lines[i] || "";
+    const line = rawLine.trim();
     if (!line) continue;
 
     const h = line.match(TOPIC_HEADING_RE);
     if (!h) continue;
 
     const level = h[1].length; // 2 / 3 / 4
+    const indent = (rawLine.match(/^\s*/) || [""])[0].length;
     const headingBody = h[2].trim();
 
     const mdLink = extractMarkdownLinkAnywhere(headingBody, subjectReadmeUrl);
@@ -207,6 +212,7 @@ export function parseSubjectTopicsFromReadme(
     hits.push({
       index: i,
       level,
+      indent,
       title,
       url,
     });
@@ -219,7 +225,18 @@ export function parseSubjectTopicsFromReadme(
   for (let i = 0; i < hits.length; i++) {
     const hit = hits[i];
     const start = hit.index + 1;
-    const end = i + 1 < hits.length ? hits[i + 1].index : lines.length;
+    let end = lines.length;
+
+    for (let j = i + 1; j < hits.length; j++) {
+      const nextHit = hits[j];
+
+      // Nested indented headings belong to the current parent section.
+      if (nextHit.indent > hit.indent) continue;
+      if (nextHit.level > hit.level) continue;
+
+      end = nextHit.index;
+      break;
+    }
 
     const sectionContent = lines.slice(start, end).join("\n").trim();
     const bullets = parseBulletsFromSection(sectionContent);

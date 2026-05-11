@@ -165,3 +165,64 @@ main, .prose, .card {
   overflow-x: auto;
   width: 100%;
 }
+
+.ticker-shell {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(248,250,252,0.72));
+}
+
+.dark .ticker-shell {
+  background: linear-gradient(90deg, rgba(15,23,42,0.92), rgba(2,6,23,0.74));
+}
+
+.ticker-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  padding: 10px 14px;
+  animation: ticker-slide 36s linear infinite;
+}
+
+.ticker-shell:hover .ticker-track {
+  animation-play-state: paused;
+}
+
+.ticker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ticker-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid;
+  background: rgba(255,255,255,0.75);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.dark .ticker-label {
+  background: rgba(15,23,42,0.78);
+}
+
+@keyframes ticker-slide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}

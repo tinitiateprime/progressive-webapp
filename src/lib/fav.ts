@@ -1,26 +1,141 @@
-// lib/fav.ts
+import { promises as fs } from "fs";
+import path from "path";
 
 export type FavTopic = {
   slug: string;
   topic_name: string;
   subject: string;
+  md_url?: string;
+  subject_readme_url?: string;
+  savedAt?: number;
 };
 
-// In-memory store (resets when server restarts / redeploys)
-let FAVS: FavTopic[] = [];
+type FavoritesFile = {
+  byUser: Record<string, FavTopic[]>;
+};
 
-export function getFavs() {
-  return FAVS;
+const FAVORITES_FILE = path.join(process.cwd(), "data", "favorites.json");
+
+let writeQueue = Promise.resolve();
+
+const normalizeFav = (value: unknown): FavTopic | null => {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  const slug = String(record.slug || "").trim();
+  const topic_name = String(record.topic_name || "").trim();
+  const subject = String(record.subject || "").trim();
+  const savedAt = Number(record.savedAt);
+
+  if (!slug || !topic_name || !subject) return null;
+
+  return {
+    slug,
+    topic_name,
+    subject,
+    md_url: typeof record.md_url === "string" ? record.md_url : undefined,
+    subject_readme_url:
+      typeof record.subject_readme_url === "string" ? record.subject_readme_url : undefined,
+    savedAt: Number.isFinite(savedAt) ? savedAt : 0,
+  };
+};
+
+async function ensureFavoritesFile() {
+  await fs.mkdir(path.dirname(FAVORITES_FILE), { recursive: true });
+
+  try {
+    await fs.access(FAVORITES_FILE);
+  } catch {
+    await fs.writeFile(FAVORITES_FILE, JSON.stringify({ byUser: {} }, null, 2), "utf8");
+  }
 }
 
-export function addFav(fav: FavTopic) {
-  const exists = FAVS.some((x) => x.slug === fav.slug);
-  if (!exists) FAVS = [fav, ...FAVS];
-  return FAVS;
+async function readFavoritesFile(): Promise<FavoritesFile> {
+  await ensureFavoritesFile();
+
+  try {
+    const raw = await fs.readFile(FAVORITES_FILE, "utf8");
+    const parsed = JSON.parse(raw) as { byUser?: Record<string, unknown[]> };
+
+    const byUser = Object.fromEntries(
+      Object.entries(parsed?.byUser || {}).map(([userKey, favs]) => [
+        userKey,
+        Array.isArray(favs)
+          ? favs
+              .map((entry) => normalizeFav(entry))
+              .filter((entry): entry is FavTopic => Boolean(entry))
+          : [],
+      ])
+    );
+
+    return { byUser };
+  } catch {
+    return { byUser: {} };
+  }
 }
 
-export function removeFav(slug: string) {
-  FAVS = FAVS.filter((x) => x.slug !== slug);
-  return FAVS;
+async function writeFavoritesFile(data: FavoritesFile) {
+  await ensureFavoritesFile();
+  await fs.writeFile(FAVORITES_FILE, JSON.stringify(data, null, 2), "utf8");
 }
 
+function queueWrite<T>(task: () => Promise<T>) {
+  const run = writeQueue.then(task, task);
+  writeQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+export async function getFavs(userKey: string) {
+  const store = await readFavoritesFile();
+  return [...(store.byUser[userKey] || [])].sort((a, b) => {
+    if ((b.savedAt || 0) !== (a.savedAt || 0)) {
+      return (b.savedAt || 0) - (a.savedAt || 0);
+    }
+    return a.topic_name.localeCompare(b.topic_name);
+  });
+}
+
+export async function addFav(userKey: string, fav: FavTopic) {
+  return queueWrite(async () => {
+    const store = await readFavoritesFile();
+    const current = store.byUser[userKey] || [];
+    const existing = current.find((entry) => entry.slug === fav.slug);
+    const nextItem: FavTopic = {
+      ...existing,
+      ...fav,
+      md_url: fav.md_url || existing?.md_url,
+      subject_readme_url: fav.subject_readme_url || existing?.subject_readme_url,
+      savedAt: Math.max(existing?.savedAt || 0, fav.savedAt || Date.now()),
+    };
+    const next = [
+      nextItem,
+      ...current.filter((entry) => entry.slug !== fav.slug),
+    ].sort((a, b) => {
+      if ((b.savedAt || 0) !== (a.savedAt || 0)) {
+        return (b.savedAt || 0) - (a.savedAt || 0);
+      }
+      return a.topic_name.localeCompare(b.topic_name);
+    });
+
+    store.byUser[userKey] = next;
+    await writeFavoritesFile(store);
+
+    return next;
+  });
+}
+
+export async function removeFav(userKey: string, slug: string) {
+  return queueWrite(async () => {
+    const store = await readFavoritesFile();
+    const current = store.byUser[userKey] || [];
+    const next = current.filter((entry) => entry.slug !== slug);
+
+    store.byUser[userKey] = next;
+    await writeFavoritesFile(store);
+
+    return next;
+  });
+}

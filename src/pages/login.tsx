@@ -5,6 +5,11 @@ import { useRouter } from "next/router";
 import { signIn, useSession } from "next-auth/react";
 import { ThemeContext } from "../context/ThemeContext";
 import {
+  clearBrowserSessionActive,
+  hasBrowserSessionActive,
+  markBrowserSessionActive,
+} from "../lib/browserSession";
+import {
   FaMoon,
   FaSun,
   FaArrowRight,
@@ -45,6 +50,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { status } = useSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const sessionExpired =
+    typeof router.query.reason === "string" && router.query.reason === "session-ended";
 
   const callbackUrl =
     typeof router.query.callbackUrl === "string"
@@ -59,10 +66,10 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.replace("/dashboard");
+    if (status === "authenticated" && hasBrowserSessionActive()) {
+      router.replace(callbackUrl);
     }
-  }, [status, router]);
+  }, [status, router, callbackUrl]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +100,7 @@ export default function LoginPage() {
       }
 
       // Then create NextAuth session
+      markBrowserSessionActive();
       const result = await signIn("credentials", {
         email,
         password,
@@ -101,11 +109,12 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
+        clearBrowserSessionActive();
         setError("Login failed. Please try again.");
         return;
       }
 
-      router.replace("/dashboard");
+      router.replace(result?.url || callbackUrl);
     } catch {
       setError("Login failed. Please try again.");
     } finally {
@@ -117,8 +126,10 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      markBrowserSessionActive();
+      await signIn("google", { callbackUrl });
     } catch {
+      clearBrowserSessionActive();
       setError("Google sign-in failed.");
       setLoading(false);
     }
@@ -236,6 +247,12 @@ export default function LoginPage() {
               <p className="mt-2 text-sm text-[color:var(--text-muted)]">
                 Continue with Google or use email/password.
               </p>
+
+              {sessionExpired ? (
+                <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[rgba(250,204,21,0.10)] px-4 py-3 text-sm text-[color:var(--text)]">
+                  Your last browser session ended. Please sign in again.
+                </div>
+              ) : null}
 
               <div className="mt-6 grid gap-3">
                 <button

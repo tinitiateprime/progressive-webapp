@@ -5,14 +5,24 @@
       "fullName": "eswar",
       "email": "eswar@gmail.com",
       "passwordHash": "a5b810a3190a39033de4d82052fdf6f4c9765516d6b7eeb0c496adf8a3d3efc9",
-      "createdAt": "2026-02-23T13:26:08.807Z"
+      "createdAt": "2026-02-23T13:26:08.807Z",
+      "provider": "credentials"
     },
     {
       "id": "9dc9d99f-03e5-4ec3-9b18-3295cb19bfa9",
       "fullName": "Eswar Reddy",
       "email": "neswar215@gmail.com",
       "passwordHash": "11d533cb51809fafb5127f8b2cd64b30a974d46d39622dec12f2a6c0de860ad8",
-      "createdAt": "2026-02-24T05:13:37.448Z"
+      "createdAt": "2026-02-24T05:13:37.448Z",
+      "provider": "credentials"
+    },
+    {
+      "id": "92247bfa-5d9f-4933-a1f4-4f14cb5a3ae4",
+      "fullName": "kaushik",
+      "email": "abc123@gmail.com",
+      "createdAt": "2026-05-07T11:42:46.886Z",
+      "provider": "credentials",
+      "passwordHash": "scrypt:dbe906f44065be5bd996c14d2f665496:766286d637788acc66f374cbffddf0ee985ee45b6357c726bc950f60d68a386ce1eb5aa68754d9ea1572b6e6fc57a1ebea9f399d7155a1b3ddc08bf8637aba6e"
     }
   ]
 }

@@ -4,7 +4,8 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        {/* ✅ Google Font: Inter */}
+        <link rel="icon" type="image/png" href="/TinitiateLogoMark.png" />
+        <link rel="apple-touch-icon" href="/TinitiateLogoMark.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

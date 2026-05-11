@@ -5,6 +5,11 @@ import { useRouter } from "next/router";
 import { signIn, useSession } from "next-auth/react";
 import { ThemeContext } from "../context/ThemeContext";
 import {
+  clearBrowserSessionActive,
+  hasBrowserSessionActive,
+  markBrowserSessionActive,
+} from "../lib/browserSession";
+import {
   FaMoon,
   FaSun,
   FaArrowRight,
@@ -46,6 +51,10 @@ export default function SignupPage() {
   const router = useRouter();
   const { status } = useSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const callbackUrl =
+    typeof router.query.callbackUrl === "string"
+      ? router.query.callbackUrl
+      : "/dashboard";
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -59,17 +68,19 @@ export default function SignupPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.replace("/dashboard");
+    if (status === "authenticated" && hasBrowserSessionActive()) {
+      router.replace(callbackUrl);
     }
-  }, [status, router]);
+  }, [status, router, callbackUrl]);
 
   async function onGoogle() {
     setError("");
     setLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      markBrowserSessionActive();
+      await signIn("google", { callbackUrl });
     } catch {
+      clearBrowserSessionActive();
       setError("Google sign-up failed.");
       setLoading(false);
     }
@@ -110,19 +121,21 @@ export default function SignupPage() {
       }
 
       // Auto login after successful signup
+      markBrowserSessionActive();
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
-        callbackUrl: "/dashboard",
+        callbackUrl,
       });
 
       if (result?.error) {
+        clearBrowserSessionActive();
         router.replace("/login");
         return;
       }
 
-      router.replace("/dashboard");
+      router.replace(result?.url || callbackUrl);
     } catch {
       setError("Signup failed. Please try again.");
     } finally {

@@ -1,3 +1,5 @@
+const path = require("path");
+
 // next.config.js
 const withPWA = require("next-pwa")({
   dest: "public",
@@ -5,7 +7,10 @@ const withPWA = require("next-pwa")({
   skipWaiting: true,
 });
 
-const nextConfig = { reactStrictMode: true };
+const nextConfig = {
+  reactStrictMode: true,
+  outputFileTracingRoot: path.join(__dirname),
+};
 
 module.exports =
   process.env.NODE_ENV === "production" ? withPWA(nextConfig) : nextConfig;

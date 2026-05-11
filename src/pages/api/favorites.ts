@@ -1,12 +1,22 @@
 // pages/api/favorites.ts
 
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getServerSession } from "next-auth/next";
 import { addFav, getFavs, removeFav, type FavTopic } from "../../lib/fav";
+import { authOptions } from "../../lib/authOptions";
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getServerSession(req, res, authOptions);
+  const sessionUser = session?.user as { id?: string; email?: string | null } | undefined;
+  const userKey = sessionUser?.id || sessionUser?.email || "";
+
+  if (!userKey) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   // GET /api/favorites
   if (req.method === "GET") {
-    return res.status(200).json(getFavs());
+    return res.status(200).json(await getFavs(userKey));
   }
 
   // POST /api/favorites  (body: {slug, topic_name, subject})
@@ -17,7 +27,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: "slug, topic_name, subject required" });
     }
 
-    const updated = addFav({
+    const updated = await addFav(userKey, {
       slug: body.slug,
       topic_name: body.topic_name,
       subject: body.subject,
@@ -31,7 +41,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const slug = String(req.query.slug || "").trim();
     if (!slug) return res.status(400).json({ error: "slug query param required" });
 
-    const updated = removeFav(slug);
+    const updated = await removeFav(userKey, slug);
     return res.status(200).json(updated);
   }
 

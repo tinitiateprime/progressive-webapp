@@ -1,25 +1,39 @@
-// src/lib/authOptions.ts
-import type { NextAuthOptions } from "next-auth";
-import type { Account, Profile, User } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
+import type { NextAuthOptions, Session } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
-import crypto from "crypto";
+import GoogleProvider from "next-auth/providers/google";
 
 import { addUser, findUserByEmail, normalizeEmail, verifyPassword } from "./userStore";
 
-export const authOptions: NextAuthOptions = {
-  secret: process.env.NEXTAUTH_SECRET,
+type AppToken = JWT & {
+  id?: string;
+};
 
-  session: { strategy: "jwt" },
+type AppSession = Session & {
+  user?: Session["user"] & {
+    id?: string;
+  };
+};
+
+const AUTH_FALLBACK_SECRET = "tinitiate-local-auth-secret-v1";
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
+
+export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET || AUTH_FALLBACK_SECRET,
+
+  session: {
+    strategy: "jwt",
+    maxAge: SESSION_MAX_AGE,
+    updateAge: 24 * 60 * 60,
+  },
+
+  jwt: {
+    maxAge: SESSION_MAX_AGE,
+  },
 
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-
     CredentialsProvider({
-      name: "credentials",
+      name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
@@ -28,57 +42,116 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         const email = normalizeEmail(credentials?.email);
         const password = String(credentials?.password || "");
-        if (!email || !password) return null;
+
+        if (!email || !password) {
+          throw new Error("Please enter email and password.");
+        }
 
         const user = await findUserByEmail(email);
-        if (!user || !user.passwordHash) return null;
+
+        if (!user) {
+          throw new Error("No account found. Please sign up first.");
+        }
+
+        if (!user.passwordHash) {
+          throw new Error("Please sign in with Google.");
+        }
 
         const ok = verifyPassword(password, user.passwordHash);
-        if (!ok) return null;
 
-        return { id: user.id, name: user.fullName, email: user.email };
+        if (!ok) {
+          throw new Error("Invalid credentials.");
+        }
+
+        return {
+          id: user.id,
+          name: user.fullName,
+          email: user.email,
+        };
       },
+    }),
+
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
   ],
 
+  pages: {
+    signIn: "/login",
+  },
+
   callbacks: {
-    // ✅ FIXED: typed params
-    async signIn({
-      user,
-      account,
-    }: {
-      user: User;
-      account: Account | null;
-      profile?: Profile;
-    }) {
-      if (account?.provider === "google") {
-        const email = normalizeEmail(user?.email);
-        if (!email) return false;
-
-        const existing = await findUserByEmail(email);
-
-        if (!existing) {
-          const fullName = user?.name || "Google User";
-          const randomPassword = crypto.randomUUID(); // user won’t use this
-
-          await addUser({ fullName, email, password: randomPassword });
-        }
+    async signIn({ user, account }) {
+      if (account?.provider !== "google") {
+        return true;
       }
-      return true;
+
+      const email = normalizeEmail(user.email);
+
+      if (!email) {
+        return false;
+      }
+
+      const existing = await findUserByEmail(email);
+      if (existing) {
+        return true;
+      }
+
+      const fullName = String(user.name || "").trim() || email.split("@")[0] || "Google User";
+      const created = await addUser({ fullName, email });
+
+      if (created.ok) {
+        return true;
+      }
+
+      const createdLater = await findUserByEmail(email);
+      return Boolean(createdLater);
     },
 
     async jwt({ token, user, account }) {
-      if (user?.id) (token as any).uid = user.id;
-      if (account?.provider) (token as any).provider = account.provider;
-      return token;
+      const appToken = token as AppToken;
+
+      if (account?.provider === "credentials" && user) {
+        appToken.id = String(user.id || "");
+        appToken.name = user.name || "";
+        appToken.email = user.email || "";
+      }
+
+      if (account?.provider === "google") {
+        const email = normalizeEmail(appToken.email || user?.email);
+
+        if (email) {
+          const existing = await findUserByEmail(email);
+
+          if (existing) {
+            appToken.id = existing.id;
+            appToken.name = existing.fullName;
+            appToken.email = existing.email;
+          }
+        }
+      }
+
+      return appToken;
     },
 
     async session({ session, token }) {
-      if (session?.user) {
-        (session.user as any).id = (token as any).uid || null;
-        (session.user as any).provider = (token as any).provider || null;
+      const appSession = session as AppSession;
+      const appToken = token as AppToken;
+
+      if (appSession.user) {
+        appSession.user.id = String(appToken.id || "");
+        appSession.user.name = String(appToken.name || appSession.user.name || "");
+        appSession.user.email = String(appToken.email || appSession.user.email || "");
       }
-      return session;
+
+      return appSession;
+    },
+
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (url.startsWith(baseUrl)) return url;
+      return `${baseUrl}/dashboard`;
     },
   },
 };
