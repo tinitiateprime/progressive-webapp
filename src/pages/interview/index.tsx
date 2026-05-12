@@ -32,6 +32,7 @@ export default function InterviewIndexPage() {
   useEffect(() => {
     if (status !== "authenticated") return;
 
+    let cancelled = false;
     const controller = new AbortController();
 
     (async () => {
@@ -39,21 +40,32 @@ export default function InterviewIndexPage() {
         setLoading(true);
         setError("");
 
-        const [questions, ticker] = await Promise.all([
+        const results = await Promise.allSettled([
           fetchInterviewQuestions(controller.signal),
           fetchTickerItems(controller.signal),
         ]);
 
-        setItems(questions);
-        setTickerItems(ticker);
-      } catch {
-        setError("Failed to load interview content.");
+        if (cancelled) return;
+
+        if (results[0].status === "fulfilled") setItems(results[0].value);
+        if (results[1].status === "fulfilled") setTickerItems(results[1].value);
+
+        if (results[0].status === "rejected" && !cancelled) {
+          setError("Failed to load interview content. Please try refreshing.");
+        }
+      } catch (err: unknown) {
+        if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
+          setError("Failed to load interview content.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [status]);
 
   const filteredItems = useMemo(() => {
@@ -70,87 +82,44 @@ export default function InterviewIndexPage() {
   }, [items, q]);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          theme === "dark"
-            ? "linear-gradient(180deg, #020617, #0f172a)"
-            : "linear-gradient(180deg, #f8fafc, #ffffff)",
-      }}
-    >
-      <main style={{ maxWidth: 1180, margin: "0 auto", padding: "18px 16px 32px" }}>
-        <div className="card" style={{ padding: 18, borderRadius: 22 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+    <div className="app-shell">
+      <main className="page-main">
+        <div className="card page-hero-card">
+          <div className="page-hero-top">
             <div>
               <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>
                 INTERVIEW QNA
               </div>
               <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
-                Architecture-form answers from markdown
+                Practice high-signal interview answers
               </div>
               <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
-                Source folder: `interview-qna` in the GitHub content repository
+                Review concise explanations, key concepts, and likely follow-up areas.
               </div>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div className="page-hero-actions">
               <Link href="/dashboard" className="btn btn-outline">
                 <FaArrowLeft /> Dashboard
               </Link>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
-                {theme === "dark" ? "Light" : "Dark"}
+                <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
               </button>
             </div>
           </div>
 
-          <div style={{ marginTop: 18 }}>
-            <TickerBar items={tickerItems} />
-          </div>
+          {tickerItems.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <TickerBar items={tickerItems} />
+            </div>
+          )}
         </div>
 
         <section style={{ marginTop: 20 }}>
           <div
-            className="card"
-            style={{
-              padding: 16,
-              borderRadius: 20,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 12,
-            }}
-          >
-            {[
-              "Add one markdown file per question.",
-              "Register the question in `catalog.json`.",
-              "The list page reads the catalog, and the detail page reads the markdown answer.",
-            ].map((note) => (
-              <div key={note} className="soft" style={{ padding: 14, borderRadius: 16 }}>
-                <div style={{ fontSize: 14, lineHeight: 1.6 }}>{note}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section style={{ marginTop: 20 }}>
-          <div
-            className="card"
-            style={{
-              padding: "12px 14px",
-              borderRadius: 18,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-            }}
+            className="card page-hero-search"
+            style={{ padding: "12px 14px", gap: 10 }}
           >
             <FaSearch />
             <input
@@ -234,3 +203,5 @@ export default function InterviewIndexPage() {
     </div>
   );
 }
+
+export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";

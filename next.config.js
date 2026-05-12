@@ -1,10 +1,20 @@
 const path = require("path");
+const runtimeCaching = require("./runtime-caching");
 
-// next.config.js
+const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV === "true";
+const shouldDisablePwa = process.env.NODE_ENV !== "production" && !enablePwaInDev;
+
 const withPWA = require("next-pwa")({
   dest: "public",
-  register: true,
+  register: false,
   skipWaiting: true,
+  disable: shouldDisablePwa,
+  cacheOnFrontEndNav: true,
+  reloadOnOnline: true,
+  runtimeCaching,
+  fallbacks: {
+    document: "/offline",
+  },
 });
 
 const nextConfig = {
@@ -12,5 +22,4 @@ const nextConfig = {
   outputFileTracingRoot: path.join(__dirname),
 };
 
-module.exports =
-  process.env.NODE_ENV === "production" ? withPWA(nextConfig) : nextConfig;
+module.exports = withPWA(nextConfig);

@@ -7,8 +7,8 @@ export default function OfflinePage() {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
       <h1 className="text-3xl font-bold">You&apos;re offline</h1>
       <p className="max-w-xs text-sm text-slate-500">
-        This page was not saved for offline use. Go back and open a subject you already
-        saved offline.
+        This screen was not cached yet. Open it once while online, or save a subject for
+        offline use, and it will be available the next time your connection drops.
       </p>
       <button
         onClick={() => router.back()}

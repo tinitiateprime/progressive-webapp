@@ -2,11 +2,18 @@
   "byUser": {
     "92247bfa-5d9f-4933-a1f4-4f14cb5a3ae4": [
       {
-        "slug": "projectsetup",
-        "topic_name": "projectsetup",
-        "subject": "Vue JS",
-        "savedAt": 1778328983317
+        "slug": "sql-server-client-tools",
+        "topic_name": "SQL Server Client Tools",
+        "subject": "SQL Server",
+        "savedAt": 1778582284311
+      },
+      {
+        "slug": "introduction",
+        "topic_name": "Introduction",
+        "subject": "Next JS",
+        "savedAt": 1778582266385
       }
-    ]
+    ],
+    "03889f5c-3bc3-4896-bbf3-205bdfcc5d34": []
   }
 }

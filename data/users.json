@@ -20,9 +20,33 @@
       "id": "92247bfa-5d9f-4933-a1f4-4f14cb5a3ae4",
       "fullName": "kaushik",
       "email": "abc123@gmail.com",
+      "passwordHash": "scrypt:dbe906f44065be5bd996c14d2f665496:766286d637788acc66f374cbffddf0ee985ee45b6357c726bc950f60d68a386ce1eb5aa68754d9ea1572b6e6fc57a1ebea9f399d7155a1b3ddc08bf8637aba6e",
       "createdAt": "2026-05-07T11:42:46.886Z",
+      "provider": "credentials"
+    },
+    {
+      "id": "03889f5c-3bc3-4896-bbf3-205bdfcc5d34",
+      "fullName": "Test User",
+      "email": "test@test.com",
+      "passwordHash": "scrypt:bb20bca6f408a245120706dc55a97a6b:d7731475fc884f95ca6f3c34b56c0d3ed97ec476f02b4f0848c706b2663ddd3e24b8f44ef8d2744b34c64e2c9fcb62f4f9bc11baf3e3e3cc46a9d583c5d6b82a",
+      "createdAt": "2026-05-12T04:34:23.395Z",
+      "provider": "credentials"
+    },
+    {
+      "id": "ca11014f-af0d-4c18-b937-25dc236cc873",
+      "fullName": "hello",
+      "email": "123@gmail.com",
+      "passwordHash": "scrypt:1076daca866076213587573f606bcd22:79d665f7e1b1bc27b95697183d5f56c4cd64ea7b64cad3bfffcc7ad061f898e23550989242698d606f3a9e4ae98713a2573efcaa6d3f0b2b5cee10e2335051bc",
+      "createdAt": "2026-05-12T09:17:06.207Z",
+      "provider": "credentials"
+    },
+    {
+      "id": "b1821562-b784-4143-be22-ac7a351f8868",
+      "fullName": "hello",
+      "email": "hello@gmail.com",
+      "createdAt": "2026-05-12T09:17:28.492Z",
       "provider": "credentials",
-      "passwordHash": "scrypt:dbe906f44065be5bd996c14d2f665496:766286d637788acc66f374cbffddf0ee985ee45b6357c726bc950f60d68a386ce1eb5aa68754d9ea1572b6e6fc57a1ebea9f399d7155a1b3ddc08bf8637aba6e"
+      "passwordHash": "scrypt:2e79123ec4e15f39700d009c2615b60c:5ebed37ae58974eba6a22c1f2702bd316bd9d061ec671b3004dfe6ab5ac949419f310af24ffd9a026b42fa230894b8f4684b12727480f59f9dcdd8f8b57b2f7e"
     }
   ]
 }

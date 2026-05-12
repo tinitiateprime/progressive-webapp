@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node -e \"try{require('fs').rmSync('.next/dev',{recursive:true,force:true})}catch{}\"",
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",

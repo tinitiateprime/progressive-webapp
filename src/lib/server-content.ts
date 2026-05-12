@@ -1,9 +1,11 @@
 import { buildContentRepoRawUrl } from "./content-repo-config";
 import { normalize, parseSubjectTopicsFromReadme, type ParsedTopic } from "./readme-utils";
+import { readRepoContentSource, readRepoContentText } from "./server-content-source";
 import type {
   CbtCollections,
   CourseCatalogEntry,
   CourseSubject,
+  DesignSystem,
   InterviewQuestionDetail,
   InterviewQuestionSummary,
   MediaCollectionItem,
@@ -29,6 +31,19 @@ type InterviewCatalogFile = {
 type CoursesCatalogFile = {
   repoName: string;
   subjects: CourseCatalogEntry[];
+};
+
+type DesignColorFile = Omit<DesignSystem, "courseIcons">;
+
+type DesignIconFile = {
+  repoName: string;
+  courses: Record<
+    string,
+    {
+      label: string;
+      iconPath: string;
+    }
+  >;
 };
 
 type SlideshowCatalogFile = {
@@ -62,23 +77,19 @@ type TickerFeedFile = {
   items: TickerItem[];
 };
 
-const fetchRepoText = async (filePath: string) => {
-  const response = await fetch(buildContentRepoRawUrl(filePath), {
-    cache: "no-store",
-    headers: {
-      "User-Agent": "Tinitiate-Edu-App",
-    },
-  });
+const fetchRepoText = (filePath: string, preferredRepoName?: string) =>
+  readRepoContentText(filePath, preferredRepoName);
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${filePath} (${response.status})`);
-  }
+const fetchRepoTextWithSource = (filePath: string, preferredRepoName?: string) =>
+  readRepoContentSource(filePath, preferredRepoName);
 
-  return response.text();
+const fetchRepoJsonWithSource = async <T>(filePath: string, preferredRepoName?: string) => {
+  const source = await fetchRepoTextWithSource(filePath, preferredRepoName);
+  return {
+    ...source,
+    data: JSON.parse(source.text) as T,
+  };
 };
-
-const fetchRepoJson = async <T>(filePath: string) =>
-  JSON.parse(await fetchRepoText(filePath)) as T;
 
 const summarizeMarkdown = (markdown: string) => {
   const lines = markdown
@@ -107,23 +118,54 @@ const splitSlides = (markdown: string): SlideshowSlide[] =>
       markdown: chunk,
     }));
 
-const loadCourseTopics = async (subject: CourseCatalogEntry): Promise<ParsedTopic[]> => {
-  const readmeUrl = buildContentRepoRawUrl(subject.readmePath);
-  const readmeText = await fetchRepoText(subject.readmePath);
+const loadCourseTopics = async (
+  subject: CourseCatalogEntry,
+  repoName: string
+): Promise<ParsedTopic[]> => {
+  const readmeUrl = buildContentRepoRawUrl(subject.readmePath, repoName);
+  const readmeText = await fetchRepoText(subject.readmePath, repoName);
   return parseSubjectTopicsFromReadme(readmeText, readmeUrl);
 };
 
+const getCourseIconRegistry = async () => {
+  const { data: iconFile, repoName } = await fetchRepoJsonWithSource<DesignIconFile>("design/icon.json");
+
+  return Object.fromEntries(
+    Object.entries(iconFile.courses || {}).map(([slug, entry]) => [
+      slug,
+      {
+        ...entry,
+        iconUrl: buildContentRepoRawUrl(entry.iconPath, repoName),
+      },
+    ])
+  );
+};
+
+export const getDesignSystem = async (): Promise<DesignSystem> => {
+  const [{ data: colorFile }, courseIcons] = await Promise.all([
+    fetchRepoJsonWithSource<DesignColorFile>("design/colour.json"),
+    getCourseIconRegistry(),
+  ]);
+
+  return {
+    ...colorFile,
+    courseIcons,
+  };
+};
+
 export const getTickerItems = async (): Promise<TickerItem[]> => {
-  const feed = await fetchRepoJson<TickerFeedFile>("news-ticker/feed.json");
+  const { data: feed } = await fetchRepoJsonWithSource<TickerFeedFile>("news-ticker/feed.json");
   return [...feed.items].sort((a, b) => a.priority - b.priority);
 };
 
 export const getInterviewQuestionSummaries = async (): Promise<InterviewQuestionSummary[]> => {
-  const catalog = await fetchRepoJson<InterviewCatalogFile>("interview-qna/catalog.json");
+  const { data: catalog, repoName } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
+    "interview-qna/catalog.json"
+  );
 
   return Promise.all(
     catalog.questions.map(async (entry) => {
-      const markdown = await fetchRepoText(entry.answerPath);
+      const markdown = await fetchRepoText(entry.answerPath, repoName);
 
       return {
         slug: entry.slug,
@@ -141,12 +183,14 @@ export const getInterviewQuestionSummaries = async (): Promise<InterviewQuestion
 export const getInterviewQuestionBySlug = async (
   slug: string
 ): Promise<InterviewQuestionDetail | null> => {
-  const catalog = await fetchRepoJson<InterviewCatalogFile>("interview-qna/catalog.json");
+  const { data: catalog, repoName } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
+    "interview-qna/catalog.json"
+  );
   const entry = catalog.questions.find((item) => item.slug === slug);
 
   if (!entry) return null;
 
-  const markdown = await fetchRepoText(entry.answerPath);
+  const markdown = await fetchRepoText(entry.answerPath, repoName);
 
   return {
     slug: entry.slug,
@@ -161,14 +205,17 @@ export const getInterviewQuestionBySlug = async (
 };
 
 export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
-  const catalog = await fetchRepoJson<CoursesCatalogFile>("courses/catalog.json");
+  const { data: catalog, repoName } = await fetchRepoJsonWithSource<CoursesCatalogFile>(
+    "courses/catalog.json"
+  );
+  const courseIcons = await getCourseIconRegistry();
 
   return Promise.all(
     catalog.subjects.map(async (entry) => {
       let topics: ParsedTopic[] = [];
 
       try {
-        topics = await loadCourseTopics(entry);
+        topics = await loadCourseTopics(entry, repoName);
       } catch {
         topics = [];
       }
@@ -176,7 +223,8 @@ export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
       return {
         ...entry,
         subject: entry.title,
-        readme_url: buildContentRepoRawUrl(entry.readmePath),
+        readme_url: buildContentRepoRawUrl(entry.readmePath, repoName),
+        icon_url: courseIcons[entry.slug]?.iconUrl,
         topics,
       };
     })
@@ -198,11 +246,15 @@ export const getCourseSubjectByName = async (
 const loadMediaCollection = async (
   folderName: "training-videos" | "audio-books"
 ): Promise<MediaCollectionItem[]> => {
-  const catalog = await fetchRepoJson<MediaCatalogFile>(`${folderName}/av-metadata.json`);
+  const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
+    `${folderName}/av-metadata.json`
+  );
 
   return Promise.all(
     catalog.items.map(async (item) => {
-      const notesMarkdown = item.notesPath ? await fetchRepoText(item.notesPath) : undefined;
+      const notesMarkdown = item.notesPath
+        ? await fetchRepoText(item.notesPath, repoName)
+        : undefined;
 
       return {
         slug: item.slug,
@@ -219,7 +271,9 @@ const loadMediaCollection = async (
 };
 
 export const getSlideshows = async (): Promise<SlideshowSummary[]> => {
-  const catalog = await fetchRepoJson<SlideshowCatalogFile>("slideshows/av-metadata.json");
+  const { data: catalog } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
+    "slideshows/av-metadata.json"
+  );
 
   return catalog.decks.map((deck) => ({
     slug: deck.slug,
@@ -231,12 +285,14 @@ export const getSlideshows = async (): Promise<SlideshowSummary[]> => {
 };
 
 export const getSlideshowBySlug = async (slug: string): Promise<SlideshowDeck | null> => {
-  const catalog = await fetchRepoJson<SlideshowCatalogFile>("slideshows/av-metadata.json");
+  const { data: catalog, repoName } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
+    "slideshows/av-metadata.json"
+  );
   const deck = catalog.decks.find((item) => item.slug === slug);
 
   if (!deck) return null;
 
-  const markdown = await fetchRepoText(deck.contentPath);
+  const markdown = await fetchRepoText(deck.contentPath, repoName);
 
   return {
     slug: deck.slug,

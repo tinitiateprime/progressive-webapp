@@ -7,6 +7,7 @@ import { addUser, findUserByEmail, normalizeEmail, verifyPassword } from "./user
 
 type AppToken = JWT & {
   id?: string;
+  picture?: string | null;
 };
 
 type AppSession = Session & {
@@ -17,6 +18,17 @@ type AppSession = Session & {
 
 const AUTH_FALLBACK_SECRET = "tinitiate-local-auth-secret-v1";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
+const AUTH_FALLBACK_URL = `http://localhost:${process.env.PORT || "3000"}`;
+
+if (!process.env.NEXTAUTH_SECRET) {
+  process.env.NEXTAUTH_SECRET = AUTH_FALLBACK_SECRET;
+}
+
+if (!process.env.NEXTAUTH_URL) {
+  process.env.NEXTAUTH_URL = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : AUTH_FALLBACK_URL;
+}
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET || AUTH_FALLBACK_SECRET,
@@ -67,6 +79,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           name: user.fullName,
           email: user.email,
+          image: null,
         };
       },
     }),
@@ -116,10 +129,17 @@ export const authOptions: NextAuthOptions = {
         appToken.id = String(user.id || "");
         appToken.name = user.name || "";
         appToken.email = user.email || "";
+        appToken.picture = null;
       }
 
       if (account?.provider === "google") {
         const email = normalizeEmail(appToken.email || user?.email);
+        appToken.picture =
+          typeof user?.image === "string"
+            ? user.image
+            : typeof appToken.picture === "string"
+              ? appToken.picture
+              : null;
 
         if (email) {
           const existing = await findUserByEmail(email);
@@ -143,6 +163,12 @@ export const authOptions: NextAuthOptions = {
         appSession.user.id = String(appToken.id || "");
         appSession.user.name = String(appToken.name || appSession.user.name || "");
         appSession.user.email = String(appToken.email || appSession.user.email || "");
+        appSession.user.image =
+          typeof appToken.picture === "string"
+            ? appToken.picture
+            : typeof appSession.user.image === "string"
+              ? appSession.user.image
+              : null;
       }
 
       return appSession;

@@ -35,7 +35,148 @@ export type CourseCatalogEntry = {
 export type CourseSubject = CourseCatalogEntry & {
   subject: string;
   readme_url: string;
+  icon_url?: string;
   topics: ParsedTopic[];
+};
+
+export type DesignThemeTokens = {
+  bg: string;
+  surface: string;
+  surfaceAlt: string;
+  border: string;
+  text: string;
+  muted: string;
+  brand: string;
+  brandStrong: string;
+  primary: string;
+  primaryStrong: string;
+  primaryText: string;
+  focus: string;
+  selection: string;
+  outlineHoverBg: string;
+  outlineHoverBorder: string;
+  badgeBg: string;
+  chipBg: string;
+  tickerBgStart: string;
+  tickerBgEnd: string;
+  codeBg: string;
+  scrollbar: string;
+  shadowCard: string;
+  shadowFeature: string;
+  shadowPrimary: string;
+  shadowPrimaryHover: string;
+  searchFocusShadow: string;
+  searchFocusBorder: string;
+};
+
+export type PageBackgrounds = {
+  defaultLight: string;
+  defaultDark: string;
+  homeLight: string;
+  homeDark: string;
+  dashboardLight: string;
+  dashboardDark: string;
+};
+
+export type DashboardStatusTone = {
+  color: string;
+  background: string;
+  border: string;
+};
+
+export type DashboardSectionTone = {
+  accent: string;
+  surfaceLight: string;
+  surfaceDark: string;
+};
+
+export type DashboardDesignConfig = {
+  headerLight: string;
+  headerDark: string;
+  headerBorderLight: string;
+  headerBorderDark: string;
+  online: DashboardStatusTone;
+  offline: DashboardStatusTone;
+  profile: {
+    avatarBackground: string;
+    avatarText: string;
+  };
+  overlay: string;
+  libraryFavorites: {
+    color: string;
+    backgroundLight: string;
+    backgroundDark: string;
+    border: string;
+  };
+  libraryOffline: {
+    color: string;
+    backgroundLight: string;
+    backgroundDark: string;
+    border: string;
+  };
+  sections: {
+    interview: DashboardSectionTone;
+    courses: DashboardSectionTone;
+    cbt: DashboardSectionTone;
+  };
+};
+
+export type CategoryTone = {
+  background: string;
+  border: string;
+  color: string;
+};
+
+export type CoursesDesignConfig = {
+  cardBackgroundLight: string;
+  cardBackgroundDark: string;
+  categoryTones: Record<string, CategoryTone>;
+};
+
+export type LandingFeatureTone = {
+  gradient: string;
+  iconBg: string;
+  iconColor: string;
+};
+
+export type LandingDesignConfig = {
+  heroAccentGradient: string;
+  features: {
+    structuredCourses: LandingFeatureTone;
+    interviewPractice: LandingFeatureTone;
+    offlineReady: LandingFeatureTone;
+    cbtHub: LandingFeatureTone;
+  };
+};
+
+export type MobileDesignConfig = {
+  quickNavSurfaceLight: string;
+  quickNavSurfaceDark: string;
+  quickNavBorderLight: string;
+  quickNavBorderDark: string;
+  quickNavShadowLight: string;
+  quickNavShadowDark: string;
+};
+
+export type CourseIconEntry = {
+  label: string;
+  iconPath: string;
+  iconUrl: string;
+};
+
+export type DesignSystem = {
+  repoName: string;
+  theme: {
+    light: DesignThemeTokens;
+    dark: DesignThemeTokens;
+  };
+  pageBackgrounds: PageBackgrounds;
+  dashboard: DashboardDesignConfig;
+  courses: CoursesDesignConfig;
+  landing: LandingDesignConfig;
+  ticker: Record<TickerItem["kind"], { borderColor: string; color: string }>;
+  mobile: MobileDesignConfig;
+  courseIcons: Record<string, CourseIconEntry>;
 };
 
 export type SlideshowSummary = {

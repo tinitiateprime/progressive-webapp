@@ -40,46 +40,43 @@ export default function MediaDetailPage() {
       return;
     }
 
+    let cancelled = false;
     const controller = new AbortController();
 
     (async () => {
       try {
         setLoading(true);
         setError("");
-        setItem(await fetchMediaItem(kind, slug, controller.signal));
-      } catch {
-        setError("Failed to load media item.");
+        setItem(null);
+
+        const nextItem = await fetchMediaItem(kind, slug, controller.signal);
+        if (cancelled) return;
+
+        setItem(nextItem);
+      } catch (err: unknown) {
+        if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
+          setError("Failed to load media item.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [kind, slug, status]);
 
   const pageLabel = kind === "audio-books" ? "Audio Book" : "Training Video";
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          theme === "dark"
-            ? "linear-gradient(180deg, #020617, #0f172a)"
-            : "linear-gradient(180deg, #f8fafc, #ffffff)",
-      }}
-    >
-      <main style={{ maxWidth: 1080, margin: "0 auto", padding: "18px 16px 32px" }}>
-        <div className="card" style={{ padding: 18, borderRadius: 22 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+    <div className="app-shell">
+      <main className="page-main" style={{ maxWidth: 1080 }}>
+        <div className="card page-hero-card">
+          <div className="page-hero-top">
             <div>
               <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>{pageLabel.toUpperCase()}</div>
               <div style={{ marginTop: 6, fontSize: 28, fontWeight: 900 }}>
@@ -87,13 +84,13 @@ export default function MediaDetailPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div className="page-hero-actions">
               <Link href="/cbt" className="btn btn-outline">
                 <FaArrowLeft /> CBT Hub
               </Link>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
-                {theme === "dark" ? "Light" : "Dark"}
+                <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
               </button>
             </div>
           </div>
@@ -186,3 +183,5 @@ export default function MediaDetailPage() {
     </div>
   );
 }
+
+export { requireAuthenticatedPage as getServerSideProps } from "../../../lib/require-auth-page";

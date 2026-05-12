@@ -322,21 +322,17 @@ export function parseTopicSectionsFromMarkdown(md: string): ParsedTopicSection[]
 
 // ✅ direct fetch + proxy fallback
 export async function fetchTextStrict(url: string, signal?: AbortSignal): Promise<string> {
-  try {
-    const r = await fetch(url, { cache: "no-store", signal });
-    if (r.ok) return await r.text();
-  } catch {
-    // fallback below
-  }
-
-  const r2 = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+  const response = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
     cache: "no-store",
+    headers: {
+      "Cache-Control": "no-store",
+    },
     signal,
   });
 
-  if (!r2.ok) {
-    throw new Error(`Fetch failed (HTTP ${r2.status}) for ${url}`);
+  if (!response.ok) {
+    throw new Error(`Fetch failed (HTTP ${response.status}) for ${url}`);
   }
 
-  return await r2.text();
+  return await response.text();
 }

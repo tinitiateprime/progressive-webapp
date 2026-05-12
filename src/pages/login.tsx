@@ -148,17 +148,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden px-4 sm:px-6 flex flex-col">
+    <div className="app-shell app-shell--home min-h-screen relative overflow-hidden px-4 sm:px-6 flex flex-col">
       {/* Ambient background */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 -right-40 h-[520px] w-[520px] rounded-full bg-[color:var(--brand)] opacity-[0.10] blur-[90px]" />
         <div className="absolute -bottom-44 -left-44 h-[520px] w-[520px] rounded-full bg-[color:var(--brand-2)] opacity-[0.10] blur-[90px]" />
-        <div className="absolute inset-0 opacity-[0.07] [background-image:linear-gradient(to_right,rgba(255,255,255,0.6)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:26px_26px]" />
+        <div className="auth-grid-pattern absolute inset-0 opacity-[0.07]" />
       </div>
 
       {/* Topbar */}
       <header className="mx-auto max-w-6xl pt-5 sm:pt-7 w-full relative">
-        <div className="glass rounded-2xl px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+        <div className="glass rounded-2xl px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between">
           <div
             className="flex items-center gap-3 min-w-0 cursor-pointer"
             onClick={() => router.push("/")}
@@ -233,7 +233,13 @@ export default function LoginPage() {
 
           {/* Right form panel */}
           <section className="glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
-            <div className="pointer-events-none absolute top-0 left-0 right-0 h-[120px] opacity-[0.55] [background:linear-gradient(to_bottom,rgba(255,255,255,0.10),transparent)]" />
+            <div
+              className="pointer-events-none absolute top-0 left-0 right-0 h-[120px] opacity-[0.55]"
+              style={{
+                background:
+                  "linear-gradient(to bottom, color-mix(in srgb, var(--surface) 14%, transparent), transparent)",
+              }}
+            />
 
             <div className="max-w-xl relative">
               <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
@@ -249,7 +255,13 @@ export default function LoginPage() {
               </p>
 
               {sessionExpired ? (
-                <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[rgba(250,204,21,0.10)] px-4 py-3 text-sm text-[color:var(--text)]">
+                <div
+                  className="mt-4 rounded-2xl border border-[color:var(--border)] px-4 py-3 text-sm text-[color:var(--text)]"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--dashboard-avatar-bg) 16%, transparent)",
+                  }}
+                >
                   Your last browser session ended. Please sign in again.
                 </div>
               ) : null}
@@ -310,7 +322,12 @@ export default function LoginPage() {
                 {error ? (
                   <div
                     aria-live="polite"
-                    className="text-sm rounded-2xl border border-[color:var(--border)] px-4 py-3 text-red-500 bg-[rgba(255,0,0,0.04)]"
+                    className="text-sm rounded-2xl border border-[color:var(--border)] px-4 py-3"
+                    style={{
+                      color: "var(--status-offline-color)",
+                      background:
+                        "color-mix(in srgb, var(--status-offline-color) 7%, transparent)",
+                    }}
                   >
                     {error}
                   </div>
@@ -353,3 +370,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export { redirectAuthenticatedUserFromPublicPage as getServerSideProps } from "../lib/redirect-authenticated-page";

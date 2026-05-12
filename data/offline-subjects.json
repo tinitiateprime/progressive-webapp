@@ -1,3 +1,504 @@
 {
-  "byUser": {}
+  "byUser": {
+    "b1821562-b784-4143-be22-ac7a351f8868": [
+      {
+        "subject": "Vue JS",
+        "savedAt": 1778577483857,
+        "topicCount": 44,
+        "topics": [
+          {
+            "topic_name": "Introduction",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/01-introduction.md",
+            "bullets": [
+              "What is Vue? Why Vue 3?",
+              "SPA vs MPA vs SSR/SSG",
+              "Options API vs Composition API",
+              "When to pick Vue over React/Angular"
+            ],
+            "section_markdown": "- What is Vue? Why Vue 3?\n- SPA vs MPA vs SSR/SSG\n- Options API vs Composition API\n- When to pick Vue over React/Angular\n---"
+          },
+          {
+            "topic_name": "projectsetup",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/projectsetup.md",
+            "bullets": [],
+            "section_markdown": ""
+          },
+          {
+            "topic_name": "Getting Started",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/02-getting-started.md",
+            "bullets": [
+              "Prereqs (Node, npm/pnpm)",
+              "Create with Vite (npm create vite@latest)",
+              "Project structure overview",
+              "Dev server, build, preview"
+            ],
+            "section_markdown": "- Prereqs (Node, npm/pnpm)\n- Create with Vite (`npm create vite@latest`)\n- Project structure overview\n- Dev server, build, preview\n---"
+          },
+          {
+            "topic_name": "Tooling & Project Setup",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/03-tooling-setup.md",
+            "bullets": [
+              "Vite config basics",
+              "ESLint + Prettier",
+              "Editor setup (Volar)",
+              "Environment variables & modes",
+              "Aliases (@) and path imports"
+            ],
+            "section_markdown": "- Vite config basics\n- ESLint + Prettier\n- Editor setup (Volar)\n- Environment variables & modes\n- Aliases (`@`) and path imports\n---"
+          },
+          {
+            "topic_name": "Template Syntax & Directives",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/04-template-directives.md",
+            "bullets": [
+              "Interpolation {{ }}",
+              "v-bind, :class, :style",
+              "Events v-on / @click (+ modifiers)",
+              "Conditionals v-if / v-show",
+              "Lists v-for & keys",
+              "Two-way binding with v-model (+ modifiers)"
+            ],
+            "section_markdown": "- Interpolation `{{ }}`\n- `v-bind`, `:class`, `:style`\n- Events `v-on` / `@click` (+ modifiers)\n- Conditionals `v-if` / `v-show`\n- Lists `v-for` & keys\n- Two-way binding with `v-model` (+ modifiers)\n---"
+          },
+          {
+            "topic_name": "Reactivity System",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/05-reactivity-basics.md",
+            "bullets": [
+              "ref, reactive, shallowRef, shallowReactive",
+              "computed & caching",
+              "watch vs watchEffect",
+              "Deep watching & cleanup",
+              "Reactivity caveats (set/delete, arrays, objects)"
+            ],
+            "section_markdown": "- `ref`, `reactive`, `shallowRef`, `shallowReactive`\n- `computed` & caching\n- `watch` vs `watchEffect`\n- Deep watching & cleanup\n- Reactivity caveats (set/delete, arrays, objects)\n---"
+          },
+          {
+            "topic_name": "Lifecycle & Component Setup",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/06-lifecycle-composition.md",
+            "bullets": [
+              "setup() & returned bindings",
+              "Hooks: onMounted, onUpdated, onUnmounted, etc.",
+              "Template refs & DOM access",
+              "Effect scopes"
+            ],
+            "section_markdown": "- `setup()` & returned bindings\n- Hooks: `onMounted`, `onUpdated`, `onUnmounted`, etc.\n- Template refs & DOM access\n- Effect scopes\n---"
+          },
+          {
+            "topic_name": "Components 101",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/07-components-basics.md",
+            "bullets": [
+              "Creating & registering components",
+              "Props (types, defaults, validation)",
+              "Emits & custom events",
+              "v-model on components",
+              "Slots (default, named, scoped)"
+            ],
+            "section_markdown": "- Creating & registering components\n- Props (types, defaults, validation)\n- Emits & custom events\n- `v-model` on components\n- Slots (default, named, scoped)\n---"
+          },
+          {
+            "topic_name": "Reusable Logic with Composables",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/08-composables.md",
+            "bullets": [
+              "Creating composables",
+              "Parameters, returns, and typing",
+              "Provide/Inject patterns",
+              "Organizing a composables/ folder"
+            ],
+            "section_markdown": "- Creating composables\n- Parameters, returns, and typing\n- Provide/Inject patterns\n- Organizing a `composables/` folder\n---"
+          },
+          {
+            "topic_name": "Forms & Inputs",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/09-forms.md",
+            "bullets": [
+              "Native inputs & v-model",
+              "Controlled vs uncontrolled patterns",
+              "Custom inputs",
+              "Number/text/checkbox/radio/select",
+              "IME & locale considerations"
+            ],
+            "section_markdown": "- Native inputs & `v-model`\n- Controlled vs uncontrolled patterns\n- Custom inputs\n- Number/text/checkbox/radio/select\n- IME & locale considerations\n---"
+          },
+          {
+            "topic_name": "Form Validation",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/10-validation.md",
+            "bullets": [
+              "Native validation vs libraries",
+              "VeeValidate + Yup basics",
+              "Error handling UX patterns",
+              "Async validation"
+            ],
+            "section_markdown": "- Native validation vs libraries\n- VeeValidate + Yup basics\n- Error handling UX patterns\n- Async validation\n---"
+          },
+          {
+            "topic_name": "Routing with Vue Router",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/11-routing.md",
+            "bullets": [
+              "Install & configure",
+              "Routes, params, queries",
+              "Nested routes & layouts",
+              "Programmatic navigation",
+              "Navigation guards (global/per-route/in-component)",
+              "Lazy loading routes & code splitting"
+            ],
+            "section_markdown": "- Install & configure\n- Routes, params, queries\n- Nested routes & layouts\n- Programmatic navigation\n- Navigation guards (global/per-route/in-component)\n- Lazy loading routes & code splitting\n---"
+          },
+          {
+            "topic_name": "State Management with Pinia",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/12-pinia.md",
+            "bullets": [
+              "Why Pinia (vs Vuex)",
+              "Defining stores",
+              "State / getters / actions",
+              "Using stores in components",
+              "Store plugins & persistence"
+            ],
+            "section_markdown": "- Why Pinia (vs Vuex)\n- Defining stores\n- State / getters / actions\n- Using stores in components\n- Store plugins & persistence\n---"
+          },
+          {
+            "topic_name": "HTTP & Data Fetching",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/13-data-fetching.md",
+            "bullets": [
+              "Fetch vs Axios",
+              "Loading, error, empty states",
+              "Caching patterns",
+              "Retrying & backoff",
+              "Cancel tokens / aborting"
+            ],
+            "section_markdown": "- Fetch vs Axios\n- Loading, error, empty states\n- Caching patterns\n- Retrying & backoff\n- Cancel tokens / aborting\n---"
+          },
+          {
+            "topic_name": "Async Components & Suspense",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/14-suspense-error-boundaries.md",
+            "bullets": [
+              "Async components",
+              "<Suspense> usage",
+              "Error boundaries & fallback UIs"
+            ],
+            "section_markdown": "- Async components\n- `<Suspense>` usage\n- Error boundaries & fallback UIs\n---"
+          },
+          {
+            "topic_name": "Styling in Vue",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/15-styling.md",
+            "bullets": [
+              "Scoped CSS & global styles",
+              "CSS Modules",
+              "Tailwind CSS + Vue",
+              "Design tokens & theming"
+            ],
+            "section_markdown": "- Scoped CSS & global styles\n- CSS Modules\n- Tailwind CSS + Vue\n- Design tokens & theming\n---"
+          },
+          {
+            "topic_name": "Transitions & Animations",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/16-transitions.md",
+            "bullets": [
+              "<Transition> & <TransitionGroup>",
+              "Enter/leave classes",
+              "Route transitions",
+              "Integrating animation libraries"
+            ],
+            "section_markdown": "- `<Transition>` & `<TransitionGroup>`\n- Enter/leave classes\n- Route transitions\n- Integrating animation libraries\n---"
+          },
+          {
+            "topic_name": "Advanced Components",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/17-advanced-components.md",
+            "bullets": [
+              "Dynamic & async components",
+              "KeepAlive for caching",
+              "Teleport for portals/modals",
+              "Render performance tips"
+            ],
+            "section_markdown": "- Dynamic & async components\n- `KeepAlive` for caching\n- `Teleport` for portals/modals\n- Render performance tips\n---"
+          },
+          {
+            "topic_name": "Render Functions & JSX",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/18-render-jsx.md",
+            "bullets": [
+              "When/why to use render functions",
+              "JSX setup with Vite",
+              "Slots & attrs in render functions"
+            ],
+            "section_markdown": "- When/why to use render functions\n- JSX setup with Vite\n- Slots & attrs in render functions\n---"
+          },
+          {
+            "topic_name": "Custom Directives",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/19-custom-directives.md",
+            "bullets": [
+              "Directive lifecycle hooks",
+              "Simple examples (focus, click-outside)",
+              "Arguments & modifiers",
+              "Reusability patterns"
+            ],
+            "section_markdown": "- Directive lifecycle hooks\n- Simple examples (focus, click-outside)\n- Arguments & modifiers\n- Reusability patterns\n---"
+          },
+          {
+            "topic_name": "Plugins (Use & Build)",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/20-plugins.md",
+            "bullets": [
+              "Using community plugins",
+              "Building your own plugin",
+              "Global properties & injections",
+              "Plugin testing"
+            ],
+            "section_markdown": "- Using community plugins\n- Building your own plugin\n- Global properties & injections\n- Plugin testing\n---"
+          },
+          {
+            "topic_name": "Internationalization (i18n)",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/21-i18n.md",
+            "bullets": [
+              "Vue I18n setup",
+              "Messages, plurals, dates, numbers",
+              "Lazy loading locales",
+              "SEO & i18n routing notes"
+            ],
+            "section_markdown": "- Vue I18n setup\n- Messages, plurals, dates, numbers\n- Lazy loading locales\n- SEO & i18n routing notes\n---"
+          },
+          {
+            "topic_name": "Accessibility (A11y)",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/22-accessibility.md",
+            "bullets": [
+              "Semantics in templates",
+              "Focus management",
+              "Keyboard navigation",
+              "ARIA with Vue patterns"
+            ],
+            "section_markdown": "- Semantics in templates\n- Focus management\n- Keyboard navigation\n- ARIA with Vue patterns\n---"
+          },
+          {
+            "topic_name": "Security & Hardening",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/23-security.md",
+            "bullets": [
+              "XSS, template injection & escaping",
+              "Safe HTML with v-html (when & how)",
+              "Auth basics (JWT/OAuth), CSRF notes",
+              "Route-level auth guards",
+              "Secrets & env handling"
+            ],
+            "section_markdown": "- XSS, template injection & escaping\n- Safe HTML with `v-html` (when & how)\n- Auth basics (JWT/OAuth), CSRF notes\n- Route-level auth guards\n- Secrets & env handling\n---"
+          },
+          {
+            "topic_name": "TypeScript with Vue",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/24-typescript.md",
+            "bullets": [
+              "TS project setup",
+              "Typing props, emits, refs, stores",
+              "DefineComponent & Volar tips",
+              "Composables with generics"
+            ],
+            "section_markdown": "- TS project setup\n- Typing props, emits, refs, stores\n- DefineComponent & Volar tips\n- Composables with generics\n---"
+          },
+          {
+            "topic_name": "Testing Suite",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/25-testing.md",
+            "bullets": [
+              "Unit tests with Vitest + Vue Test Utils",
+              "Snapshot tests",
+              "Mocking router/pinia/axios",
+              "E2E with Cypress/Playwright",
+              "Testing async & transitions"
+            ],
+            "section_markdown": "- Unit tests with Vitest + Vue Test Utils\n- Snapshot tests\n- Mocking router/pinia/axios\n- E2E with Cypress/Playwright\n- Testing async & transitions\n---"
+          },
+          {
+            "topic_name": "Performance Optimization",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/26-performance.md",
+            "bullets": [
+              "Re-render hotspots & memoization",
+              "defineComponent, hoisting, v-memo",
+              "Virtualized lists",
+              "Code-splitting & prefetch",
+              "Image optimization",
+              "Profiling with Devtools"
+            ],
+            "section_markdown": "- Re-render hotspots & memoization\n- `defineComponent`, hoisting, `v-memo`\n- Virtualized lists\n- Code-splitting & prefetch\n- Image optimization\n- Profiling with Devtools\n---"
+          },
+          {
+            "topic_name": "Modules & Architecture",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/27-architecture.md",
+            "bullets": [
+              "Feature-folder structure",
+              "Design system components",
+              "Large-app conventions",
+              "Dependency boundaries"
+            ],
+            "section_markdown": "- Feature-folder structure\n- Design system components\n- Large-app conventions\n- Dependency boundaries\n---"
+          },
+          {
+            "topic_name": "Micro-Frontends & Monorepos",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/28-mfe-monorepo.md",
+            "bullets": [
+              "When to consider MFEs",
+              "Module Federation basics (Vite/Rspack)",
+              "PNPM workspaces & Turbo"
+            ],
+            "section_markdown": "- When to consider MFEs\n- Module Federation basics (Vite/Rspack)\n- PNPM workspaces & Turbo\n---"
+          },
+          {
+            "topic_name": "UI Libraries & Ecosystem",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/29-ui-ecosystem.md",
+            "bullets": [
+              "Vuetify, Element Plus, PrimeVue",
+              "Headless UI patterns",
+              "Storybook setup for Vue",
+              "Building a design system"
+            ],
+            "section_markdown": "- Vuetify, Element Plus, PrimeVue\n- Headless UI patterns\n- Storybook setup for Vue\n- Building a design system\n---"
+          },
+          {
+            "topic_name": "Charts, Tables, Maps",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/30-charts-dataviz.md",
+            "bullets": [
+              "Charting (Chart.js/ECharts)",
+              "Data tables (AG Grid, TanStack Table)",
+              "Maps (Leaflet/Mapbox)",
+              "Infinite scroll & virtualization"
+            ],
+            "section_markdown": "- Charting (Chart.js/ECharts)\n- Data tables (AG Grid, TanStack Table)\n- Maps (Leaflet/Mapbox)\n- Infinite scroll & virtualization\n---"
+          },
+          {
+            "topic_name": "Real-Time Apps",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/31-realtime.md",
+            "bullets": [
+              "WebSockets basics",
+              "SSE & WebRTC notes",
+              "State sync and presence",
+              "Optimistic UI patterns"
+            ],
+            "section_markdown": "- WebSockets basics\n- SSE & WebRTC notes\n- State sync and presence\n- Optimistic UI patterns\n---"
+          },
+          {
+            "topic_name": "GraphQL with Vue",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/32-graphql.md",
+            "bullets": [
+              "Apollo Client setup",
+              "Queries, mutations, subscriptions",
+              "Caching & normalization",
+              "Error & loading states"
+            ],
+            "section_markdown": "- Apollo Client setup\n- Queries, mutations, subscriptions\n- Caching & normalization\n- Error & loading states\n---"
+          },
+          {
+            "topic_name": "File & Image Handling",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/33-files-images.md",
+            "bullets": [
+              "File uploads (native/Dropzone)",
+              "Previews, progress, cancel",
+              "Image cropping/compression",
+              "S3/GCS signed URLs patterns"
+            ],
+            "section_markdown": "- File uploads (native/Dropzone)\n- Previews, progress, cancel\n- Image cropping/compression\n- S3/GCS signed URLs patterns\n---"
+          },
+          {
+            "topic_name": "Analytics & Monitoring",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/34-analytics-monitoring.md",
+            "bullets": [
+              "Page & event analytics",
+              "Logging & user timing",
+              "Sentry/TrackJS integration",
+              "RUM metrics (CLS/LCP/TTI)"
+            ],
+            "section_markdown": "- Page & event analytics\n- Logging & user timing\n- Sentry/TrackJS integration\n- RUM metrics (CLS/LCP/TTI)\n---"
+          },
+          {
+            "topic_name": "SEO & Meta",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/35-seo-meta.md",
+            "bullets": [
+              "Meta tags & social cards",
+              "Sitemap & robots",
+              "SPA SEO limitations",
+              "Prerendering strategies"
+            ],
+            "section_markdown": "- Meta tags & social cards\n- Sitemap & robots\n- SPA SEO limitations\n- Prerendering strategies\n---"
+          },
+          {
+            "topic_name": "PWA & Offline",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/36-pwa.md",
+            "bullets": [
+              "Service workers",
+              "Caching & offline patterns",
+              "Push notifications",
+              "App manifests"
+            ],
+            "section_markdown": "- Service workers\n- Caching & offline patterns\n- Push notifications\n- App manifests\n---"
+          },
+          {
+            "topic_name": "SSR/SSG with Nuxt 3 (Optional)",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/37-nuxt-ssr-ssg.md",
+            "bullets": [
+              "Nuxt architecture (pages/layouts)",
+              "Data fetching (useAsyncData, useFetch)",
+              "Nitro server routes",
+              "Runtime config & envs",
+              "Deploy SSR vs SSG"
+            ],
+            "section_markdown": "- Nuxt architecture (pages/layouts)\n- Data fetching (`useAsyncData`, `useFetch`)\n- Nitro server routes\n- Runtime config & envs\n- Deploy SSR vs SSG\n---"
+          },
+          {
+            "topic_name": "Migrations & Upgrades",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/38-migrations.md",
+            "bullets": [
+              "Vue 2 → Vue 3 migration notes",
+              "Options API → Composition API tips",
+              "Deprecations & compatibility"
+            ],
+            "section_markdown": "- Vue 2 → Vue 3 migration notes\n- Options API → Composition API tips\n- Deprecations & compatibility\n---"
+          },
+          {
+            "topic_name": "Error Handling",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/39-error-handling.md",
+            "bullets": [
+              "Global error handlers",
+              "Component-level try/catch patterns",
+              "UX for broken states & retries"
+            ],
+            "section_markdown": "- Global error handlers\n- Component-level try/catch patterns\n- UX for broken states & retries\n---"
+          },
+          {
+            "topic_name": "CI/CD & DevOps",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/40-ci-cd.md",
+            "bullets": [
+              "Lint/test/build pipelines",
+              "Preview deployments",
+              "Versioning & changelogs",
+              "Feature flags"
+            ],
+            "section_markdown": "- Lint/test/build pipelines\n- Preview deployments\n- Versioning & changelogs\n- Feature flags\n---"
+          },
+          {
+            "topic_name": "Deployment",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/41-deployment.md",
+            "bullets": [
+              "Static hosting (Netlify/Vercel)",
+              "SSR hosting (Node, Nitro adapters)",
+              "Docker + Nginx basics",
+              "Caching/CDN best practices"
+            ],
+            "section_markdown": "- Static hosting (Netlify/Vercel)\n- SSR hosting (Node, Nitro adapters)\n- Docker + Nginx basics\n- Caching/CDN best practices\n---"
+          },
+          {
+            "topic_name": "Advanced Patterns",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/42-advanced-patterns.md",
+            "bullets": [
+              "Renderless components",
+              "State machines (XState) in Vue",
+              "RxJS with Vue for streams",
+              "Inversion of Control patterns"
+            ],
+            "section_markdown": "- Renderless components\n- State machines (XState) in Vue\n- RxJS with Vue for streams\n- Inversion of Control patterns\n---"
+          },
+          {
+            "topic_name": "Capstone Projects",
+            "md_url": "https://raw.githubusercontent.com/tinitiateprime/vue-Js/main/43-capstones.md",
+            "bullets": [
+              "1) CRUD Admin + Auth (SPA)",
+              "2) Ecommerce Front (Pinia + Router)",
+              "3) Realtime Chat (WebSockets)",
+              "4) Analytics Dashboard (Charts + Virtualized lists)",
+              "5) Nuxt 3 Blog (SSG + i18n + SEO)"
+            ],
+            "section_markdown": "- 1) CRUD Admin + Auth (SPA)\n- 2) Ecommerce Front (Pinia + Router)\n- 3) Realtime Chat (WebSockets)\n- 4) Analytics Dashboard (Charts + Virtualized lists)\n- 5) Nuxt 3 Blog (SSG + i18n + SEO) \n---\n### 📘 Conclusion\nMaster the **Composition API**, routing, and state with Pinia; layer in testing, performance, security, and deployment to produce production-grade Vue apps.\n\n> © TINITIATE.COM"
+          }
+        ],
+        "subject_readme_url": "https://raw.githubusercontent.com/tinitiateprime/tiai-edu-app/main/courses/vue-js/README.md"
+      }
+    ]
+  }
 }

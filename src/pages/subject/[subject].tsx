@@ -74,46 +74,26 @@ const orderTopics = (topics: Topic[]) => {
   return [topics[introIndex], ...topics.filter((_, index) => index !== introIndex)];
 };
 
-async function loadTextCacheFirst(url: string, signal: AbortSignal) {
-  let cachedText: string | null = null;
-
-  if ("caches" in window) {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(url);
-      if (cached) cachedText = await cached.text();
-    } catch {
-      // ignore cache read failures
-    }
-  }
-
-  const result: { cached: string | null; fresh: string | null } = {
-    cached: cachedText,
-    fresh: null,
-  };
+async function cacheTextContent(url: string, text: string) {
+  if (!("caches" in window)) return;
 
   try {
-    const fresh = await fetchTextStrict(url, signal);
-    result.fresh = fresh;
-
-    if ("caches" in window) {
-      try {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.put(
-          url,
-          new Response(fresh, {
-            headers: { "Content-Type": "text/plain; charset=utf-8" },
-          })
-        );
-      } catch {
-        // ignore cache write failures
-      }
-    }
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(
+      url,
+      new Response(text, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      })
+    );
   } catch {
-    // keep cached result when fresh fetch fails
+    // ignore cache write failures
   }
+}
 
-  return result;
+async function fetchAndCacheText(url: string, signal: AbortSignal) {
+  const fresh = await fetchTextStrict(url, signal);
+  await cacheTextContent(url, fresh);
+  return fresh;
 }
 
 export default function SubjectPage() {
@@ -247,12 +227,15 @@ export default function SubjectPage() {
       return true;
     };
 
-    const hadOfflineCopy = loadOfflineCopy();
+    const hadOfflineCopy = !navigator.onLine && loadOfflineCopy();
     setLoading(!hadOfflineCopy);
 
-    if (!navigator.onLine && !hadOfflineCopy) {
-      setError("You're offline and no saved copy exists for this subject.");
-      setLoading(false);
+    if (!navigator.onLine) {
+      if (!hadOfflineCopy) {
+        setError("You're offline and no saved copy exists for this subject.");
+        setLoading(false);
+      }
+
       return () => controller.abort();
     }
 
@@ -270,24 +253,14 @@ export default function SubjectPage() {
           throw new Error(`Subject "${subjectStr}" not found in course catalog`);
         }
 
-        const { cached, fresh } = await loadTextCacheFirst(resolvedReadmeUrl, controller.signal);
+        const fresh = await fetchAndCacheText(resolvedReadmeUrl, controller.signal);
         if (cancelled) return;
 
-        if (cached) {
-          applyReadme(cached, resolvedReadmeUrl);
-          setLoading(false);
-        }
-
-        if (fresh && fresh !== cached) {
-          applyReadme(fresh, resolvedReadmeUrl);
-        }
-
-        if (!cached && !fresh) {
-          throw new Error("Subject README fetch returned no data");
-        }
+        applyReadme(fresh, resolvedReadmeUrl);
       } catch {
-        if (!cancelled && !hadOfflineCopy) {
-          setError("Failed to load the subject (and no offline copy was found).");
+        if (!cancelled) {
+          setError("Failed to load the subject content.");
+          setTopics([]);
         }
       } finally {
         if (!cancelled) {
@@ -462,26 +435,10 @@ export default function SubjectPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          theme === "dark"
-            ? "linear-gradient(180deg, #020617, #0f172a)"
-            : "linear-gradient(180deg, #f8fafc, #ffffff)",
-      }}
-    >
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 16px 32px" }}>
-        <div className="card" style={{ padding: 18, borderRadius: 22 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+    <div className="app-shell">
+      <main className="page-main">
+        <div className="card page-hero-card">
+          <div className="page-hero-top">
             <div>
               <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>
                 COURSE SUBJECT
@@ -490,7 +447,7 @@ export default function SubjectPage() {
                 {subjectStr || "Loading subject..."}
               </div>
               <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
-                Topics are still parsed from the subject `README.md`, but the subject source now comes from the new course catalog API.
+                Open any topic to continue reading, save it offline, or mark it as a favorite.
               </div>
               <div style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
                 Status: {isOffline ? "Offline" : "Online"}
@@ -502,7 +459,7 @@ export default function SubjectPage() {
               )}
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div className="page-hero-actions">
               <button className="btn btn-outline" onClick={() => router.push("/dashboard")} type="button">
                 <FaHome />
               </button>
@@ -534,20 +491,13 @@ export default function SubjectPage() {
               </button>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
-                {theme === "dark" ? "Light" : "Dark"}
+                <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
               </button>
             </div>
           </div>
 
-          <div style={{ marginTop: 18 }} className="card">
-            <div
-              style={{
-                padding: "12px 14px",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
+          <div style={{ marginTop: 18 }} className="card search-bar-elevated page-hero-search">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
               <FaSearch />
               <input
                 value={q}
@@ -584,6 +534,7 @@ export default function SubjectPage() {
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
               gap: 14,
+              alignItems: "stretch",
             }}
           >
             {filteredTopics.map((topic, index) => {
@@ -591,8 +542,19 @@ export default function SubjectPage() {
               const isFavorite = favorites.some((favorite) => favorite.slug === slug);
 
               return (
-                <div key={`${topic.md_url}-${topic.topic_name}`} className="card" style={{ borderRadius: 22 }}>
-                  <div style={{ padding: 18 }}>
+                <div
+                  key={`${topic.md_url}-${topic.topic_name}`}
+                  className="card"
+                  style={{ borderRadius: 22, height: "100%" }}
+                >
+                  <div
+                    style={{
+                      padding: 18,
+                      display: "flex",
+                      flexDirection: "column",
+                      height: "100%",
+                    }}
+                  >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>
@@ -612,7 +574,7 @@ export default function SubjectPage() {
                           height: 42,
                           padding: 0,
                           borderRadius: 14,
-                          color: isFavorite ? "#ca8a04" : undefined,
+                          color: isFavorite ? "var(--brand-strong)" : undefined,
                         }}
                         title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                       >
@@ -621,7 +583,7 @@ export default function SubjectPage() {
                     </div>
 
                     {!!topic.bullets?.length && (
-                      <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+                      <div style={{ marginTop: 14, display: "grid", gap: 8, flex: 1 }}>
                         {topic.bullets.slice(0, 4).map((bullet) => (
                           <div key={bullet} className="soft" style={{ padding: "8px 10px", borderRadius: 14, fontSize: 12 }}>
                             {bullet}
@@ -630,10 +592,27 @@ export default function SubjectPage() {
                       </div>
                     )}
 
-                    <div style={{ marginTop: 16 }}>
+                    {!topic.bullets?.length && (
+                      <div
+                        className="soft"
+                        style={{
+                          marginTop: 14,
+                          padding: "10px 12px",
+                          borderRadius: 14,
+                          fontSize: 12,
+                          color: "var(--muted)",
+                          flex: 1,
+                        }}
+                      >
+                        Open the topic to read the full lesson content.
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: 16, paddingTop: 2 }}>
                       <button
                         className="btn btn-primary"
                         type="button"
+                        style={{ width: "100%", justifyContent: "center" }}
                         onClick={() =>
                           router.push({
                             pathname: `/topic/${encodeURIComponent(topic.topic_name)}`,
@@ -657,3 +636,5 @@ export default function SubjectPage() {
     </div>
   );
 }
+
+export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";

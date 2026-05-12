@@ -1,120 +1,287 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext } from "react";
 import { useSession } from "next-auth/react";
-import { ThemeContext } from "../context/ThemeContext";
 import {
-  FaMoon,
-  FaSun,
   FaArrowRight,
-  FaLinkedinIn,
-  FaYoutube,
+  FaBookOpen,
+  FaEnvelope,
   FaFacebookF,
   FaInstagram,
-  FaEnvelope,
+  FaLayerGroup,
+  FaLinkedinIn,
+  FaMoon,
+  FaStar,
+  FaSun,
+  FaUserTie,
+  FaWifi,
+  FaYoutube,
 } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
+import { useDesign } from "../context/DesignContext";
+import { ThemeContext } from "../context/ThemeContext";
+
+const featureCards = [
+  {
+    key: "structuredCourses",
+    title: "Structured Courses",
+    description: "Subject-led learning paths with searchable topics and organized reading flow.",
+    icon: <FaBookOpen />,
+  },
+  {
+    key: "interviewPractice",
+    title: "Interview Practice",
+    description: "Curated Q&A sets for focused interview preparation across tech domains.",
+    icon: <FaUserTie />,
+  },
+  {
+    key: "offlineReady",
+    title: "Offline-Ready",
+    description: "Installable PWA with cached content available even without internet.",
+    icon: <FaWifi />,
+  },
+  {
+    key: "cbtHub",
+    title: "CBT Hub",
+    description: "Slides, videos, and audio content gathered into one consistent experience.",
+    icon: <FaLayerGroup />,
+  },
+] as const;
 
 export default function Home() {
   const router = useRouter();
   const { status } = useSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const { design } = useDesign();
 
-  const primaryHref = status === "authenticated" ? "/dashboard" : "/signup";
+  const isAuthenticated = status === "authenticated";
+  const primaryHref = "/signup";
+  const secondaryHref = "/login";
+  const primaryLabel = "Sign Up";
+  const secondaryLabel = "Login";
   const logoSrc = theme === "dark" ? "/TinitiateLogo.png" : "/TinitiateLogoLight.png";
+  const featureTones = design?.landing.features;
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 flex flex-col">
-      <header className="mx-auto max-w-6xl pt-5 sm:pt-7 w-full">
-        <div className="glass rounded-2xl px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between gap-4">
-          <div className="min-w-0 flex items-center">
-            <img
+    <div className="app-shell app-shell--home">
+      {/* Header */}
+      <header className="page-main" style={{ paddingBottom: 0 }}>
+        <div className="card page-hero-card">
+          <div className="page-hero-top" style={{ gap: 14 }}>
+            <Image
               src={logoSrc}
               alt="Tinitiate"
-              className="block w-[220px] sm:w-[270px] h-auto shrink-0 self-center object-contain translate-y-[1px] sm:translate-y-[2px]"
+              width={1720}
+              height={181}
+              style={{ width: 180, maxWidth: "50vw", height: "auto", objectFit: "contain" }}
             />
+            <button className="btn btn-outline" onClick={toggleTheme} type="button" style={{ minWidth: 42 }}>
+              {theme === "dark" ? <FaSun /> : <FaMoon />}
+              <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
+            </button>
           </div>
-
-          <button
-            className="btn btn-outline"
-            onClick={toggleTheme}
-            type="button"
-            aria-label="Toggle theme"
-          >
-            <span className="text-[14px]">{theme === "dark" ? <FaSun /> : <FaMoon />}</span>
-          </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl mt-8 sm:mt-12 w-full flex-1">
-        <div className="glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
-          <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[color:var(--brand)] opacity-[0.10] blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-[color:var(--brand-2)] opacity-[0.10] blur-3xl" />
-
-          <div className="max-w-2xl relative">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
-              <span className="h-2 w-2 rounded-full bg-[color:var(--brand)]" />
-              Offline-ready &bull; Favorites &bull; Clean UI
-            </div>
-
-            <h1 className="mt-4 text-3xl sm:text-5xl font-extrabold tracking-tight">
-              Learn faster with clean, focused content.
-            </h1>
-
-            <p className="mt-4 text-[color:var(--text-muted)] text-base sm:text-lg leading-relaxed">
-              Browse subjects, save what matters, and come back to your learning flow
-              with favorites plus offline-ready reading.
-            </p>
-
-            <div className="mt-7 flex flex-col sm:flex-row gap-3">
-              <button
-                className="btn btn-primary w-full sm:w-auto"
-                onClick={() => router.push(primaryHref)}
-                type="button"
-              >
-                <span className="whitespace-nowrap">
-                  {status === "authenticated" ? "Open Dashboard" : "Browse Tutorials"}
-                </span>
-                <span className="inline-flex items-center">
-                  <FaArrowRight />
-                </span>
-              </button>
-            </div>
-
-            <div className="mt-7 flex flex-wrap gap-2">
-              <span className="chip">Dark mode</span>
-              <span className="chip">Offline-ready</span>
-              <span className="chip">Favorites</span>
-              <span className="chip">Mobile-friendly</span>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <footer className="mx-auto max-w-6xl w-full py-8 sm:py-10">
-        <div className="glass rounded-3xl p-5 sm:p-8">
-          <div className="grid gap-8 lg:grid-cols-12">
-            <div className="lg:col-span-5">
-              <img
-                src={logoSrc}
-                alt="Tinitiate"
-                className="block w-[200px] sm:w-[240px] h-auto object-contain"
-              />
-
-              <div className="mt-2 text-xs sm:text-sm font-semibold">
-                Tinitiate AI Solutions
+      <main className="page-main" style={{ paddingTop: 20 }}>
+        {/* Hero Section */}
+        <section
+          className="card page-hero-card"
+          style={{
+            borderRadius: 30,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 28,
+            }}
+          >
+            {/* Hero Text */}
+            <div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                <span className="badge">Installable PWA</span>
+                <span className="badge">Offline reading</span>
               </div>
 
-              <p className="mt-4 text-xs sm:text-sm leading-6 text-[color:var(--text-muted)]">
-                Tinitiate AI Solutions empowers learners with industry-relevant skills through hands-on training and real-time project experience. Specializing in AI, Data Engineering, and Cloud technologies, we focus on transforming knowledge into practical expertise. Our mission is to create job-ready professionals by providing real-world exposure, mentorship, and structured learning aligned with current industry demands.
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: "clamp(28px, 5vw, 48px)",
+                  lineHeight: 1.1,
+                  fontWeight: 900,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Your complete{" "}
+                <span
+                  style={{
+                    background: "var(--landing-hero-accent)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                  }}
+                >
+                  learning workspace
+                </span>{" "}
+                for tech careers.
+              </h1>
+
+              <p
+                style={{
+                  marginTop: 16,
+                  maxWidth: 600,
+                  fontSize: "clamp(14px, 1.8vw, 17px)",
+                  lineHeight: 1.75,
+                  color: "var(--muted)",
+                }}
+              >
+                Courses, interview prep, and CBT content — all in one fast, offline-ready app.
+                Find the right subject, save it, and learn at your pace.
               </p>
 
-              <div className="mt-6 text-[11px] sm:text-xs font-bold tracking-widest text-[color:var(--text-muted)]">
-                FOLLOW US
+              <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 10 }}>
+                <button className="btn btn-primary btn-lg" onClick={() => router.push(primaryHref)} type="button">
+                  {primaryLabel} <FaArrowRight />
+                </button>
+                <button className="btn btn-outline btn-lg" onClick={() => router.push(secondaryHref)} type="button">
+                  {secondaryLabel}
+                </button>
               </div>
+            </div>
 
-              <div className="mt-3 flex items-center gap-3 text-[color:var(--text-muted)]">
+            {/* Feature Cards Grid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 14,
+              }}
+            >
+              {featureCards.map((feature) => {
+                const tone = featureTones![feature.key];
+
+                return (
+                <div
+                  key={feature.title}
+                  className="feature-card-hover"
+                  style={{
+                    padding: "20px 18px",
+                    borderRadius: 20,
+                    border: "1px solid var(--border)",
+                    background: tone.gradient,
+                    transition: "transform 200ms ease, box-shadow 200ms ease",
+                    cursor: "default",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: tone.iconBg,
+                      color: tone.iconColor,
+                      fontSize: 18,
+                    }}
+                  >
+                    {feature.icon}
+                  </div>
+                  <div style={{ marginTop: 14, fontSize: 17, fontWeight: 800 }}>{feature.title}</div>
+                  <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.65, color: "var(--muted)" }}>
+                    {feature.description}
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="page-main" style={{ paddingTop: 0, paddingBottom: 28 }}>
+        <div className="card page-hero-card" style={{ padding: "clamp(16px, 3vw, 24px)", borderRadius: 28 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 24,
+            }}
+          >
+            <div>
+              <Image
+                src={logoSrc}
+                alt="Tinitiate"
+                width={1720}
+                height={181}
+                style={{ width: 180, height: "auto", objectFit: "contain" }}
+              />
+              <div style={{ marginTop: 12, fontSize: 14, lineHeight: 1.75, color: "var(--muted)" }}>
+                Tinitiate AI Solutions helps learners grow with practical training, project-backed
+                learning, and curated material that is easier to revisit across devices.
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>Explore</div>
+              <div style={{ marginTop: 12, display: "grid", gap: 10, fontSize: 14 }}>
+                <Link href={isAuthenticated ? "/dashboard" : "/signup"} style={{ color: "inherit", textDecoration: "none" }}>
+                  Learning Dashboard
+                </Link>
+                <Link href={isAuthenticated ? "/cbt" : "/login"} style={{ color: "inherit", textDecoration: "none" }}>
+                  CBT Hub
+                </Link>
+                <a
+                  href="https://tinitiate.com/about"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "inherit", textDecoration: "none" }}
+                >
+                  About Tinitiate
+                </a>
+                <a
+                  href="https://tinitiate.com/privacy-policy"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "inherit", textDecoration: "none" }}
+                >
+                  Privacy Policy
+                </a>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>Contact</div>
+              <div style={{ marginTop: 12, display: "grid", gap: 10, fontSize: 14, color: "var(--muted)" }}>
+                <a
+                  href="mailto:contact@tinitiateai.com"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    color: "inherit",
+                    textDecoration: "none",
+                  }}
+                >
+                  <FaEnvelope />
+                  contact@tinitiateai.com
+                </a>
+                <div>USA: +1 (973) 653-6870, +1 (206) 802-4102</div>
+                <div>India: +91 9848092083</div>
+                <div>Telangana, India</div>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>Follow</div>
+              <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {[
                   {
                     href: "https://www.linkedin.com/company/tinitiate/",
@@ -148,7 +315,8 @@ export default function Home() {
                     target="_blank"
                     rel="noreferrer"
                     aria-label={social.label}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--border)] transition hover:opacity-80"
+                    className="btn btn-outline"
+                    style={{ width: 40, height: 40, padding: 0, borderRadius: 12 }}
                     title={social.label}
                   >
                     {social.icon}
@@ -156,99 +324,32 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
-            <div className="lg:col-span-3">
-              <div className="text-base sm:text-lg font-bold">Company</div>
-              <div className="mt-3 sm:mt-4 grid gap-2.5 text-xs sm:text-sm">
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/about"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  About Us
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/pricing-policy"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Pricing Policy
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/privacy-policy"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Privacy Policy
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/refund-policy"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Refund Policy
-                </a>
-                <a
-                  className="hover:underline"
-                  href="https://tinitiate.com/terms-and-conditions"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Terms &amp; Conditions
-                </a>
-              </div>
-            </div>
-
-            <div className="lg:col-span-4">
-              <div className="text-base sm:text-lg font-bold">Contact Us</div>
-
-              <div className="mt-3 sm:mt-4 grid gap-4 text-xs sm:text-sm text-[color:var(--text-muted)]">
-                <div className="flex items-center gap-2">
-                  <FaEnvelope className="shrink-0" />
-                  <a
-                    className="hover:underline break-all"
-                    href="mailto:contact@tinitiate.com"
-                  >
-                    contact@tinitiateai.com
-                  </a>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-[color:var(--text)]">USA:</div>
-                  <div className="break-words">+1 (973) 653-6870, +1 (206) 802-4102</div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-[color:var(--text)]">India:</div>
-                  <div>+91 9848092083</div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-[color:var(--text)]">
-                    Corporate Office:
-                  </div>
-                  <div className="break-words">
-                    1-2/10 Sbh Colony Mohan Nagar, SBH Colony, Kothapet, 500036,
-                    Telangana, India
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
-          <div className="mt-8 sm:mt-10 flex flex-col items-center justify-between gap-3 border-t border-[color:var(--border)] pt-5 text-[11px] text-[color:var(--text-muted)] sm:flex-row sm:text-xs">
-            <span>
-              &copy; {new Date().getFullYear()} Tinitiate AI Solutions. All rights reserved.
-              rights reserved.
-            </span>
-            <span className="opacity-80">tinitiateai.com</span>
+          <div
+            style={{
+              marginTop: 20,
+              paddingTop: 16,
+              borderTop: "1px solid var(--border)",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              fontSize: 12,
+              color: "var(--muted)",
+            }}
+          >
+            <div>&copy; {new Date().getFullYear()} Tinitiate AI Solutions. All rights reserved.</div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <FaStar />
+              Learning, practice, and offline access in one PWA.
+            </div>
           </div>
         </div>
       </footer>
     </div>
   );
 }
+
+export { redirectAuthenticatedUserFromPublicPage as getServerSideProps } from "../lib/redirect-authenticated-page";

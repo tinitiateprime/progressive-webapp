@@ -36,6 +36,7 @@ export default function CbtPage() {
   useEffect(() => {
     if (status !== "authenticated") return;
 
+    let cancelled = false;
     const controller = new AbortController();
 
     (async () => {
@@ -43,14 +44,19 @@ export default function CbtPage() {
         setLoading(true);
         setError("");
         setData(await fetchCbtCollections(controller.signal));
-      } catch {
-        setError("Failed to load CBT content.");
+      } catch (err: unknown) {
+        if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
+          setError("Failed to load CBT content.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [status]);
 
   const slideItems = data?.slideshows || [];
@@ -58,43 +64,27 @@ export default function CbtPage() {
   const audioItems = data?.audioBooks || [];
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          theme === "dark"
-            ? "linear-gradient(180deg, #020617, #0f172a)"
-            : "linear-gradient(180deg, #f8fafc, #ffffff)",
-      }}
-    >
-      <main style={{ maxWidth: 1180, margin: "0 auto", padding: "18px 16px 32px" }}>
-        <div className="card" style={{ padding: 18, borderRadius: 22 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+    <div className="app-shell">
+      <main className="page-main">
+        <div className="card page-hero-card">
+          <div className="page-hero-top">
             <div>
               <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>CBT HUB</div>
               <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
                 Slideshows, training videos, and audio books
               </div>
               <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
-                Source folders: `slideshows`, `training-videos`, and `audio-books` in the GitHub content repository
+                Choose the format that fits your study session and continue from the collection you want.
               </div>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div className="page-hero-actions">
               <Link href="/dashboard" className="btn btn-outline">
                 <FaArrowLeft /> Dashboard
               </Link>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
-                {theme === "dark" ? "Light" : "Dark"}
+                <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
               </button>
             </div>
           </div>
@@ -241,3 +231,5 @@ export default function CbtPage() {
     </div>
   );
 }
+
+export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";

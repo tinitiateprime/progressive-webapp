@@ -18,13 +18,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).send("Host not allowed");
     }
 
-    const r = await fetch(u.toString(), {
-      headers: { "User-Agent": "NextProxy" },
-    });
-
-    const text = await r.text();
     res.setHeader("Cache-Control", "no-store");
-    res.status(r.status).send(text);
+
+    try {
+      const response = await fetch(u.toString(), {
+        cache: "no-store",
+        headers: { "User-Agent": "NextProxy" },
+      });
+
+      const text = await response.text();
+      const contentType = response.headers.get("content-type");
+      if (contentType) {
+        res.setHeader("Content-Type", contentType);
+      }
+
+      res.status(response.status).send(text);
+      return;
+    } catch {
+      res.status(502).send("Failed to fetch requested URL from GitHub");
+      return;
+    }
   } catch {
     res.status(400).send("Invalid url");
   }

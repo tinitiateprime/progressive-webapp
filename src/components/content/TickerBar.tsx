@@ -1,27 +1,15 @@
-import type { CSSProperties } from "react";
+import { useContext } from "react";
+import { DesignContext } from "../../context/DesignContext";
 import type { TickerItem } from "../../lib/content-types";
-
-const toneStyles: Record<TickerItem["kind"], CSSProperties> = {
-  jobs: {
-    borderColor: "rgba(34,197,94,0.35)",
-    color: "#166534",
-  },
-  "trending-technologies": {
-    borderColor: "rgba(37,99,235,0.35)",
-    color: "#1d4ed8",
-  },
-  events: {
-    borderColor: "rgba(249,115,22,0.35)",
-    color: "#c2410c",
-  },
-};
 
 type TickerBarProps = {
   items: TickerItem[];
 };
 
 export default function TickerBar({ items }: TickerBarProps) {
-  if (!items.length) return null;
+  const { design } = useContext(DesignContext);
+
+  if (!items.length || !design) return null;
 
   const loopItems = [...items, ...items];
 
@@ -36,7 +24,13 @@ export default function TickerBar({ items }: TickerBarProps) {
             rel="noreferrer"
             className="ticker-pill"
           >
-            <span className="ticker-label" style={toneStyles[item.kind]}>
+            <span
+              className="ticker-label"
+              style={{
+                borderColor: design.ticker[item.kind].borderColor,
+                color: design.ticker[item.kind].color,
+              }}
+            >
               {item.label}
             </span>
             <span>{item.title}</span>

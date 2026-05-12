@@ -57,46 +57,38 @@ const getSelectedTopic = (topics: CatalogTopic[], preferredTopicName: string) =>
   topics[0] ||
   null;
 
-async function loadTextCacheFirst(url: string, signal: AbortSignal) {
-  let cachedText: string | null = null;
-
-  if ("caches" in window) {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(url);
-      if (cached) cachedText = await cached.text();
-    } catch {
-      // ignore cache read failures
-    }
-  }
-
-  const result: { cached: string | null; fresh: string | null } = {
-    cached: cachedText,
-    fresh: null,
-  };
+async function readCachedText(url: string) {
+  if (!("caches" in window)) return null;
 
   try {
-    const fresh = await fetchTextStrict(url, signal);
-    result.fresh = fresh;
-
-    if ("caches" in window) {
-      try {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.put(
-          url,
-          new Response(fresh, {
-            headers: { "Content-Type": "text/plain; charset=utf-8" },
-          })
-        );
-      } catch {
-        // ignore cache write failures
-      }
-    }
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(url);
+    return cached ? await cached.text() : null;
   } catch {
-    // keep cached version when fresh fetch fails
+    return null;
   }
+}
 
-  return result;
+async function cacheTextContent(url: string, text: string) {
+  if (!("caches" in window)) return;
+
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(
+      url,
+      new Response(text, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      })
+    );
+  } catch {
+    // ignore cache write failures
+  }
+}
+
+async function fetchAndCacheText(url: string, signal: AbortSignal) {
+  const fresh = await fetchTextStrict(url, signal);
+  await cacheTextContent(url, fresh);
+  return fresh;
 }
 
 export default function TopicPage() {
@@ -158,6 +150,7 @@ export default function TopicPage() {
 
     let cancelled = false;
     const controller = new AbortController();
+    const offline = !navigator.onLine;
 
     (async () => {
       try {
@@ -178,8 +171,10 @@ export default function TopicPage() {
         if (cancelled) return;
         setSubjectReadmeUrl(resolvedSubjectReadmeUrl);
 
-        const subjectRes = await loadTextCacheFirst(resolvedSubjectReadmeUrl, controller.signal);
-        const subjectReadmeText = subjectRes.fresh || subjectRes.cached || "";
+        const subjectReadmeText = offline
+          ? (await readCachedText(resolvedSubjectReadmeUrl)) || ""
+          : await fetchAndCacheText(resolvedSubjectReadmeUrl, controller.signal);
+
         if (!subjectReadmeText) throw new Error("Subject README is empty or unavailable");
 
         const parsedTopics = parseSubjectTopicsFromReadme(
@@ -210,11 +205,14 @@ export default function TopicPage() {
         const baseUrl = mdUrl.includes("/") ? mdUrl.slice(0, mdUrl.lastIndexOf("/") + 1) : "";
 
         let topicMd = "";
-        try {
-          const topicRes = await loadTextCacheFirst(mdUrl, controller.signal);
-          topicMd = (topicRes.fresh || topicRes.cached || "").trim();
-        } catch {
-          topicMd = "";
+        if (offline) {
+          topicMd = ((await readCachedText(mdUrl)) || "").trim();
+        } else {
+          try {
+            topicMd = (await fetchAndCacheText(mdUrl, controller.signal)).trim();
+          } catch {
+            topicMd = "";
+          }
         }
 
         if (cancelled) return;
@@ -429,26 +427,10 @@ export default function TopicPage() {
   }, [activeTopicName, content, subjectReadmeOutlineMd]);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          theme === "dark"
-            ? "linear-gradient(180deg, #020617, #0f172a)"
-            : "linear-gradient(180deg, #f8fafc, #ffffff)",
-      }}
-    >
-      <main style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 16px 32px" }}>
-        <div className="card" style={{ padding: 18, borderRadius: 22 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+    <div className="app-shell">
+      <main className="page-main">
+        <div className="card page-hero-card">
+          <div className="page-hero-top">
             <div>
               <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>TOPIC READER</div>
               <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
@@ -459,7 +441,7 @@ export default function TopicPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div className="page-hero-actions">
               <Link
                 href={
                   subjectReadmeUrl
@@ -480,7 +462,7 @@ export default function TopicPage() {
               </button>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
-                {theme === "dark" ? "Light" : "Dark"}
+                <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
               </button>
             </div>
           </div>
@@ -621,3 +603,5 @@ export default function TopicPage() {
     </div>
   );
 }
+
+export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";
