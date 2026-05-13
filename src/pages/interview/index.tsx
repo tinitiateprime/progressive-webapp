@@ -9,6 +9,7 @@ import TickerBar from "../../components/content/TickerBar";
 import { ThemeContext } from "../../context/ThemeContext";
 import { fetchInterviewQuestions, fetchTickerItems } from "../../lib/content-client";
 import type { InterviewQuestionSummary, TickerItem } from "../../lib/content-types";
+import { buildPublicEntryUrl } from "../../lib/public-entry";
 
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -25,7 +26,7 @@ export default function InterviewIndexPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/login");
+      router.replace(buildPublicEntryUrl(router.asPath));
     }
   }, [router, status]);
 

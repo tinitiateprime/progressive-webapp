@@ -10,6 +10,7 @@ import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaMoon, FaSun } from "react
 import { ThemeContext } from "../../../context/ThemeContext";
 import { fetchSlideshow } from "../../../lib/content-client";
 import type { SlideshowDeck } from "../../../lib/content-types";
+import { buildPublicEntryUrl } from "../../../lib/public-entry";
 
 export default function SlideshowPage() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function SlideshowPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/login");
+      router.replace(buildPublicEntryUrl(router.asPath));
     }
   }, [router, status]);
 

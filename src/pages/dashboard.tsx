@@ -26,6 +26,7 @@ import { ThemeContext } from "../context/ThemeContext";
 import { clearBrowserSessionActive } from "../lib/browserSession";
 import { fetchTickerItems } from "../lib/content-client";
 import type { TickerItem } from "../lib/content-types";
+import { buildPublicEntryUrl } from "../lib/public-entry";
 import {
   getLibraryUserKey,
   hydrateOfflineSubjectsForAccount,
@@ -84,7 +85,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/login");
+      router.replace(buildPublicEntryUrl(router.asPath));
     }
   }, [router, status]);
 
@@ -240,7 +241,7 @@ export default function Dashboard() {
       // ignore
     }
 
-    router.replace("/login");
+    router.replace("/");
   };
 
   const handleInstall = async () => {
@@ -468,6 +469,7 @@ export default function Dashboard() {
                 style={{
                   pointerEvents: "none",
                 }}
+                title={accountEmail ? `${firstName} (${accountEmail})` : firstName}
               >
                 <div className="dashboard-profile-btn__avatar">
                   {accountInitial}
@@ -475,9 +477,6 @@ export default function Dashboard() {
 
                 <div className="dashboard-profile-btn__copy">
                   <div className="dashboard-profile-btn__name">{firstName}</div>
-                  <div className="dashboard-profile-btn__email">
-                    {accountEmail}
-                  </div>
                 </div>
               </div>
 

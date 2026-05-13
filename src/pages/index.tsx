@@ -58,8 +58,17 @@ export default function Home() {
   const { design } = useDesign();
 
   const isAuthenticated = status === "authenticated";
-  const primaryHref = "/signup";
-  const secondaryHref = "/login";
+  const sessionExpired =
+    typeof router.query.reason === "string" && router.query.reason === "session-ended";
+  const callbackUrl =
+    typeof router.query.callbackUrl === "string" ? router.query.callbackUrl : "";
+  const authParams = new URLSearchParams();
+  if (callbackUrl) {
+    authParams.set("callbackUrl", callbackUrl);
+  }
+  const authQuery = authParams.toString();
+  const primaryHref = authQuery ? `/signup?${authQuery}` : "/signup";
+  const secondaryHref = authQuery ? `/login?${authQuery}` : "/login";
   const primaryLabel = "Sign Up";
   const secondaryLabel = "Login";
   const logoSrc = theme === "dark" ? "/TinitiateLogo.png" : "/TinitiateLogoLight.png";
@@ -109,6 +118,22 @@ export default function Home() {
                 <span className="badge">Offline reading</span>
               </div>
 
+              {sessionExpired ? (
+                <div
+                  className="card"
+                  style={{
+                    marginBottom: 18,
+                    padding: "12px 14px",
+                    borderRadius: 18,
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Your previous session ended. Continue from the landing page and choose login or
+                  signup to open your dashboard again.
+                </div>
+              ) : null}
+
               <h1
                 style={{
                   margin: 0,
@@ -140,7 +165,7 @@ export default function Home() {
                   color: "var(--muted)",
                 }}
               >
-                Courses, interview prep, and CBT content — all in one fast, offline-ready app.
+                Courses, interview prep, and CBT content - all in one fast, offline-ready app.
                 Find the right subject, save it, and learn at your pace.
               </p>
 
@@ -351,5 +376,3 @@ export default function Home() {
     </div>
   );
 }
-
-export { redirectAuthenticatedUserFromPublicPage as getServerSideProps } from "../lib/redirect-authenticated-page";

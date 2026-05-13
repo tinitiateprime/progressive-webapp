@@ -34,6 +34,7 @@ import {
   writeOfflineSubjectMeta,
   type OfflineSubjectMeta,
 } from "../../lib/offline";
+import { buildPublicEntryUrl } from "../../lib/public-entry";
 import {
   fetchTextStrict,
   parseSubjectTopicsFromReadme,
@@ -118,7 +119,7 @@ export default function SubjectPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/login");
+      router.replace(buildPublicEntryUrl(router.asPath));
     }
   }, [router, status]);
 

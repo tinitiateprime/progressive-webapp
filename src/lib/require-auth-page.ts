@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
 
 import { authOptions } from "./authOptions";
+import { buildPublicEntryUrl } from "./public-entry";
 
 type ProtectedPageProps = {
   session: Session;
@@ -17,11 +18,11 @@ export const requireAuthenticatedPage: GetServerSideProps<ProtectedPageProps> = 
   const session = await getServerSession(context.req, context.res, authOptions);
 
   if (!session) {
-    const callbackUrl = encodeURIComponent(context.resolvedUrl || "/dashboard");
+    const callbackUrl = context.resolvedUrl || "/dashboard";
 
     return {
       redirect: {
-        destination: `/login?callbackUrl=${callbackUrl}`,
+        destination: buildPublicEntryUrl(callbackUrl),
         permanent: false,
       },
     };

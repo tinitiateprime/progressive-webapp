@@ -10,6 +10,7 @@ import { FaArrowLeft, FaMoon, FaSun } from "react-icons/fa";
 import { ThemeContext } from "../../../context/ThemeContext";
 import { fetchMediaItem } from "../../../lib/content-client";
 import type { MediaCollectionItem } from "../../../lib/content-types";
+import { buildPublicEntryUrl } from "../../../lib/public-entry";
 
 const isMediaKind = (value: string): value is "training-videos" | "audio-books" =>
   value === "training-videos" || value === "audio-books";
@@ -25,7 +26,7 @@ export default function MediaDetailPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/login");
+      router.replace(buildPublicEntryUrl(router.asPath));
     }
   }, [router, status]);
 

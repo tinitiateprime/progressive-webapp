@@ -453,10 +453,10 @@ input:focus-visible {
 
 .dashboard-profile-btn {
   min-width: 0;
-  max-width: 248px;
-  justify-content: flex-start;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
   cursor: default;
+  white-space: nowrap;
 }
 
 .dashboard-profile-btn__avatar {
@@ -473,22 +473,18 @@ input:focus-visible {
 
 .dashboard-profile-btn__copy {
   min-width: 0;
-  display: grid;
-  gap: 2px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .dashboard-profile-btn__name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.1;
 }
 
 .dashboard-profile-btn__email {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: none;
 }
 
 .auth-grid-pattern {
@@ -573,11 +569,6 @@ main,
 
   .dashboard-profile-btn {
     grid-column: 1 / -1;
-    max-width: none;
-  }
-
-  .dashboard-profile-btn__email {
-    display: none;
   }
 
   .page-hero-search {

@@ -6,13 +6,6 @@ const trimSlashes = (value: string) =>
 const splitUrlPath = (value: string) =>
   trimSlashes(String(value || "").split(/[?#]/)[0]).split("/").filter(Boolean);
 
-const LEGACY_CONTENT_PATH_ALIASES = [
-  { logical: "interview-qna", legacy: "Interview" },
-  { logical: "slideshows", legacy: "CBT/slideshows" },
-  { logical: "training-videos", legacy: "CBT/training-videos" },
-  { logical: "audio-books", legacy: "CBT/audio-books" },
-] as const;
-
 export const CONTENT_REPO_OWNER =
   process.env.NEXT_PUBLIC_CONTENT_REPO_OWNER ||
   process.env.CONTENT_REPO_OWNER ||
@@ -45,34 +38,6 @@ export const stripContentRepoBasePath = (filePath: string) => {
     : normalized;
 };
 
-const toLegacyRepoContentPath = (filePath: string) => {
-  const normalized = normalizeContentRepoPath(filePath);
-
-  for (const alias of LEGACY_CONTENT_PATH_ALIASES) {
-    if (normalized === alias.legacy || normalized.startsWith(`${alias.legacy}/`)) {
-      return normalized;
-    }
-
-    if (normalized === alias.logical || normalized.startsWith(`${alias.logical}/`)) {
-      return `${alias.legacy}${normalized.slice(alias.logical.length)}`;
-    }
-  }
-
-  return normalized;
-};
-
-const fromRepoContentPath = (filePath: string) => {
-  const normalized = normalizeContentRepoPath(filePath);
-
-  for (const alias of LEGACY_CONTENT_PATH_ALIASES) {
-    if (normalized === alias.legacy || normalized.startsWith(`${alias.legacy}/`)) {
-      return `${alias.logical}${normalized.slice(alias.legacy.length)}`;
-    }
-  }
-
-  return normalized;
-};
-
 export const resolveContentRepoPath = (filePath: string) => {
   const normalized = stripContentRepoBasePath(filePath);
   return [CONTENT_REPO_BASE_PATH, normalized].filter(Boolean).join("/");
@@ -80,9 +45,7 @@ export const resolveContentRepoPath = (filePath: string) => {
 
 export const getContentRepoPathCandidates = (filePath: string) => {
   const normalized = stripContentRepoBasePath(filePath);
-  const candidates = [normalized, toLegacyRepoContentPath(normalized)]
-    .map((candidate) => [CONTENT_REPO_BASE_PATH, candidate].filter(Boolean).join("/"))
-    .filter(Boolean);
+  const candidates = [[CONTENT_REPO_BASE_PATH, normalized].filter(Boolean).join("/")].filter(Boolean);
 
   return [...new Set(candidates)];
 };
@@ -122,7 +85,7 @@ export const parseContentRepoPathFromUrl = (urlString: string) => {
       repoNameCandidates.has(parts[1]) &&
       parts[2] === CONTENT_REPO_BRANCH
     ) {
-      return fromRepoContentPath(stripContentRepoBasePath(parts.slice(3).join("/")));
+      return stripContentRepoBasePath(parts.slice(3).join("/"));
     }
 
     if (
@@ -132,7 +95,7 @@ export const parseContentRepoPathFromUrl = (urlString: string) => {
       parts[2] === "blob" &&
       parts[3] === CONTENT_REPO_BRANCH
     ) {
-      return fromRepoContentPath(stripContentRepoBasePath(parts.slice(4).join("/")));
+      return stripContentRepoBasePath(parts.slice(4).join("/"));
     }
   } catch {
     return null;

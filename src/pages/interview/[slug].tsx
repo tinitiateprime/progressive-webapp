@@ -10,6 +10,7 @@ import { FaArrowLeft, FaMoon, FaSun } from "react-icons/fa";
 import { ThemeContext } from "../../context/ThemeContext";
 import { fetchInterviewQuestion } from "../../lib/content-client";
 import type { InterviewQuestionDetail } from "../../lib/content-types";
+import { buildPublicEntryUrl } from "../../lib/public-entry";
 
 export default function InterviewDetailPage() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function InterviewDetailPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/login");
+      router.replace(buildPublicEntryUrl(router.asPath));
     }
   }, [router, status]);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useContext, useEffect, ReactNode } from "react";
 import { useRouter } from "next/router";
 import { signIn, useSession } from "next-auth/react";
@@ -52,6 +53,7 @@ export default function LoginPage() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const sessionExpired =
     typeof router.query.reason === "string" && router.query.reason === "session-ended";
+  const logoSrc = theme === "dark" ? "/TinitiateLogo.png" : "/TinitiateLogoLight.png";
 
   const callbackUrl =
     typeof router.query.callbackUrl === "string"
@@ -168,17 +170,13 @@ export default function LoginPage() {
               if (e.key === "Enter" || e.key === " ") router.push("/");
             }}
           >
-            <img
-              src="/favicon_new.png"
+            <Image
+              src={logoSrc}
               alt="Tinitiate"
-              className="h-9 w-9 sm:h-10 sm:w-10 rounded-2xl shrink-0 ring-1 ring-[color:var(--border)]"
+              width={1720}
+              height={181}
+              style={{ width: 180, maxWidth: "48vw", height: "auto", objectFit: "contain" }}
             />
-            <div className="leading-tight min-w-0">
-              <div className="text-sm font-semibold truncate">Tinitiate</div>
-              <div className="text-xs text-[color:var(--text-muted)] truncate">
-                Secure sign in
-              </div>
-            </div>
           </div>
 
           <button
@@ -214,7 +212,7 @@ export default function LoginPage() {
 
               <p className="mt-3 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-prose">
                 Sign in to access your dashboard, manage your workspace, and continue
-                where you left off — with a modern, distraction-free experience.
+                where you left off - with a modern, distraction-free experience.
               </p>
 
               <div className="mt-6 text-xs text-[color:var(--text-muted)]">
@@ -362,7 +360,7 @@ export default function LoginPage() {
       <footer className="mx-auto max-w-6xl w-full py-8 sm:py-10 relative">
         <div className="glass rounded-3xl p-5 sm:p-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
-            <span>© {new Date().getFullYear()} TINITIATE Technologies Pvt Ltd.</span>
+            <span>Copyright {new Date().getFullYear()} TINITIATE Technologies Pvt Ltd.</span>
             <span className="opacity-80">tinitiate.com</span>
           </div>
         </div>

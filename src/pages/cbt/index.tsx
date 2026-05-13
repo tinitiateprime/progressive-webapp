@@ -9,6 +9,7 @@ import { MdOutlineSlideshow } from "react-icons/md";
 import { ThemeContext } from "../../context/ThemeContext";
 import { fetchCbtCollections } from "../../lib/content-client";
 import type { CbtCollections } from "../../lib/content-types";
+import { buildPublicEntryUrl } from "../../lib/public-entry";
 
 type TabKey = "slideshows" | "trainingVideos" | "audioBooks";
 
@@ -29,7 +30,7 @@ export default function CbtPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/login");
+      router.replace(buildPublicEntryUrl(router.asPath));
     }
   }, [router, status]);
 

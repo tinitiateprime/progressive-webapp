@@ -15,6 +15,7 @@ import {
 } from "../lib/browserSession";
 import { fetchDesignConfig } from "../lib/content-client";
 import type { DesignSystem } from "../lib/content-types";
+import { buildPublicEntryUrl } from "../lib/public-entry";
 
 const AUTH_SESSION_CHANNEL = "tinitiate.auth.browser-session";
 const PUBLIC_BROWSER_SESSION_ROUTES = new Set(["/", "/login", "/signup"]);
@@ -201,7 +202,7 @@ function SessionLifetimeGuard() {
       } finally {
         clearBrowserSessionActive();
         if (!cancelled) {
-          router.replace("/login?reason=session-ended");
+          router.replace(buildPublicEntryUrl(router.asPath, "session-ended"));
         }
       }
     };
