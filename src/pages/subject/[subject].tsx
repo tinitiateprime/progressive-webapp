@@ -1,23 +1,35 @@
-"use client";
+// File: src/pages/subject/[subject].tsx
 
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import CachedRepoImage from "../../components/content/CachedRepoImage";
+import { ThemeContext } from "../../context/ThemeContext";
 import {
   FaArrowLeft,
-  FaCheckCircle,
-  FaDownload,
-  FaHome,
   FaMoon,
   FaSearch,
-  FaStar,
   FaSun,
+  FaDownload,
+  FaCheckCircle,
+  FaHome,
 } from "react-icons/fa";
-import { ThemeContext } from "../../context/ThemeContext";
-import { resolveCourseSubject } from "../../lib/content-client";
+import {
+  CACHE_NAME,
+  cacheTextUrls,
+  hydrateOfflineSubjectsForAccount,
+  migrateLegacyOfflineSubjects,
+  readOfflineSubjectMeta,
+  writeOfflineSubjectMeta,
+  type OfflineSubjectMeta as SharedOfflineSubjectMeta,
+} from "../../lib/offline";
+import {
+  CONTENT_AVAILABILITY_EVENT,
+  lookupCourseSubject,
+  readContentAvailability,
+} from "../../lib/content-client";
 import {
   getLibraryUserKey,
-  hydrateOfflineSubjectsForAccount,
   mergeFavoriteTopics,
   readFavoriteTopics,
   removeFavoriteTopic,
@@ -27,123 +39,386 @@ import {
   type SavedFavoriteTopic,
 } from "../../lib/library";
 import {
-  CACHE_NAME,
-  cacheTextUrls,
-  migrateLegacyOfflineSubjects,
-  readOfflineSubjectMeta,
-  writeOfflineSubjectMeta,
-  type OfflineSubjectMeta,
-} from "../../lib/offline";
-import { buildPublicEntryUrl } from "../../lib/public-entry";
-import {
+  buildGithubProxyUrl,
   fetchTextStrict,
-  parseSubjectTopicsFromReadme,
+  normalize,
   toRawGithub,
   type ParsedTopic,
 } from "../../lib/readme-utils";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Topic = ParsedTopic;
+
+type OfflineSubjectMeta = SharedOfflineSubjectMeta;
+
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const slugify = (text: string) =>
   text
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-
-const readOfflineMeta = (subject: string, accountKey?: string) =>
-  readOfflineSubjectMeta(subject, accountKey);
-
-const formatDate = (timestamp: number) => {
-  const date = new Date(timestamp);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(
-    date.getMinutes()
-  ).padStart(2, "0")}`;
-};
+    .replace(/[^a-z0-9\-]/g, "");
 
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-const orderTopics = (topics: Topic[]) => {
-  const introIndex = topics.findIndex(
-    (topic) => topic.topic_name.toLowerCase().replace(/[^a-z0-9]/g, "") === "introduction"
-  );
+const accentByCategory = (category: string) => {
+  const normalizedCategory = normalizeSearch(category);
 
-  if (introIndex <= 0) return topics;
-  return [topics[introIndex], ...topics.filter((_, index) => index !== introIndex)];
+  if (normalizedCategory.includes("front")) {
+    return {
+      background: "var(--course-tone-frontend-background)",
+      border: "var(--course-tone-frontend-border)",
+      color: "var(--course-tone-frontend-color)",
+    };
+  }
+
+  if (normalizedCategory.includes("data") || normalizedCategory.includes("database")) {
+    return {
+      background: "var(--course-tone-database-background)",
+      border: "var(--course-tone-database-border)",
+      color: "var(--course-tone-database-color)",
+    };
+  }
+
+  if (normalizedCategory.includes("back")) {
+    return {
+      background: "var(--course-tone-backend-background)",
+      border: "var(--course-tone-backend-border)",
+      color: "var(--course-tone-backend-color)",
+    };
+  }
+
+  if (normalizedCategory.includes("full")) {
+    return {
+      background: "var(--course-tone-full-stack-background)",
+      border: "var(--course-tone-full-stack-border)",
+      color: "var(--course-tone-full-stack-color)",
+    };
+  }
+
+  return {
+    background: "var(--course-tone-default-background)",
+    border: "var(--course-tone-default-border)",
+    color: "var(--course-tone-default-color)",
+  };
 };
 
-async function cacheTextContent(url: string, text: string) {
-  if (!("caches" in window)) return;
+const cleanTitle = (s: string) =>
+  s
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\s*\*\s*https?:\/\/.*$/i, "")
+    .replace(/\s*https?:\/\/.*$/i, "")
+    .trim();
 
-  try {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.put(
-      url,
-      new Response(text, {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      })
-    );
-  } catch {
-    // ignore cache write failures
+const resolveMaybeRelativeUrl = (url: string, baseUrl?: string) => {
+  if (!url) return "";
+  const u = url.trim();
+
+  if (/^https?:\/\//i.test(u)) return toRawGithub(u);
+
+  if (baseUrl) {
+    try {
+      const resolved = new URL(u, baseUrl).toString();
+      return toRawGithub(resolved);
+    } catch {
+      // ignore
+    }
   }
+
+  return u;
+};
+
+const extractMarkdownLinkAnywhere = (
+  text: string,
+  baseUrl?: string
+): { title: string; url: string } | null => {
+  // Supports heading text like:
+  // 📘 [Introduction](./01-introduction.md)
+  // [projectsetup](./projectsetup.md) 
+  const m = text.match(/\[([^\]]+)\]\(([^)]+)\)/);
+  if (!m) return null;
+
+  const title = cleanTitle(m[1]);
+  const url = resolveMaybeRelativeUrl(m[2].trim(), baseUrl);
+
+  return url ? { title, url } : null;
+};
+
+const parseBulletsFromSection = (sectionText: string): string[] => {
+  const bullets: string[] = [];
+  const lines = (sectionText || "").split("\n");
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    // - item / * item / + item
+    let m = line.match(/^[-*+]\s+(.+)$/);
+    if (m) {
+      bullets.push(m[1].trim());
+      continue;
+    }
+
+    // 1. item
+    m = line.match(/^\d+\.\s+(.+)$/);
+    if (m) {
+      bullets.push(m[1].trim());
+      continue;
+    }
+  }
+
+  return bullets;
+};
+
+/**
+ * Parses the MAIN README catalog:
+ * ## [Vue JS](https://github.com/.../README.md)
+ */
+/**
+ * Parses SUBJECT README format like:
+ * ## 📘 [Introduction](./01-introduction.md)
+ * - bullet
+ * - bullet
+ * ---
+ * ## 🚀 [Getting Started](./02-getting-started.md)
+ * ...
+ *
+ * IMPORTANT:
+ * - We treat "## ..." as topic sections
+ * - We only create topic if the heading (or nearby lines) contains an .md link
+ * - We capture bullets under that heading until next heading of same/higher level
+ */
+function parseSubjectReadmeTopics(md: string, subjectReadmeUrl: string): Topic[] {
+  const rawMd = (md || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const normalizedMd = rawMd
+    .replace(/([^\n])\s+((?:[-*+]\s+)?#{1,6}\s+)/g, "$1\n$2")
+    .replace(/\n{3,}/g, "\n\n");
+  const rawLines = rawMd.split("\n");
+  const lines = rawLines.length > 1 ? rawLines : normalizedMd.split("\n");
+
+  type Hit = {
+    index: number;
+    title: string;
+    url: string;
+    level: number;
+    indent: number;
+  };
+
+  const hits: Hit[] = [];
+  const seen = new Set<string>();
+  const TOPIC_HEADING_RE = /^(?:[-*+]\s+)?(#{2,4})\s+(.+)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i] || "";
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const h = line.match(TOPIC_HEADING_RE);
+    if (!h) continue;
+
+    const level = h[1].length;
+    const headingBody = h[2].trim();
+
+    // ✅ Subject README topic entries are expected at level 2 (## ...)
+    // Ignore other levels (like ### Conclusion)
+    if (level < 2 || level > 4) continue;
+
+    const indent = (rawLine.match(/^\s*/) || [""])[0].length;
+    const mdLink = extractMarkdownLinkAnywhere(headingBody, subjectReadmeUrl);
+    if (!mdLink) continue;
+
+    const title = cleanTitle(mdLink.title);
+    const url = toRawGithub(mdLink.url);
+
+    if (!title || !url || !/\.md(\?|#|$)/i.test(url)) continue;
+
+    const key = `${normalize(title)}|${url}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    hits.push({ index: i, title, url, level, indent });
+  }
+
+  if (!hits.length) return [];
+
+  const topics: Topic[] = [];
+
+  for (let idx = 0; idx < hits.length; idx++) {
+    const hit = hits[idx];
+    const start = hit.index + 1;
+
+    let end = lines.length;
+    for (let j = idx + 1; j < hits.length; j++) {
+      const nextHit = hits[j];
+      if (nextHit.indent > hit.indent) continue;
+      if (nextHit.level > hit.level) continue;
+
+      end = nextHit.index;
+      break;
+    }
+
+    const sectionContent = lines.slice(start, end).join("\n").trim();
+    const bullets = parseBulletsFromSection(sectionContent);
+
+    topics.push({
+      topic_name: hit.title,
+      md_url: hit.url,
+      bullets,
+      section_markdown: sectionContent,
+    });
+  }
+
+  return topics;
 }
 
-async function fetchAndCacheText(url: string, signal: AbortSignal) {
-  const fresh = await fetchTextStrict(url, signal);
-  await cacheTextContent(url, fresh);
-  return fresh;
+const orderTopics = (raw: Topic[]) => {
+  const introIdx = raw.findIndex((t) => normalize(t.topic_name) === "introduction");
+  return introIdx > 0 ? [raw[introIdx], ...raw.filter((_, i) => i !== introIdx)] : raw;
+};
+
+// ─── Helpers: localStorage ────────────────────────────────────────────────────
+
+const readOfflineMeta = (subject: string, accountKey?: string): OfflineSubjectMeta | null =>
+  readOfflineSubjectMeta(subject, accountKey);
+
+const formatDate = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+};
+
+// Cache-aware subject README loader backed by GitHub + Cache Storage only.
+async function loadGitHubTextCacheFirst(url: string, signal: AbortSignal) {
+  const proxyUrl = buildGithubProxyUrl(url);
+  const freshPromise = (async () => {
+    try {
+      const fresh = await fetchTextStrict(url, signal, { strategy: "network-first" });
+
+      if ("caches" in window) {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(
+            url,
+            new Response(fresh, {
+              headers: { "Content-Type": "text/plain; charset=utf-8" },
+            })
+          );
+        } catch {}
+      }
+
+      return fresh;
+    } catch {
+      return null;
+    }
+  })();
+
+  let cachedText: string | null = null;
+
+  if ("caches" in window) {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = (await cache.match(url)) || (await cache.match(proxyUrl));
+      if (cached) cachedText = await cached.text();
+    } catch {}
+  }
+
+  return {
+    cached: cachedText,
+    freshPromise,
+  };
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SubjectPage() {
+  const [mounted, setMounted] = useState(false);
+
   const router = useRouter();
+  const { data: session, status } = useSession();
   const { subject, readme } = router.query;
   const subjectStr = String(subject || "");
   const readmeQueryUrl = typeof readme === "string" ? readme : "";
-  const { data: session, status } = useSession();
   const accountKey = useMemo(() => getLibraryUserKey(session?.user), [session]);
+
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [subjectReadmeUrl, setSubjectReadmeUrl] = useState("");
-  const [favorites, setFavorites] = useState<SavedFavoriteTopic[]>([]);
+  const [subjectReadmeUrl, setSubjectReadmeUrl] = useState<string>("");
+  const [subjectMeta, setSubjectMeta] = useState<{
+    category: string;
+    icon_url?: string;
+  } | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [isOffline, setIsOffline] = useState(
+    () =>
+      typeof navigator !== "undefined" &&
+      (!navigator.onLine || (readContentAvailability()?.offline ?? false))
+  );
   const [q, setQ] = useState("");
-  const [isOffline, setIsOffline] = useState(false);
+
+  const [favorites, setFavorites] = useState<SavedFavoriteTopic[]>([]);
+
   const [savingOffline, setSavingOffline] = useState(false);
-  const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
   const [offlineSavedAt, setOfflineSavedAt] = useState<number | null>(null);
+  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number }>({
+    done: 0,
+    total: 0,
+  });
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+    const update = () => {
+      const cachedState = readContentAvailability()?.offline ?? false;
+      setIsOffline((typeof navigator !== "undefined" && !navigator.onLine) || cachedState);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        update();
+      }
+    };
 
-  useEffect(() => {
-    const update = () => setIsOffline(!navigator.onLine);
     update();
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
+    window.addEventListener("focus", update);
+    window.addEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
+      window.removeEventListener("focus", update);
+      window.removeEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 
   useEffect(() => {
-    if (!accountKey) return;
-    setActiveLibraryUserKey(accountKey);
-    migrateLegacyOfflineSubjects(accountKey);
-  }, [accountKey]);
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
+    if (!mounted) return;
+
+    if (accountKey) {
+      setActiveLibraryUserKey(accountKey);
+      migrateLegacyOfflineSubjects(accountKey);
+    }
+
     setFavorites(readFavoriteTopics(accountKey));
-  }, [accountKey]);
+  }, [mounted, accountKey]);
 
   useEffect(() => {
     if (!subjectStr) return;
@@ -188,103 +463,126 @@ export default function SubjectPage() {
           }
         }
       } catch {
-        // keep local state when sync fails
+        // ignore sync failures and keep local data
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [accountKey, status, subjectStr]);
+  }, [status, accountKey, subjectStr]);
 
+  // ── fetch topics from SUBJECT README (new format) ───────────────────────────
   useEffect(() => {
     if (!router.isReady || !subjectStr) return;
 
-    const controller = new AbortController();
+    const ac = new AbortController();
     let cancelled = false;
 
-    const applyReadme = (markdown: string, sourceUrl: string) => {
-      const parsed = orderTopics(parseSubjectTopicsFromReadme(markdown, sourceUrl));
+    const applySubjectReadme = (md: string, sourceUrl: string) => {
+      const parsed = parseSubjectReadmeTopics(md, sourceUrl);
+      const ordered = orderTopics(parsed);
+
       setSubjectReadmeUrl(sourceUrl);
 
-      if (!parsed.length) {
+      if (!ordered.length) {
         setTopics([]);
-        setError(`No topics found in "${subjectStr}".`);
+        setError(`No topics found in subject README for "${subjectStr}".`);
         return;
       }
 
-      setTopics(parsed);
+      setTopics(ordered);
       setError("");
     };
 
-    const loadOfflineCopy = () => {
-      const meta = readOfflineMeta(subjectStr, accountKey);
-      if (!meta) return false;
-
-      setTopics(meta.topics || []);
-      setError("");
-      setOfflineSavedAt(meta.savedAt ?? null);
-      if (meta.subject_readme_url) setSubjectReadmeUrl(meta.subject_readme_url);
-      return true;
-    };
-
-    const hadOfflineCopy = !navigator.onLine && loadOfflineCopy();
-    setLoading(!hadOfflineCopy);
-
-    if (!navigator.onLine) {
-      if (!hadOfflineCopy) {
-        setError("You're offline and no saved copy exists for this subject.");
-        setLoading(false);
-      }
-
-      return () => controller.abort();
-    }
+    setLoading(true);
+    setSubjectMeta(null);
 
     (async () => {
       try {
-        let resolvedReadmeUrl = readmeQueryUrl ? toRawGithub(readmeQueryUrl) : "";
+        setRefreshing(true);
+        setError("");
 
-        if (!resolvedReadmeUrl) {
-          const fromCatalog = await resolveCourseSubject(subjectStr, controller.signal);
+        const savedSubjectReadmeUrl = readOfflineMeta(subjectStr, accountKey)?.subject_readme_url || "";
+        let resolvedSubjectReadme = readmeQueryUrl
+          ? toRawGithub(readmeQueryUrl)
+          : savedSubjectReadmeUrl
+            ? toRawGithub(savedSubjectReadmeUrl)
+            : "";
+
+        const subjectLookupPromise = (async () => {
+          const match = await lookupCourseSubject(subjectStr, ac.signal);
+          if (cancelled) return null;
+
+          setSubjectMeta(
+            match
+              ? {
+                  category: match.category,
+                  icon_url: match.icon_url,
+                }
+              : null
+          );
+
+          return match;
+        })();
+
+        if (!resolvedSubjectReadme) {
+          const match = await subjectLookupPromise;
           if (cancelled) return;
-          resolvedReadmeUrl = fromCatalog?.readme_url || "";
+
+          resolvedSubjectReadme = match?.readme_url ? toRawGithub(match.readme_url) : "";
+        } else {
+          void subjectLookupPromise.catch(() => undefined);
         }
 
-        if (!resolvedReadmeUrl) {
-          throw new Error(`Subject "${subjectStr}" not found in course catalog`);
+        if (!resolvedSubjectReadme) {
+          throw new Error(`Subject "${subjectStr}" not found in the GitHub course catalog`);
         }
 
-        const fresh = await fetchAndCacheText(resolvedReadmeUrl, controller.signal);
+        const { cached, freshPromise } = await loadGitHubTextCacheFirst(
+          resolvedSubjectReadme,
+          ac.signal
+        );
         if (cancelled) return;
 
-        applyReadme(fresh, resolvedReadmeUrl);
-      } catch {
+        if (cached) {
+          applySubjectReadme(cached, resolvedSubjectReadme);
+          setLoading(false);
+        }
+
+        const fresh = await freshPromise;
+        if (cancelled) return;
+
+        if (fresh && fresh !== cached) {
+          applySubjectReadme(fresh, resolvedSubjectReadme);
+        }
+
+        if (!cached && !fresh) {
+          throw new Error("Subject README fetch returned no data");
+        }
+      } catch (e) {
+        console.error("Subject load error:", e);
         if (!cancelled) {
-          setError("Failed to load the subject content.");
-          setTopics([]);
+          setError("Failed to load subject from the GitHub content repo.");
         }
       } finally {
         if (!cancelled) {
           setLoading(false);
+          setRefreshing(false);
         }
       }
     })();
 
     return () => {
       cancelled = true;
-      controller.abort();
+      ac.abort();
     };
-  }, [accountKey, readmeQueryUrl, router.isReady, subjectStr]);
+  }, [router.isReady, subjectStr, accountKey, readmeQueryUrl]);
 
-  const filteredTopics = useMemo(() => {
-    const query = normalizeSearch(q);
-    if (!query) return topics;
-
-    return topics.filter((topic) => {
-      if (normalizeSearch(topic.topic_name).includes(query)) return true;
-      return (topic.bullets || []).some((bullet) => normalizeSearch(bullet).includes(query));
-    });
-  }, [q, topics]);
+  const filtered = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    return qq ? topics.filter((t) => t.topic_name.toLowerCase().includes(qq)) : topics;
+  }, [topics, q]);
 
   const handleSaveOffline = async () => {
     if (!topics.length) return;
@@ -306,12 +604,13 @@ export default function SubjectPage() {
         ...topics.map((topic) => topic.md_url),
       ];
 
-      const cacheResult = await cacheTextUrls(urlsToCache, fetchTextStrict, (done, total) => {
+      const cacheResult = await cacheTextUrls(urlsToCache, fetchTextStrict, (done: number, total: number) => {
         setSaveProgress({ done, total });
       });
 
       const savedSubjectReadme =
-        !subjectReadmeUrl || cacheResult.savedUrls.includes(toRawGithub(subjectReadmeUrl));
+        !subjectReadmeUrl ||
+        cacheResult.savedUrls.includes(toRawGithub(subjectReadmeUrl));
 
       if (!savedSubjectReadme || cacheResult.savedUrls.length === 0) {
         throw new Error("Could not save the required files for offline use.");
@@ -347,17 +646,15 @@ export default function SubjectPage() {
     }
   };
 
-  const toggleFavorite = async (topic: Topic) => {
-    const slug = slugify(topic.topic_name);
-    const existingFavorite = favorites.some((favorite) => favorite.slug === slug);
-
-    if (existingFavorite) {
-      const nextFavorites = removeFavoriteTopic(slug, accountKey);
+  const toggleFavorite = async (topic: SavedFavoriteTopic) => {
+    const isFavorite = favorites.some((f) => f.slug === topic.slug);
+    if (isFavorite) {
+      const nextFavorites = removeFavoriteTopic(topic.slug, accountKey);
       setFavorites(nextFavorites);
 
       if (status === "authenticated") {
         try {
-          const res = await fetch(`/api/favorites?slug=${encodeURIComponent(slug)}`, {
+          const res = await fetch(`/api/favorites?slug=${encodeURIComponent(topic.slug)}`, {
             method: "DELETE",
             headers: { "Cache-Control": "no-store" },
             cache: "no-store",
@@ -370,7 +667,7 @@ export default function SubjectPage() {
             setFavorites(mergedFavorites);
           }
         } catch {
-          // keep local state if server sync fails
+          // keep local state even if server sync fails
         }
       }
 
@@ -380,7 +677,7 @@ export default function SubjectPage() {
     try {
       const cacheResult = await cacheTextUrls(
         [
-          ...(subjectReadmeUrl ? [subjectReadmeUrl] : []),
+          ...(topic.subject_readme_url ? [topic.subject_readme_url] : []),
           ...(topic.md_url ? [topic.md_url] : []),
         ],
         fetchTextStrict
@@ -389,7 +686,8 @@ export default function SubjectPage() {
       const savedTopicMd =
         !topic.md_url || cacheResult.savedUrls.includes(toRawGithub(topic.md_url));
       const savedSubjectReadme =
-        !subjectReadmeUrl || cacheResult.savedUrls.includes(toRawGithub(subjectReadmeUrl));
+        !topic.subject_readme_url ||
+        cacheResult.savedUrls.includes(toRawGithub(topic.subject_readme_url));
 
       if (!savedTopicMd || !savedSubjectReadme) {
         throw new Error("Favorite cache is incomplete.");
@@ -400,14 +698,9 @@ export default function SubjectPage() {
     }
 
     const nextFavorite: SavedFavoriteTopic = {
-      slug,
-      topic_name: topic.topic_name,
-      subject: subjectStr,
-      md_url: topic.md_url,
-      subject_readme_url: subjectReadmeUrl || undefined,
-      savedAt: Date.now(),
+      ...topic,
+      savedAt: topic.savedAt || Date.now(),
     };
-
     const nextFavorites = upsertFavoriteTopic(nextFavorite, accountKey);
     setFavorites(nextFavorites);
 
@@ -430,54 +723,130 @@ export default function SubjectPage() {
           setFavorites(mergedFavorites);
         }
       } catch {
-        // keep local state if server sync fails
+        // keep local state even if server sync fails
       }
     }
   };
 
+  // ─── UI classes ─────────────────────────────────────────────────────────────
+
+  const subjectTone = accentByCategory(subjectMeta?.category || "");
+  const headerCardStyle = {
+    background: "var(--dashboard-header-bg)",
+    border: "1px solid var(--dashboard-header-border)",
+  };
+  const searchCardStyle = {
+    background: "color-mix(in srgb, var(--surface) 92%, transparent)",
+    border: "1px solid var(--border)",
+  };
+  const searchCard = "card";
+  const topicCardStyle = {
+    background: "var(--course-card-bg)",
+    border: `1px solid ${subjectTone.border}`,
+  };
+  const introCardStyle = {
+    ...topicCardStyle,
+    boxShadow: "var(--shadow-feature)",
+  };
+  const mutedTextStyle = { color: "var(--muted)" };
+  const connectionTone = isOffline
+    ? {
+        label: "Offline",
+        color: "var(--status-offline-color)",
+        background: "var(--status-offline-background)",
+        border: "var(--status-offline-border)",
+      }
+    : {
+        label: "Online",
+        color: "var(--status-online-color)",
+        background: "var(--status-online-background)",
+        border: "var(--status-online-border)",
+      };
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  if (!mounted) {
+    return (
+      <div className="app-shell">
+        <main className="page-main">
+          <div className="card" style={{ padding: 18, borderRadius: 24 }}>
+            Loading…
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <main className="page-main">
-        <div className="card page-hero-card">
+        <div className="card page-hero-card" style={headerCardStyle}>
           <div className="page-hero-top">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>
-                COURSE SUBJECT
-              </div>
-              <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
-                {subjectStr || "Loading subject..."}
-              </div>
-              <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
-                Open any topic to continue reading, save it offline, or mark it as a favorite.
-              </div>
-              <div style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
-                Status: {isOffline ? "Offline" : "Online"}
-              </div>
-              {offlineSavedAt && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
-                  Offline saved at: {formatDate(offlineSavedAt)}
+            <div className="page-hero-brand">
+              {subjectMeta?.icon_url ? (
+                <div
+                  className="course-library-card__icon-shell"
+                  style={{
+                    border: `1px solid ${subjectTone.border}`,
+                    background: subjectTone.background,
+                    color: subjectTone.color,
+                  }}
+                >
+                  <CachedRepoImage src={subjectMeta.icon_url} alt={`${subjectStr} icon`} loading="eager" />
                 </div>
-              )}
+              ) : null}
+              <div className="page-hero-copy">
+                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>
+                  COURSE SUBJECT
+                </div>
+                <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
+                  {subjectStr ? subjectStr.toUpperCase() : "SUBJECT"}
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                  <span
+                    className="badge"
+                    style={{
+                      color: connectionTone.color,
+                      background: connectionTone.background,
+                      borderColor: connectionTone.border,
+                    }}
+                  >
+                    {connectionTone.label}
+                  </span>
+                  {refreshing ? <span className="badge">Updating...</span> : null}
+                  <span className="badge">{topics.length} topics</span>
+                  {offlineSavedAt ? <span className="badge">Offline saved</span> : null}
+                </div>
+
+                {offlineSavedAt && (
+                  <div style={{ ...mutedTextStyle, marginTop: 10, fontSize: 12 }}>
+                    Saved at: {formatDate(offlineSavedAt)}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="page-hero-actions">
-              <button className="btn btn-outline" onClick={() => router.push("/dashboard")} type="button">
+              <button className="btn btn-outline" onClick={() => router.push("/dashboard")} type="button" title="Home">
                 <FaHome />
               </button>
+
               <button
                 className="btn btn-outline"
                 onClick={handleSaveOffline}
                 type="button"
                 disabled={savingOffline || topics.length === 0}
+                title="Save subject and topic markdown files for offline reading"
               >
                 {savingOffline ? (
                   <>
-                    <FaDownload />
+                    <FaDownload className="animate-bounce" />
                     Saving {saveProgress.done}/{saveProgress.total}
                   </>
                 ) : offlineSavedAt ? (
                   <>
-                    <FaCheckCircle />
+                    <FaCheckCircle style={{ color: "var(--status-online-color)" }} />
                     Update Offline
                   </>
                 ) : (
@@ -487,155 +856,170 @@ export default function SubjectPage() {
                   </>
                 )}
               </button>
-              <button className="btn btn-outline" onClick={() => router.back()} type="button">
+
+              <button className="btn btn-outline" onClick={() => router.push("/dashboard")} type="button">
                 <FaArrowLeft /> Back
               </button>
+
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
-                <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
+                {theme === "dark" ? "Light" : "Dark"}
               </button>
             </div>
           </div>
 
-          <div style={{ marginTop: 18 }} className="card search-bar-elevated page-hero-search">
-            <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
-              <FaSearch />
+          {/* Search */}
+          <div className="page-hero-search glass search-bar-elevated" style={searchCardStyle}>
+            <FaSearch style={{ color: "var(--muted)" }} />
               <input
                 value={q}
-                onChange={(event) => setQ(event.target.value)}
-                placeholder="Search topics or bullet points..."
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search topics…"
                 style={{
                   width: "100%",
                   border: "none",
                   outline: "none",
                   background: "transparent",
                   color: "var(--text)",
+                  fontSize: 14,
                 }}
               />
-            </div>
           </div>
         </div>
 
         {loading && (
-          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18 }}>
+          <div className={searchCard + " p-6"} style={{ marginTop: 20 }}>
             Loading topics...
           </div>
         )}
-
         {!loading && error && (
-          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "crimson" }}>
+          <div
+            className={searchCard + " p-6"}
+            style={{ marginTop: 20, color: "var(--status-offline-color)" }}
+          >
             {error}
           </div>
         )}
 
         {!loading && !error && (
-          <section
-            style={{
-              marginTop: 18,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 14,
-              alignItems: "stretch",
-            }}
-          >
-            {filteredTopics.map((topic, index) => {
-              const slug = slugify(topic.topic_name);
-              const isFavorite = favorites.some((favorite) => favorite.slug === slug);
+          <>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filtered.map((t, i) => {
+                const slug = slugify(t.topic_name);
+                const isFav = favorites.some((f) => f.slug === slug);
+                const isIntro = normalize(t.topic_name) === "introduction";
 
-              return (
-                <div
-                  key={`${topic.md_url}-${topic.topic_name}`}
-                  className="card"
-                  style={{ borderRadius: 22, height: "100%" }}
-                >
+                // ✅ pass subject README URL so Topic page can re-read bullets/subtopics later
+                const hrefObj = {
+                  pathname: `/topic/${encodeURIComponent(t.topic_name)}`,
+                  query: {
+                    subject: subjectStr,
+                    ...(subjectReadmeUrl ? { readme: subjectReadmeUrl } : {}),
+                  },
+                };
+
+                return (
                   <div
-                    style={{
-                      padding: 18,
-                      display: "flex",
-                      flexDirection: "column",
-                      height: "100%",
+                    key={`${t.md_url}-${t.topic_name}`}
+                    className="card course-card-hover relative rounded-3xl p-6 transition-all duration-300 cursor-pointer"
+                    style={isIntro ? introCardStyle : topicCardStyle}
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('[data-no-nav="true"]')) return;
+                      router.push(hrefObj);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") router.push(hrefObj);
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>
-                          Topic #{index + 1}
-                        </div>
-                        <div style={{ marginTop: 8, fontSize: 22, fontWeight: 900, lineHeight: 1.3 }}>
-                          {topic.topic_name}
-                        </div>
-                      </div>
+                    <div
+                      style={{
+                        height: 5,
+                        borderRadius: 999,
+                        background: subjectTone.background,
+                        marginBottom: 16,
+                      }}
+                    />
+                    <button
+                      data-no-nav="true"
+                      type="button"
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleFavorite({
+                          slug,
+                          topic_name: t.topic_name,
+                          subject: subjectStr,
+                          md_url: t.md_url,
+                          subject_readme_url: subjectReadmeUrl || undefined,
+                          savedAt: Date.now(),
+                        });
+                      }}
+                      className="absolute top-4 right-4 z-50 pointer-events-auto text-xl transition-transform hover:scale-125"
+                      style={{ color: isFav ? "var(--brand-2)" : "var(--muted)" }}
+                      title={isFav ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      {isFav ? "★" : "☆"}
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={() => toggleFavorite(topic)}
-                        className="btn btn-outline"
-                        style={{
-                          width: 42,
-                          height: 42,
-                          padding: 0,
-                          borderRadius: 14,
-                          color: isFavorite ? "var(--brand-strong)" : undefined,
-                        }}
-                        title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                      >
-                        <FaStar />
-                      </button>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                      {isIntro ? "Start here" : `#${i + 1}`}
                     </div>
 
-                    {!!topic.bullets?.length && (
-                      <div style={{ marginTop: 14, display: "grid", gap: 8, flex: 1 }}>
-                        {topic.bullets.slice(0, 4).map((bullet) => (
-                          <div key={bullet} className="soft" style={{ padding: "8px 10px", borderRadius: 14, fontSize: 12 }}>
-                            {bullet}
+                    <div className="mt-2">
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        Card Name
+                      </div>
+                      <h3 className="mt-1 text-lg font-semibold leading-snug line-clamp-2">
+                        {t.topic_name}
+                      </h3>
+                    </div>
+
+                    {/* ✅ show bullet preview from subject README (if present) */}
+                    {!!t.bullets?.length && (
+                      <div className="mt-3 space-y-1">
+                        {t.bullets.slice(0, 3).map((b, idx) => (
+                          <div key={idx} style={{ fontSize: 12, color: "var(--muted)" }}>
+                            • {b}
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {!topic.bullets?.length && (
-                      <div
-                        className="soft"
-                        style={{
-                          marginTop: 14,
-                          padding: "10px 12px",
-                          borderRadius: 14,
-                          fontSize: 12,
-                          color: "var(--muted)",
-                          flex: 1,
-                        }}
-                      >
-                        Open the topic to read the full lesson content.
+                    <div className="mt-6 flex items-center justify-between">
+                      <div style={{ fontSize: 14, fontWeight: 700, color: subjectTone.color }}>
+                        Open →
                       </div>
-                    )}
-
-                    <div style={{ marginTop: 16, paddingTop: 2 }}>
-                      <button
-                        className="btn btn-primary"
-                        type="button"
-                        style={{ width: "100%", justifyContent: "center" }}
-                        onClick={() =>
-                          router.push({
-                            pathname: `/topic/${encodeURIComponent(topic.topic_name)}`,
-                            query: {
-                              subject: subjectStr,
-                              ...(subjectReadmeUrl ? { readme: subjectReadmeUrl } : {}),
-                            },
-                          })
-                        }
-                      >
-                        Open Topic
-                      </button>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </section>
+                );
+              })}
+            </div>
+
+            {filtered.length === 0 && (
+              <p style={{ marginTop: 18, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
+                No topics found
+              </p>
+            )}
+          </>
         )}
       </main>
     </div>
   );
 }
 
-export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";
+
+

@@ -1,7 +1,7 @@
 const path = require("path");
 const runtimeCaching = require("./runtime-caching");
 
-const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV === "true";
+const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV !== "false";
 const shouldDisablePwa = process.env.NODE_ENV !== "production" && !enablePwaInDev;
 
 const withPWA = require("next-pwa")({
@@ -12,9 +12,6 @@ const withPWA = require("next-pwa")({
   cacheOnFrontEndNav: true,
   reloadOnOnline: true,
   runtimeCaching,
-  fallbacks: {
-    document: "/offline",
-  },
 });
 
 const nextConfig = {

@@ -4,35 +4,33 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   FaArrowLeft,
   FaChevronLeft,
   FaChevronRight,
-  FaDownload,
   FaHome,
   FaMoon,
   FaSearch,
   FaSun,
 } from "react-icons/fa";
 import { materialDark, materialLight } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import CachedRepoImage from "../../components/content/CachedRepoImage";
 import { ThemeContext } from "../../context/ThemeContext";
-import { resolveCourseSubject } from "../../lib/content-client";
-import { getLibraryUserKey, setActiveLibraryUserKey } from "../../lib/library";
+import { useAppSession } from "../../lib/app-session";
 import {
-  CACHE_NAME,
-  cacheTextUrls,
-  migrateLegacyOfflineSubjects,
-  writeOfflineSubjectMeta,
-  type OfflineSubjectMeta,
-} from "../../lib/offline";
+  CONTENT_AVAILABILITY_EVENT,
+  lookupCourseSubject,
+  readContentAvailability,
+} from "../../lib/content-client";
+import { getLibraryUserKey, setActiveLibraryUserKey } from "../../lib/library";
 import { buildPublicEntryUrl } from "../../lib/public-entry";
 import {
   fetchTextStrict,
   normalize,
   parseSubjectTopicsFromReadme,
+  toGithubProxyUrl,
   toRawGithub,
 } from "../../lib/readme-utils";
 
@@ -58,47 +56,13 @@ const getSelectedTopic = (topics: CatalogTopic[], preferredTopicName: string) =>
   topics[0] ||
   null;
 
-async function readCachedText(url: string) {
-  if (!("caches" in window)) return null;
-
-  try {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(url);
-    return cached ? await cached.text() : null;
-  } catch {
-    return null;
-  }
-}
-
-async function cacheTextContent(url: string, text: string) {
-  if (!("caches" in window)) return;
-
-  try {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.put(
-      url,
-      new Response(text, {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      })
-    );
-  } catch {
-    // ignore cache write failures
-  }
-}
-
-async function fetchAndCacheText(url: string, signal: AbortSignal) {
-  const fresh = await fetchTextStrict(url, signal);
-  await cacheTextContent(url, fresh);
-  return fresh;
-}
-
 export default function TopicPage() {
   const router = useRouter();
   const { topic, subject, readme } = router.query;
   const topicStr = String(topic || "");
   const subjectStr = String(subject || "");
   const readmeQuery = typeof readme === "string" ? readme : "";
-  const { data: session, status } = useSession();
+  const { data: session, status } = useAppSession();
   const accountKey = useMemo(() => getLibraryUserKey(session?.user), [session]);
   const { theme, toggleTheme } = useContext(ThemeContext);
 
@@ -111,7 +75,11 @@ export default function TopicPage() {
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [isDesktop, setIsDesktop] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  const [isOffline, setIsOffline] = useState(
+    () =>
+      typeof navigator !== "undefined" &&
+      (!navigator.onLine || (readContentAvailability()?.offline ?? false))
+  );
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -129,21 +97,35 @@ export default function TopicPage() {
   }, []);
 
   useEffect(() => {
-    const update = () => setIsOffline(!navigator.onLine);
+    const update = () => {
+      const cachedState = readContentAvailability()?.offline ?? false;
+      setIsOffline((typeof navigator !== "undefined" && !navigator.onLine) || cachedState);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        update();
+      }
+    };
+
     update();
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
+    window.addEventListener("focus", update);
+    window.addEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
+      window.removeEventListener("focus", update);
+      window.removeEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 
   useEffect(() => {
     if (!accountKey) return;
     setActiveLibraryUserKey(accountKey);
-    migrateLegacyOfflineSubjects(accountKey);
   }, [accountKey]);
 
   useEffect(() => {
@@ -151,7 +133,6 @@ export default function TopicPage() {
 
     let cancelled = false;
     const controller = new AbortController();
-    const offline = !navigator.onLine;
 
     (async () => {
       try {
@@ -164,7 +145,7 @@ export default function TopicPage() {
         let resolvedSubjectReadmeUrl = readmeQuery ? toRawGithub(readmeQuery) : "";
 
         if (!resolvedSubjectReadmeUrl) {
-          const match = await resolveCourseSubject(subjectStr, controller.signal);
+          const match = await lookupCourseSubject(subjectStr, controller.signal);
           if (!match) throw new Error("Subject not found in course catalog");
           resolvedSubjectReadmeUrl = toRawGithub(match.readme_url);
         }
@@ -172,9 +153,7 @@ export default function TopicPage() {
         if (cancelled) return;
         setSubjectReadmeUrl(resolvedSubjectReadmeUrl);
 
-        const subjectReadmeText = offline
-          ? (await readCachedText(resolvedSubjectReadmeUrl)) || ""
-          : await fetchAndCacheText(resolvedSubjectReadmeUrl, controller.signal);
+        const subjectReadmeText = await fetchTextStrict(resolvedSubjectReadmeUrl, controller.signal);
 
         if (!subjectReadmeText) throw new Error("Subject README is empty or unavailable");
 
@@ -204,21 +183,23 @@ export default function TopicPage() {
 
         const mdUrl = toRawGithub(selectedTopic.md_url);
         const baseUrl = mdUrl.includes("/") ? mdUrl.slice(0, mdUrl.lastIndexOf("/") + 1) : "";
-
         let topicMd = "";
-        if (offline) {
-          topicMd = ((await readCachedText(mdUrl)) || "").trim();
-        } else {
-          try {
-            topicMd = (await fetchAndCacheText(mdUrl, controller.signal)).trim();
-          } catch {
-            topicMd = "";
-          }
+
+        try {
+          topicMd = (await fetchTextStrict(mdUrl, controller.signal)).trim();
+        } catch {
+          topicMd = "";
         }
 
         if (cancelled) return;
 
         setMdBaseUrl(baseUrl);
+        if (!topicMd && !outlineMd) {
+          setError("Failed to load topic content.");
+          setLoading(false);
+          return;
+        }
+
         setContent(topicMd);
         setLoading(false);
 
@@ -247,7 +228,7 @@ export default function TopicPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [accountKey, readmeQuery, router, router.isReady, subjectStr, topicStr]);
+  }, [readmeQuery, router, router.isReady, subjectStr, topicStr]);
 
   const topics = useMemo(() => catalogData?.topics ?? [], [catalogData]);
 
@@ -269,74 +250,26 @@ export default function TopicPage() {
   const nextTopic =
     currentIndex >= 0 && currentIndex < topics.length - 1 ? topics[currentIndex + 1] : null;
 
-  const saveOffline = async () => {
-    if (!catalogData) return;
-
-    const meta: OfflineSubjectMeta = {
-      subject: subjectStr,
-      savedAt: Date.now(),
-      topicCount: catalogData.topics.length,
-      topics: catalogData.topics,
-      subject_readme_url: subjectReadmeUrl || undefined,
-    };
-
-    const urls = [
-      ...(subjectReadmeUrl ? [subjectReadmeUrl] : []),
-      ...catalogData.topics.map((item) => item.md_url),
-    ];
-
-    try {
-      const cacheResult = await cacheTextUrls(urls, fetchTextStrict);
-      const savedSubjectReadme =
-        !subjectReadmeUrl || cacheResult.savedUrls.includes(toRawGithub(subjectReadmeUrl));
-
-      if (!savedSubjectReadme || cacheResult.savedUrls.length === 0) {
-        throw new Error("Could not save the required files for offline use.");
-      }
-
-      writeOfflineSubjectMeta(meta, accountKey);
-
-      if (status === "authenticated") {
-        await fetch("/api/offline-subjects", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store",
-          },
-          body: JSON.stringify(meta),
-          cache: "no-store",
-        }).catch(() => undefined);
-      }
-
-      if (cacheResult.failedUrls.length > 0) {
-        window.alert(
-          `Saved offline with ${cacheResult.failedUrls.length} skipped file(s). Some topic content may be limited offline.`
-        );
-        return;
-      }
-
-      window.alert(`Saved "${subjectStr}" for offline.`);
-    } catch {
-      window.alert("Offline save failed. Please try again while online.");
-    }
-  };
-
   const resolveImgSrc = (src: unknown): string => {
     if (!src || typeof src !== "string") return "";
     const value = src.trim();
 
     if (value.includes("github.com/") && value.includes("/blob/")) {
-      return toRawGithub(value);
+      return toGithubProxyUrl(value);
     }
 
-    if (value.startsWith("http") || value.startsWith("/") || value.startsWith("data:")) {
+    if (value.startsWith("http")) {
+      return toGithubProxyUrl(value);
+    }
+
+    if (value.startsWith("/") || value.startsWith("data:")) {
       return value;
     }
 
     if (!mdBaseUrl) return value;
 
     try {
-      return new URL(value, mdBaseUrl).toString();
+      return toGithubProxyUrl(new URL(value, mdBaseUrl).toString());
     } catch {
       return value;
     }
@@ -400,7 +333,7 @@ export default function TopicPage() {
 
       return (
         <div className="md-image-wrapper">
-          <img src={finalSrc} alt={alt} loading="lazy" />
+          <CachedRepoImage src={finalSrc} alt={alt} loading="lazy" />
         </div>
       );
     },
@@ -424,7 +357,7 @@ export default function TopicPage() {
     if (topicMd) return topicMd;
     if (outlineMd) return `# ${activeTopicName}\n\n${outlineMd}`;
 
-    return `# ${activeTopicName}\n\nContent is being prepared for this topic.`;
+    return "";
   }, [activeTopicName, content, subjectReadmeOutlineMd]);
 
   return (
@@ -458,9 +391,6 @@ export default function TopicPage() {
               <Link href="/dashboard" className="btn btn-outline">
                 <FaHome />
               </Link>
-              <button className="btn btn-outline" onClick={saveOffline} type="button">
-                <FaDownload /> Save Offline
-              </button>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
                 <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
@@ -476,7 +406,7 @@ export default function TopicPage() {
         )}
 
         {!loading && error && (
-          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "crimson" }}>
+          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "var(--status-offline-color)" }}>
             {error}
           </div>
         )}
@@ -490,7 +420,7 @@ export default function TopicPage() {
               gap: 16,
             }}
           >
-            <aside className="card" style={{ padding: 16, borderRadius: 22, minWidth: 0 }}>
+            <aside className="card reader-layout__sidebar" style={{ padding: 16, borderRadius: 22, minWidth: 0 }}>
               <div className="card" style={{ padding: "10px 12px", borderRadius: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <FaSearch />
@@ -534,7 +464,7 @@ export default function TopicPage() {
               </div>
             </aside>
 
-            <section className="card" style={{ padding: 22, borderRadius: 22, minWidth: 0 }}>
+            <section className="card reader-layout__content reader-card" style={{ padding: 22, borderRadius: 22, minWidth: 0 }}>
               <div
                 style={{
                   display: "flex",

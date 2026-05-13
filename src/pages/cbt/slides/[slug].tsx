@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaMoon, FaSun } from "react-icons/fa";
+import RepoMarkdown from "../../../components/content/RepoMarkdown";
 import { ThemeContext } from "../../../context/ThemeContext";
+import { useAppSession } from "../../../lib/app-session";
 import { fetchSlideshow } from "../../../lib/content-client";
 import type { SlideshowDeck } from "../../../lib/content-types";
 import { buildPublicEntryUrl } from "../../../lib/public-entry";
@@ -15,7 +14,7 @@ import { buildPublicEntryUrl } from "../../../lib/public-entry";
 export default function SlideshowPage() {
   const router = useRouter();
   const { slug } = router.query;
-  const { status } = useSession();
+  const { status } = useAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [deck, setDeck] = useState<SlideshowDeck | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -112,7 +111,7 @@ export default function SlideshowPage() {
         )}
 
         {!loading && error && (
-          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "crimson" }}>
+          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "var(--status-offline-color)" }}>
             {error}
           </div>
         )}
@@ -136,7 +135,7 @@ export default function SlideshowPage() {
               </div>
             </aside>
 
-            <section className="card reader-layout__content" style={{ padding: 22, borderRadius: 22, minWidth: 0 }}>
+            <section className="card reader-layout__content reader-card" style={{ padding: 22, borderRadius: 22, minWidth: 0 }}>
               <div
                 style={{
                   display: "flex",
@@ -177,7 +176,7 @@ export default function SlideshowPage() {
               </div>
 
               <div className="prose" style={{ minHeight: "60vh" }}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeSlide.markdown}</ReactMarkdown>
+                <RepoMarkdown baseUrl={deck.markdown_url}>{activeSlide.markdown}</RepoMarkdown>
               </div>
             </section>
           </div>

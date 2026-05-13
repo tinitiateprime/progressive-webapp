@@ -21,6 +21,7 @@ export type InterviewQuestionSummary = {
 
 export type InterviewQuestionDetail = InterviewQuestionSummary & {
   markdown: string;
+  markdown_url?: string;
 };
 
 export type CourseCatalogEntry = {
@@ -203,6 +204,7 @@ export type SlideshowSlide = {
 
 export type SlideshowDeck = SlideshowSummary & {
   markdown: string;
+  markdown_url?: string;
   slides: SlideshowSlide[];
 };
 
@@ -211,10 +213,14 @@ export type MediaCollectionItem = {
   title: string;
   summary: string;
   speaker: string;
-  playlistUrl: string;
+  playlistUrl?: string;
   embedUrl?: string;
+  mediaUrl?: string;
+  posterUrl?: string;
+  mimeType?: string;
   tags: string[];
   notesMarkdown?: string;
+  notesMarkdownUrl?: string;
 };
 
 export type CbtCollections = {

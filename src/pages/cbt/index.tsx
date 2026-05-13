@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import { FaArrowLeft, FaMoon, FaPlayCircle, FaSun, FaVolumeUp } from "react-icons/fa";
 import { MdOutlineSlideshow } from "react-icons/md";
 import { ThemeContext } from "../../context/ThemeContext";
+import { useAppSession } from "../../lib/app-session";
 import { fetchCbtCollections } from "../../lib/content-client";
 import type { CbtCollections } from "../../lib/content-types";
 import { buildPublicEntryUrl } from "../../lib/public-entry";
@@ -21,7 +21,7 @@ const tabOrder: Array<{ key: TabKey; label: string }> = [
 
 export default function CbtPage() {
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = useAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [tab, setTab] = useState<TabKey>("slideshows");
   const [data, setData] = useState<CbtCollections | null>(null);
@@ -93,14 +93,7 @@ export default function CbtPage() {
 
         <section style={{ marginTop: 18 }}>
           <div
-            className="card"
-            style={{
-              padding: 16,
-              borderRadius: 20,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
+            className="card content-tab-bar"
           >
             {tabOrder.map((entry) => (
               <button
@@ -122,18 +115,16 @@ export default function CbtPage() {
         )}
 
         {!loading && error && (
-          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "crimson" }}>
+          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "var(--status-offline-color)" }}>
             {error}
           </div>
         )}
 
         {!loading && !error && tab === "slideshows" && (
           <section
+            className="content-grid"
             style={{
               marginTop: 18,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 14,
             }}
           >
             {slideItems.map((item) => (
@@ -142,29 +133,16 @@ export default function CbtPage() {
                 href={`/cbt/slides/${encodeURIComponent(item.slug)}`}
                 style={{ textDecoration: "none", color: "inherit" }}
               >
-                <div className="card" style={{ padding: 18, borderRadius: 22, height: "100%" }}>
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 20,
-                    }}
-                  >
+                <div className="card content-card">
+                  <div className="content-card__icon">
                     <MdOutlineSlideshow />
                   </div>
-                  <div style={{ marginTop: 14, fontSize: 22, fontWeight: 900 }}>{item.title}</div>
-                  <div style={{ marginTop: 10, fontSize: 14, color: "var(--muted)", lineHeight: 1.7 }}>
-                    {item.summary}
-                  </div>
-                  <div style={{ marginTop: 12, fontSize: 13, color: "var(--muted)" }}>
+                  <div className="content-card__title" style={{ marginTop: 14 }}>{item.title}</div>
+                  <div className="content-card__body">{item.summary}</div>
+                  <div className="content-card__meta">
                     Audience: {item.audience}
                   </div>
-                  <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <div className="content-card__tags">
                     {item.tags.map((tag) => (
                       <span key={tag} className="badge" style={{ fontSize: 10 }}>
                         {tag}
@@ -179,11 +157,9 @@ export default function CbtPage() {
 
         {!loading && !error && tab !== "slideshows" && (
           <section
+            className="content-grid"
             style={{
               marginTop: 18,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 14,
             }}
           >
             {(tab === "trainingVideos" ? trainingItems : audioItems).map((item) => (
@@ -194,29 +170,16 @@ export default function CbtPage() {
                 )}`}
                 style={{ textDecoration: "none", color: "inherit" }}
               >
-                <div className="card" style={{ padding: 18, borderRadius: 22, height: "100%" }}>
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 18,
-                    }}
-                  >
+                <div className="card content-card">
+                  <div className="content-card__icon">
                     {tab === "trainingVideos" ? <FaPlayCircle /> : <FaVolumeUp />}
                   </div>
-                  <div style={{ marginTop: 14, fontSize: 22, fontWeight: 900 }}>{item.title}</div>
-                  <div style={{ marginTop: 10, fontSize: 14, color: "var(--muted)", lineHeight: 1.7 }}>
-                    {item.summary}
-                  </div>
-                  <div style={{ marginTop: 12, fontSize: 13, color: "var(--muted)" }}>
+                  <div className="content-card__title" style={{ marginTop: 14 }}>{item.title}</div>
+                  <div className="content-card__body">{item.summary}</div>
+                  <div className="content-card__meta">
                     Speaker: {item.speaker}
                   </div>
-                  <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <div className="content-card__tags">
                     {item.tags.map((tag) => (
                       <span key={tag} className="badge" style={{ fontSize: 10 }}>
                         {tag}

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
 import { FaArrowLeft, FaMoon, FaSearch, FaSun } from "react-icons/fa";
 import TickerBar from "../../components/content/TickerBar";
 import { ThemeContext } from "../../context/ThemeContext";
+import { useAppSession } from "../../lib/app-session";
 import { fetchInterviewQuestions, fetchTickerItems } from "../../lib/content-client";
 import type { InterviewQuestionSummary, TickerItem } from "../../lib/content-types";
 import { buildPublicEntryUrl } from "../../lib/public-entry";
@@ -16,7 +16,7 @@ const normalizeSearch = (value: string) =>
 
 export default function InterviewIndexPage() {
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = useAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [items, setItems] = useState<InterviewQuestionSummary[]>([]);
   const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
@@ -111,7 +111,7 @@ export default function InterviewIndexPage() {
           </div>
 
           {tickerItems.length > 0 && (
-            <div style={{ marginTop: 18 }}>
+            <div className="desktop-ticker-slot" style={{ marginTop: 18 }}>
               <TickerBar items={tickerItems} />
             </div>
           )}
@@ -146,27 +146,21 @@ export default function InterviewIndexPage() {
           )}
 
           {!loading && error && (
-            <div className="card" style={{ padding: 18, borderRadius: 18, color: "crimson" }}>
+            <div className="card" style={{ padding: 18, borderRadius: 18, color: "var(--status-offline-color)" }}>
               {error}
             </div>
           )}
 
           {!loading && !error && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: 14,
-              }}
-            >
+            <div className="content-grid">
               {filteredItems.map((item) => (
                 <Link
                   key={item.slug}
                   href={`/interview/${encodeURIComponent(item.slug)}`}
                   style={{ textDecoration: "none", color: "inherit" }}
                 >
-                  <div className="card" style={{ padding: 18, borderRadius: 22, height: "100%" }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <div className="card content-card">
+                    <div className="content-card__tags" style={{ marginTop: 0 }}>
                       <span className="badge" style={{ fontSize: 11 }}>
                         {item.category}
                       </span>
@@ -175,19 +169,15 @@ export default function InterviewIndexPage() {
                       </span>
                     </div>
 
-                    <div style={{ marginTop: 14, fontSize: 22, fontWeight: 900, lineHeight: 1.3 }}>
-                      {item.title}
-                    </div>
+                    <div className="content-card__title" style={{ marginTop: 14 }}>{item.title}</div>
 
-                    <div style={{ marginTop: 10, fontSize: 14, color: "var(--muted)", lineHeight: 1.7 }}>
-                      {item.question}
-                    </div>
+                    <div className="content-card__body">{item.question}</div>
 
-                    <div style={{ marginTop: 12, fontSize: 13, color: "var(--muted)", lineHeight: 1.7 }}>
+                    <div className="content-card__meta">
                       {item.excerpt}
                     </div>
 
-                    <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <div className="content-card__tags" style={{ marginTop: 14 }}>
                       {item.tags.map((tag) => (
                         <span key={tag} className="badge" style={{ fontSize: 10 }}>
                           {tag}

@@ -26,13 +26,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         headers: { "User-Agent": "NextProxy" },
       });
 
-      const text = await response.text();
       const contentType = response.headers.get("content-type");
       if (contentType) {
         res.setHeader("Content-Type", contentType);
       }
 
-      res.status(response.status).send(text);
+      const body = Buffer.from(await response.arrayBuffer());
+      res.status(response.status).send(body);
       return;
     } catch {
       res.status(502).send("Failed to fetch requested URL from GitHub");

@@ -5,7 +5,6 @@ import { useRouter } from "next/router";
 import "../styles/globals.css";
 
 import { SessionProvider, signOut, useSession } from "next-auth/react";
-import MobileQuickNav from "../components/navigation/MobileQuickNav";
 import { DesignContext } from "../context/DesignContext";
 import { ThemeContext, Theme } from "../context/ThemeContext";
 import {
@@ -13,8 +12,10 @@ import {
   hasBrowserSessionActive,
   markBrowserSessionActive,
 } from "../lib/browserSession";
-import { fetchDesignConfig } from "../lib/content-client";
+import { clearCachedSessionUser, writeCachedSessionUser } from "../lib/app-session";
+import { fetchDesignConfig, warmCoreContent } from "../lib/content-client";
 import type { DesignSystem } from "../lib/content-types";
+import { syncOfflineWorkspace } from "../lib/offline-sync";
 import { buildPublicEntryUrl } from "../lib/public-entry";
 
 const AUTH_SESSION_CHANNEL = "tinitiate.auth.browser-session";
@@ -250,12 +251,145 @@ function SessionLifetimeGuard() {
   return null;
 }
 
+function OfflineWorkspaceController() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const syncStartedRef = useRef(false);
+  const initialSyncCompletedRef = useRef(false);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      writeCachedSessionUser(session?.user);
+      return;
+    }
+
+    if (status === "unauthenticated") {
+      clearCachedSessionUser();
+    }
+  }, [session?.user, status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") {
+      syncStartedRef.current = false;
+      initialSyncCompletedRef.current = false;
+      return;
+    }
+
+    const isPublicRoute = PUBLIC_BROWSER_SESSION_ROUTES.has(router.pathname);
+
+    if (isPublicRoute) {
+      syncStartedRef.current = false;
+      return;
+    }
+
+    let idleCallbackId: number | null = null;
+    let timeoutId: number | null = null;
+
+    const runSync = (force = false) => {
+      if (!navigator.onLine || syncStartedRef.current) return;
+      if (!force && initialSyncCompletedRef.current) return;
+      syncStartedRef.current = true;
+
+      syncOfflineWorkspace(router)
+        .then(() => {
+          initialSyncCompletedRef.current = true;
+        })
+        .catch(() => {
+          initialSyncCompletedRef.current = false;
+        })
+        .finally(() => {
+          syncStartedRef.current = false;
+        });
+    };
+
+    const clearScheduledSync = () => {
+      if (idleCallbackId !== null && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleCallbackId);
+        idleCallbackId = null;
+      }
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const scheduleSync = (force = false) => {
+      clearScheduledSync();
+
+      const delay = force ? 1200 : 3500;
+      const startSync = () => {
+        idleCallbackId = null;
+        timeoutId = null;
+        runSync(force);
+      };
+
+      if (typeof window.requestIdleCallback === "function") {
+        idleCallbackId = window.requestIdleCallback(startSync, { timeout: delay });
+        return;
+      }
+
+      timeoutId = window.setTimeout(startSync, delay);
+    };
+
+    scheduleSync();
+    const handleOnline = () => scheduleSync(true);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      clearScheduledSync();
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [router, router.pathname, status]);
+
+  return null;
+}
+
+function CoreContentWarmupController() {
+  const router = useRouter();
+  const { status } = useSession();
+  const warmedRef = useRef(false);
+
+  useEffect(() => {
+    if (status !== "authenticated") {
+      warmedRef.current = false;
+      return;
+    }
+
+    if (PUBLIC_BROWSER_SESSION_ROUTES.has(router.pathname) || !navigator.onLine || warmedRef.current) {
+      return;
+    }
+
+    warmedRef.current = true;
+    void warmCoreContent().catch(() => {
+      warmedRef.current = false;
+    });
+  }, [router.pathname, status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    const handleOnline = () => {
+      if (warmedRef.current) return;
+      warmedRef.current = true;
+      void warmCoreContent().catch(() => {
+        warmedRef.current = false;
+      });
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [status]);
+
+  return null;
+}
+
 export default function App({ Component, pageProps }: AppProps) {
   const [theme, setTheme] = useState<Theme>("light");
   const [design, setDesign] = useState<DesignSystem | null>(null);
   const [designError, setDesignError] = useState("");
   const [mounted, setMounted] = useState(false);
-  const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV === "true";
+  const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV !== "false";
 
   useEffect(() => {
     setMounted(true);
@@ -363,10 +497,7 @@ export default function App({ Component, pageProps }: AppProps) {
         }}
       >
         <div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>Loading design configuration...</div>
-          <div style={{ marginTop: 10, lineHeight: 1.6 }}>
-            The app is waiting for the GitHub `colour.json` and `icon.json` files.
-          </div>
+          <div style={{ fontSize: 20, fontWeight: 700 }}>Loading...</div>
         </div>
       </div>
     );
@@ -375,6 +506,8 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <SessionProvider session={(pageProps as any).session} refetchWhenOffline={false}>
       <SessionLifetimeGuard />
+      <CoreContentWarmupController />
+      <OfflineWorkspaceController />
       <ThemeContext.Provider
         value={{
           theme,
@@ -392,7 +525,6 @@ export default function App({ Component, pageProps }: AppProps) {
           </Head>
 
           {renderDesignState()}
-          <MobileQuickNav />
         </DesignContext.Provider>
       </ThemeContext.Provider>
     </SessionProvider>

@@ -230,7 +230,7 @@ export default function LoginPage() {
           </section>
 
           {/* Right form panel */}
-          <section className="glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
+          <section className="glass auth-mobile-intro rounded-3xl p-6 sm:p-10 relative overflow-hidden">
             <div
               className="pointer-events-none absolute top-0 left-0 right-0 h-[120px] opacity-[0.55]"
               style={{

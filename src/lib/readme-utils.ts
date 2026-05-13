@@ -20,6 +20,15 @@ export type MainCatalogSubjectLink = {
 
 export const normalize = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
+const REPO_CONTENT_CACHE = "repo-content";
+const markdownMemoryCache = new Map<string, string>();
+const inflightMarkdownRequests = new Map<string, Promise<string>>();
+
+export type RepoTextRequestOptions = {
+  strategy?: "cache-first" | "network-first";
+  revalidateOnCacheHit?: boolean;
+};
+
 export const toRawGithub = (u: string) => {
   const m = (u || "").match(
     /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
@@ -27,6 +36,27 @@ export const toRawGithub = (u: string) => {
   if (!m) return u;
   const [, owner, repo, branch, path] = m;
   return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+};
+
+export const buildGithubProxyUrl = (url: string) =>
+  `/api/proxy?url=${encodeURIComponent(String(url || ""))}`;
+
+const GITHUB_IMAGE_HOSTS = new Set(["raw.githubusercontent.com", "github.com"]);
+
+export const toGithubProxyUrl = (url: string) => {
+  const rawUrl = toRawGithub(String(url || "").trim());
+  if (!rawUrl) return "";
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === "https:" && GITHUB_IMAGE_HOSTS.has(parsed.hostname)) {
+      return buildGithubProxyUrl(rawUrl);
+    }
+  } catch {
+    return rawUrl;
+  }
+
+  return rawUrl;
 };
 
 const cleanTitle = (s: string) =>
@@ -61,6 +91,9 @@ const resolveMaybeRelativeUrl = (url: string, baseUrl?: string) => {
 
   return v;
 };
+
+export const resolveMarkdownAssetUrl = (url: string, baseUrl?: string) =>
+  resolveMaybeRelativeUrl(url, baseUrl);
 
 const extractMarkdownLinkAnywhere = (
   text: string,
@@ -256,8 +289,8 @@ export function parseSubjectTopicsFromReadme(
  * ✅ Topic page section parser (for rendering sub-sections / TOC)
  * Supports headings with 2 / 3 / 4 hashes.
  *
- * If no 2/3/4 headings are found, returns one fallback section with full content
- * so content still loads (important for inconsistent markdown files).
+ * If no 2/3/4 headings are found, returns the full content as one section
+ * so inconsistent markdown files are still rendered from the source content.
  */
 export function parseTopicSectionsFromMarkdown(md: string): ParsedTopicSection[] {
   const normalizedMd = normalizeMarkdownForHeadingParsing(md);
@@ -289,7 +322,7 @@ export function parseTopicSectionsFromMarkdown(md: string): ParsedTopicSection[]
     hits.push({ index: i, level, heading });
   }
 
-  // ✅ Fallback: no sections => return full content section
+  // No headings: render the full GitHub markdown as one content section.
   if (!hits.length) {
     const full = normalizedMd.trim();
     return full
@@ -320,9 +353,63 @@ export function parseTopicSectionsFromMarkdown(md: string): ParsedTopicSection[]
   return sections;
 }
 
-// ✅ direct fetch + proxy fallback
-export async function fetchTextStrict(url: string, signal?: AbortSignal): Promise<string> {
-  const response = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+export const extractMarkdownAssetUrls = (md: string, baseUrl?: string): string[] => {
+  const urls = new Set<string>();
+  const source = md || "";
+
+  const addUrl = (value: string) => {
+    const resolved = resolveMaybeRelativeUrl(value, baseUrl);
+    if (!resolved || resolved.startsWith("data:")) return;
+    urls.add(resolved);
+  };
+
+  const markdownImageRegex = /!\[[^\]]*]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  const htmlImageRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+
+  let match: RegExpExecArray | null = null;
+
+  while ((match = markdownImageRegex.exec(source))) {
+    addUrl(match[1] || "");
+  }
+
+  while ((match = htmlImageRegex.exec(source))) {
+    addUrl(match[1] || "");
+  }
+
+  return Array.from(urls);
+};
+
+const readCachedRepoText = async (proxyUrl: string) => {
+  if (typeof window === "undefined" || !("caches" in window)) return null;
+
+  try {
+    const cache = await caches.open(REPO_CONTENT_CACHE);
+    const cached = await cache.match(proxyUrl);
+
+    if (!cached?.ok) {
+      return null;
+    }
+
+    const text = await cached.text();
+    return text || null;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedRepoText = async (proxyUrl: string, response: Response) => {
+  if (typeof window === "undefined" || !("caches" in window) || !response.ok) return;
+
+  try {
+    const cache = await caches.open(REPO_CONTENT_CACHE);
+    await cache.put(proxyUrl, response.clone());
+  } catch {
+    // ignore cache write failures
+  }
+};
+
+const fetchRepoTextFromNetwork = async (proxyUrl: string, signal?: AbortSignal) => {
+  const response = await fetch(proxyUrl, {
     cache: "no-store",
     headers: {
       "Cache-Control": "no-store",
@@ -331,8 +418,73 @@ export async function fetchTextStrict(url: string, signal?: AbortSignal): Promis
   });
 
   if (!response.ok) {
-    throw new Error(`Fetch failed (HTTP ${response.status}) for ${url}`);
+    throw new Error(`Fetch failed (HTTP ${response.status}) for ${proxyUrl}`);
   }
 
-  return await response.text();
+  await writeCachedRepoText(proxyUrl, response);
+  const text = await response.text();
+  markdownMemoryCache.set(proxyUrl, text);
+  return text;
+};
+
+const requestRepoTextFromNetwork = (proxyUrl: string, signal?: AbortSignal) => {
+  const existing = inflightMarkdownRequests.get(proxyUrl);
+  if (existing) {
+    return existing;
+  }
+
+  const request = fetchRepoTextFromNetwork(proxyUrl, signal).finally(() => {
+    inflightMarkdownRequests.delete(proxyUrl);
+  });
+
+  inflightMarkdownRequests.set(proxyUrl, request);
+  return request;
+};
+
+const revalidateRepoText = (proxyUrl: string) => {
+  if (typeof window === "undefined" || !navigator.onLine) return;
+  void requestRepoTextFromNetwork(proxyUrl).catch(() => undefined);
+};
+
+export async function fetchTextStrict(
+  url: string,
+  signal?: AbortSignal,
+  options?: RepoTextRequestOptions
+): Promise<string> {
+  const proxyUrl = buildGithubProxyUrl(url);
+  const strategy = options?.strategy || "cache-first";
+  const revalidateOnCacheHit = options?.revalidateOnCacheHit ?? true;
+
+  if (strategy === "cache-first") {
+    const memoized = markdownMemoryCache.get(proxyUrl);
+    if (typeof memoized === "string") {
+      if (revalidateOnCacheHit) {
+        revalidateRepoText(proxyUrl);
+      }
+      return memoized;
+    }
+
+    const cachedText = await readCachedRepoText(proxyUrl);
+    if (cachedText) {
+      markdownMemoryCache.set(proxyUrl, cachedText);
+      if (revalidateOnCacheHit) {
+        revalidateRepoText(proxyUrl);
+      }
+      return cachedText;
+    }
+  }
+
+  try {
+    return await requestRepoTextFromNetwork(proxyUrl, signal);
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      const cachedText = await readCachedRepoText(proxyUrl);
+      if (cachedText) {
+        markdownMemoryCache.set(proxyUrl, cachedText);
+        return cachedText;
+      }
+    }
+
+    throw error;
+  }
 }

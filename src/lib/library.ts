@@ -1,12 +1,3 @@
-import {
-  ACTIVE_LIBRARY_USER_KEY,
-  normalizeLibraryUserKey,
-  readAllOfflineSubjectMetas,
-  setActiveLibraryUserKey,
-  writeOfflineSubjectMeta,
-  type OfflineSubjectMeta,
-} from "./offline";
-
 export type SavedFavoriteTopic = {
   slug: string;
   topic_name: string;
@@ -16,8 +7,15 @@ export type SavedFavoriteTopic = {
   savedAt: number;
 };
 
+const ACTIVE_LIBRARY_USER_KEY = "tinitiate_library_active_user";
 const FAVORITES_STORAGE_PREFIX = "favorite_topics_";
 const FAVORITES_STORAGE_FALLBACK = "favorite_topics";
+
+export const normalizeLibraryUserKey = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 
 const normalizeFavoriteTopic = (value: unknown): SavedFavoriteTopic | null => {
   if (!value || typeof value !== "object") return null;
@@ -63,6 +61,15 @@ const sortFavorites = (topics: SavedFavoriteTopic[]) =>
 export const getLibraryUserKey = (
   user?: { id?: string | null; email?: string | null } | null
 ) => normalizeLibraryUserKey(user?.id || user?.email || "");
+
+export const setActiveLibraryUserKey = (accountKey?: string) => {
+  if (typeof window === "undefined") return;
+
+  const normalized = normalizeLibraryUserKey(accountKey);
+  if (!normalized) return;
+
+  localStorage.setItem(ACTIVE_LIBRARY_USER_KEY, normalized);
+};
 
 export const mergeFavoriteTopics = (...lists: Array<SavedFavoriteTopic[] | undefined>) => {
   const bySlug = new Map<string, SavedFavoriteTopic>();
@@ -132,41 +139,3 @@ export const removeFavoriteTopic = (slug: string, accountKey?: string) =>
     readFavoriteTopics(accountKey).filter((item) => item.slug !== slug),
     accountKey
   );
-
-export const mergeOfflineSubjectMetas = (...lists: Array<OfflineSubjectMeta[] | undefined>) => {
-  const bySubject = new Map<string, OfflineSubjectMeta>();
-
-  for (const list of lists) {
-    for (const meta of list || []) {
-      if (!meta?.subject) continue;
-
-      const key = meta.subject.trim().toLowerCase();
-      const existing = bySubject.get(key);
-      if (!existing || meta.savedAt >= existing.savedAt) {
-        bySubject.set(key, {
-          ...existing,
-          ...meta,
-          topicCount: meta.topicCount || meta.topics.length,
-          subject_readme_url: meta.subject_readme_url || existing?.subject_readme_url,
-        });
-      }
-    }
-  }
-
-  return Array.from(bySubject.values()).sort((a, b) => a.subject.localeCompare(b.subject));
-};
-
-export const hydrateOfflineSubjectsForAccount = (
-  serverMetas: OfflineSubjectMeta[],
-  accountKey?: string
-) => {
-  const merged = mergeOfflineSubjectMetas(readAllOfflineSubjectMetas(accountKey), serverMetas);
-
-  for (const meta of merged) {
-    writeOfflineSubjectMeta(meta, accountKey);
-  }
-
-  return merged;
-};
-
-export { setActiveLibraryUserKey };

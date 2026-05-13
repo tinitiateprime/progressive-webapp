@@ -11,34 +11,194 @@ import type {
   TickerItem,
 } from "./content-types";
 
-import { readContentSnapshot, writeContentSnapshot } from "./content-snapshot";
 import { normalize } from "./readme-utils";
 
 class HttpStatusError extends Error {}
 
-const fetchJsonNoStore = async <T>(url: string, signal?: AbortSignal): Promise<T> => {
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        "Cache-Control": "no-store",
-      },
-      signal,
-    });
+const CONTENT_API_CACHE = "repo-content";
+const CONTENT_AVAILABILITY_KEY = "tinitiate.content.availability";
+export const CONTENT_AVAILABILITY_EVENT = "tinitiate:content-availability";
+const CORE_CONTENT_URLS = [
+  "/api/content/design",
+  "/api/content/ticker",
+  "/api/content/status",
+  "/api/content/courses",
+  "/api/content/interview",
+  "/api/content/cbt",
+] as const;
 
-    if (!response.ok) {
-      const message = await response.text().catch(() => "");
-      throw new HttpStatusError(message || `Failed to fetch ${url} (${response.status})`);
+export type ContentRequestOptions = {
+  strategy?: "cache-first" | "network-first";
+  revalidateOnCacheHit?: boolean;
+};
+
+type ContentAvailabilityState = {
+  offline: boolean;
+  updatedAt: number;
+};
+
+const canUseCacheStorage = () =>
+  typeof window !== "undefined" && typeof window.caches !== "undefined";
+
+const jsonMemoryCache = new Map<string, unknown>();
+const inflightJsonRequests = new Map<string, Promise<unknown>>();
+
+const toAbsoluteRequestUrl = (url: string) => {
+  if (typeof window === "undefined") return url;
+  return new URL(url, window.location.origin).toString();
+};
+
+const writeContentAvailability = (offline: boolean) => {
+  if (typeof window === "undefined") return;
+
+  const payload: ContentAvailabilityState = {
+    offline,
+    updatedAt: Date.now(),
+  };
+
+  try {
+    window.localStorage.setItem(CONTENT_AVAILABILITY_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore storage failures
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(CONTENT_AVAILABILITY_EVENT, {
+      detail: payload,
+    })
+  );
+};
+
+export const readContentAvailability = (): ContentAvailabilityState | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(CONTENT_AVAILABILITY_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ContentAvailabilityState;
+  } catch {
+    return null;
+  }
+};
+
+const getRequestKey = (url: string) => toAbsoluteRequestUrl(url);
+
+const readCachedJson = async <T>(url: string): Promise<T | null> => {
+  if (!canUseCacheStorage()) return null;
+
+  try {
+    const absoluteUrl = toAbsoluteRequestUrl(url);
+    const cached =
+      (await caches.match(absoluteUrl, { ignoreSearch: false })) ||
+      (await caches.match(url, { ignoreSearch: false }));
+
+    if (!cached?.ok) return null;
+    return (await cached.clone().json()) as T;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedJson = async (url: string, response: Response) => {
+  if (!canUseCacheStorage() || !response.ok) return;
+
+  try {
+    const cache = await caches.open(CONTENT_API_CACHE);
+    await cache.put(toAbsoluteRequestUrl(url), response.clone());
+  } catch {
+    // ignore cache write failures
+  }
+};
+
+const readMemoryJson = <T>(url: string): T | null => {
+  const key = getRequestKey(url);
+  return jsonMemoryCache.has(key) ? (jsonMemoryCache.get(key) as T) : null;
+};
+
+const writeMemoryJson = <T>(url: string, payload: T) => {
+  jsonMemoryCache.set(getRequestKey(url), payload);
+};
+
+const fetchJsonFromNetwork = async <T>(url: string, signal?: AbortSignal): Promise<T> => {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-store",
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new HttpStatusError(message || `Failed to fetch ${url} (${response.status})`);
+  }
+
+  await writeCachedJson(url, response);
+  const payload = (await response.json()) as T;
+  writeMemoryJson(url, payload);
+  writeContentAvailability(false);
+  return payload;
+};
+
+const requestJsonFromNetwork = <T>(url: string, signal?: AbortSignal): Promise<T> => {
+  const key = getRequestKey(url);
+  const existing = inflightJsonRequests.get(key) as Promise<T> | undefined;
+  if (existing) {
+    return existing;
+  }
+
+  const request = fetchJsonFromNetwork<T>(url, signal).finally(() => {
+    inflightJsonRequests.delete(key);
+  });
+
+  inflightJsonRequests.set(key, request as Promise<unknown>);
+  return request;
+};
+
+const revalidateCachedJson = (url: string) => {
+  if (typeof window === "undefined" || !navigator.onLine) return;
+  void requestJsonFromNetwork(url).catch(() => undefined);
+};
+
+const fetchJsonNoStore = async <T>(
+  url: string,
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<T> => {
+  const strategy = options?.strategy || "cache-first";
+  const revalidateOnCacheHit = options?.revalidateOnCacheHit ?? true;
+
+  if (strategy === "cache-first") {
+    const memoized = readMemoryJson<T>(url);
+    if (memoized !== null) {
+      if (revalidateOnCacheHit) {
+        revalidateCachedJson(url);
+      }
+      return memoized;
     }
 
-    const data = (await response.json()) as T;
-    writeContentSnapshot(url, data);
-    return data;
+    const cached = await readCachedJson<T>(url);
+    if (cached !== null) {
+      writeMemoryJson(url, cached);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        writeContentAvailability(true);
+      } else if (revalidateOnCacheHit) {
+        revalidateCachedJson(url);
+      }
+      return cached;
+    }
+  }
+
+  try {
+    return await requestJsonFromNetwork<T>(url, signal);
   } catch (error) {
-    if (!(error instanceof DOMException && error.name === "AbortError") && !(error instanceof HttpStatusError)) {
-      const snapshot = readContentSnapshot<T>(url);
-      if (snapshot !== null) {
-        return snapshot;
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      const cached = await readCachedJson<T>(url);
+      writeContentAvailability(true);
+
+      if (cached !== null) {
+        writeMemoryJson(url, cached);
+        return cached;
       }
     }
 
@@ -46,21 +206,43 @@ const fetchJsonNoStore = async <T>(url: string, signal?: AbortSignal): Promise<T
   }
 };
 
-export const fetchTickerItems = async (signal?: AbortSignal): Promise<TickerItem[]> => {
-  return fetchJsonNoStore<TickerItem[]>("/api/content/ticker", signal);
+export const warmCoreContent = async () => {
+  if (typeof window === "undefined" || !navigator.onLine) return;
+
+  await Promise.allSettled(
+    CORE_CONTENT_URLS.map((url) =>
+      requestJsonFromNetwork(url, undefined).catch(() => undefined)
+    )
+  );
 };
 
-export const fetchDesignConfig = async (signal?: AbortSignal): Promise<DesignSystem> =>
-  fetchJsonNoStore<DesignSystem>("/api/content/design", signal);
+export const fetchTickerItems = async (
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<TickerItem[]> => fetchJsonNoStore<TickerItem[]>("/api/content/ticker", signal, options);
 
-export const fetchContentRepoStatus = async (signal?: AbortSignal): Promise<ContentRepoStatus> =>
-  fetchJsonNoStore<ContentRepoStatus>("/api/content/status", signal);
+export const fetchDesignConfig = async (
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<DesignSystem> => fetchJsonNoStore<DesignSystem>("/api/content/design", signal, options);
 
-export const fetchCourseSubjects = async (signal?: AbortSignal): Promise<CourseSubject[]> =>
-  fetchJsonNoStore<CourseSubject[]>("/api/content/courses", signal);
+export const fetchContentRepoStatus = async (
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<ContentRepoStatus> =>
+  fetchJsonNoStore<ContentRepoStatus>("/api/content/status", signal, options);
 
-export const resolveCourseSubject = async (subjectName: string, signal?: AbortSignal) => {
-  const subjects = await fetchCourseSubjects(signal);
+export const fetchCourseSubjects = async (
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<CourseSubject[]> => fetchJsonNoStore<CourseSubject[]>("/api/content/courses", signal, options);
+
+export const lookupCourseSubject = async (
+  subjectName: string,
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+) => {
+  const subjects = await fetchCourseSubjects(signal, options);
   return (
     subjects.find(
       (subject) =>
@@ -69,43 +251,58 @@ export const resolveCourseSubject = async (subjectName: string, signal?: AbortSi
   );
 };
 
+export const resolveCourseSubject = lookupCourseSubject;
+
 export const fetchInterviewQuestions = async (
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
 ): Promise<InterviewQuestionSummary[]> =>
-  fetchJsonNoStore<InterviewQuestionSummary[]>("/api/content/interview", signal);
+  fetchJsonNoStore<InterviewQuestionSummary[]>("/api/content/interview", signal, options);
 
 export const fetchInterviewQuestion = async (
   slug: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
 ): Promise<InterviewQuestionDetail> =>
   fetchJsonNoStore<InterviewQuestionDetail>(
     `/api/content/interview/${encodeURIComponent(slug)}`,
-    signal
+    signal,
+    options
   );
 
-export const fetchCbtCollections = async (signal?: AbortSignal): Promise<CbtCollections> =>
-  fetchJsonNoStore<CbtCollections>("/api/content/cbt", signal);
+export const fetchCbtCollections = async (
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<CbtCollections> =>
+  fetchJsonNoStore<CbtCollections>("/api/content/cbt", signal, options);
 
-export const fetchSlideshows = async (signal?: AbortSignal): Promise<SlideshowSummary[]> => {
-  const collections = await fetchCbtCollections(signal);
+export const fetchSlideshows = async (
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<SlideshowSummary[]> => {
+  const collections = await fetchCbtCollections(signal, options);
   return collections.slideshows;
 };
 
 export const fetchSlideshow = async (
   slug: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
 ): Promise<SlideshowDeck> =>
   fetchJsonNoStore<SlideshowDeck>(
     `/api/content/slideshows/${encodeURIComponent(slug)}`,
-    signal
+    signal,
+    options
   );
 
 export const fetchMediaItem = async (
   kind: "training-videos" | "audio-books",
   slug: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
 ): Promise<MediaCollectionItem> =>
   fetchJsonNoStore<MediaCollectionItem>(
     `/api/content/media/${encodeURIComponent(kind)}/${encodeURIComponent(slug)}`,
-    signal
+    signal,
+    options
   );

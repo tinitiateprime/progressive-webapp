@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import type { IconType } from "react-icons";
 import {
   FaArrowRight,
@@ -15,7 +15,6 @@ import {
   FaMoon,
   FaSearch,
   FaSignOutAlt,
-  FaStar,
   FaSun,
   FaTimes,
   FaUserTie,
@@ -23,19 +22,27 @@ import {
 
 import TickerBar from "../components/content/TickerBar";
 import { ThemeContext } from "../context/ThemeContext";
+import { useAppSession } from "../lib/app-session";
 import { clearBrowserSessionActive } from "../lib/browserSession";
-import { fetchContentRepoStatus, fetchTickerItems } from "../lib/content-client";
+import {
+  CONTENT_AVAILABILITY_EVENT,
+  fetchContentRepoStatus,
+  fetchTickerItems,
+  readContentAvailability,
+} from "../lib/content-client";
 import type { TickerItem } from "../lib/content-types";
+import {
+  OFFLINE_SYNC_STATE_EVENT,
+  readOfflineSyncState,
+} from "../lib/offline-sync";
 import { buildPublicEntryUrl } from "../lib/public-entry";
 import {
   getLibraryUserKey,
-  hydrateOfflineSubjectsForAccount,
   mergeFavoriteTopics,
   readFavoriteTopics,
   type SavedFavoriteTopic,
   writeFavoriteTopics,
 } from "../lib/library";
-import { readAllOfflineSubjectMetas, type OfflineSubjectMeta } from "../lib/offline";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -68,7 +75,7 @@ const formatDateTime = (timestamp: number) =>
 
 export default function Dashboard() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status } = useAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const accountKey = useMemo(() => getLibraryUserKey(session?.user), [session]);
 
@@ -77,8 +84,8 @@ export default function Dashboard() {
   const [isOffline, setIsOffline] = useState(false);
   const [syncingContent, setSyncingContent] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [offlineSyncState, setOfflineSyncState] = useState(() => readOfflineSyncState());
   const [favoriteTopics, setFavoriteTopics] = useState<SavedFavoriteTopic[]>([]);
-  const [offlineSubjects, setOfflineSubjects] = useState<OfflineSubjectMeta[]>([]);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installInstalled, setInstallInstalled] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -98,21 +105,25 @@ export default function Dashboard() {
   }, [router, status]);
 
   useEffect(() => {
-    const update = () => setIsOffline(!navigator.onLine);
+    const update = () => {
+      const cachedState = readContentAvailability()?.offline ?? false;
+      setIsOffline(!navigator.onLine || cachedState);
+    };
     update();
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
+    window.addEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
 
     return () => {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
+      window.removeEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
     };
   }, []);
 
   useEffect(() => {
     const syncLibrary = () => {
       setFavoriteTopics(readFavoriteTopics(accountKey));
-      setOfflineSubjects(readAllOfflineSubjectMetas(accountKey));
     };
 
     const handleVisibility = () => {
@@ -140,28 +151,16 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const [favoritesRes, offlineRes] = await Promise.all([
-          fetch("/api/favorites", {
-            cache: "no-store",
-            headers: { "Cache-Control": "no-store" },
-          }),
-          fetch("/api/offline-subjects", {
-            cache: "no-store",
-            headers: { "Cache-Control": "no-store" },
-          }),
-        ]);
+        const favoritesRes = await fetch("/api/favorites", {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-store" },
+        });
 
         if (!cancelled && favoritesRes.ok) {
           const serverFavorites = (await favoritesRes.json()) as SavedFavoriteTopic[];
           const mergedFavorites = mergeFavoriteTopics(readFavoriteTopics(accountKey), serverFavorites);
           writeFavoriteTopics(mergedFavorites, accountKey);
           setFavoriteTopics(mergedFavorites);
-        }
-
-        if (!cancelled && offlineRes.ok) {
-          const serverOfflineSubjects = (await offlineRes.json()) as OfflineSubjectMeta[];
-          const hydrated = hydrateOfflineSubjectsForAccount(serverOfflineSubjects, accountKey);
-          setOfflineSubjects(hydrated);
         }
       } catch {
         // keep local library state when sync fails
@@ -172,6 +171,28 @@ export default function Dashboard() {
       cancelled = true;
     };
   }, [accountKey, status]);
+
+  useEffect(() => {
+    const refresh = () => setOfflineSyncState(readOfflineSyncState());
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+      }
+    };
+
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("storage", refresh);
+    window.addEventListener(OFFLINE_SYNC_STATE_EVENT, refresh as EventListener);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener(OFFLINE_SYNC_STATE_EVENT, refresh as EventListener);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     const standalone =
@@ -335,34 +356,28 @@ export default function Dashboard() {
     });
   }, [favoriteTopics, q]);
 
-  const filteredOfflineSubjects = useMemo(() => {
-    const query = normalizeSearch(q);
-    if (!query) return offlineSubjects;
-
-    return offlineSubjects.filter((item) => normalizeSearch(item.subject).includes(query));
-  }, [offlineSubjects, q]);
-
   const syncStatusText = isOffline
     ? lastSyncedAt
       ? `Last GitHub update ${formatDateTime(lastSyncedAt)}`
       : "Offline mode is active"
     : syncingContent
-      ? "Checking GitHub content..."
+      ? "Refreshing GitHub content..."
       : lastSyncedAt
         ? `GitHub updated ${formatDateTime(lastSyncedAt)}`
         : "GitHub update time is unavailable right now.";
 
-  const secondaryStatusText = isOffline
-    ? favoriteTopics.length || offlineSubjects.length
-      ? "Library mode is active. Saved favorites and offline subjects are ready."
-      : "Library mode is active, but this device does not have saved items yet."
-    : offlineSubjects[0]?.subject
-      ? `Recent offline copy: ${offlineSubjects[0].subject}`
-      : "Open any section online once to keep it ready for offline reading later.";
+  const secondaryStatusText =
+    offlineSyncState?.status === "ready"
+      ? isOffline
+        ? `Full workspace cached ${formatDateTime(offlineSyncState.syncedAt)}.`
+        : `Offline workspace updated ${formatDateTime(offlineSyncState.syncedAt)}.`
+      : offlineSyncState?.status === "failed"
+        ? "Offline workspace needs another refresh."
+        : isOffline
+          ? "Offline mode is active. This device is waiting for a full online sync."
+          : "Preparing the full workspace for offline use.";
 
-  const searchPlaceholder = isOffline
-    ? "Search saved topics or offline subjects..."
-    : "Search interview, courses, or CBT...";
+  const searchPlaceholder = "Search interview, courses, or CBT...";
 
   const openFavorite = (item: SavedFavoriteTopic) => {
     setLibraryOpen(false);
@@ -370,16 +385,6 @@ export default function Dashboard() {
       pathname: `/topic/${encodeURIComponent(item.topic_name)}`,
       query: {
         subject: item.subject,
-        ...(item.subject_readme_url ? { readme: item.subject_readme_url } : {}),
-      },
-    });
-  };
-
-  const openOfflineSubject = (item: OfflineSubjectMeta) => {
-    setLibraryOpen(false);
-    router.push({
-      pathname: `/subject/${encodeURIComponent(item.subject)}`,
-      query: {
         ...(item.subject_readme_url ? { readme: item.subject_readme_url } : {}),
       },
     });
@@ -486,7 +491,7 @@ export default function Dashboard() {
 
               <button className="btn btn-outline" onClick={handleLogout} type="button">
                 <FaSignOutAlt />
-                Logout
+                <span className="hide-mobile">Logout</span>
               </button>
             </div>
           </div>
@@ -531,15 +536,14 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {!isOffline && tickerItems.length > 0 && (
-          <section style={{ marginBottom: 16 }}>
+        {tickerItems.length > 0 && (
+          <section className="dashboard-ticker-slot mobile-flat-ticker" style={{ marginBottom: 16 }}>
             <TickerBar items={tickerItems} />
           </section>
         )}
 
-        <section style={{ display: "grid", gap: 14 }}>
-          {!isOffline &&
-            filteredSections.map((section) => {
+        <section className="dashboard-section-list">
+          {filteredSections.map((section) => {
             const Icon = section.icon;
 
             return (
@@ -549,59 +553,34 @@ export default function Dashboard() {
                 style={{ textDecoration: "none", color: "inherit" }}
               >
                 <div
-                  className="card"
+                  className="card dashboard-section-card"
                   style={{
-                    padding: "22px 24px",
-                    borderRadius: 26,
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 16,
                     background: theme === "dark" ? section.surfaceDark : section.surfaceLight,
-                    border: "1px solid color-mix(in srgb, var(--border) 92%, transparent)",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0, flex: 1 }}>
+                  <div className="dashboard-section-card__main">
                     <div
+                      className="dashboard-section-card__icon"
                       style={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: 18,
-                        display: "grid",
-                        placeItems: "center",
                         background:
                           theme === "dark"
                             ? "color-mix(in srgb, var(--surface) 86%, transparent)"
                             : "color-mix(in srgb, var(--surface) 90%, transparent)",
-                        border: "1px solid color-mix(in srgb, var(--border) 86%, transparent)",
                         color: section.accent,
-                        flexShrink: 0,
                       }}
                     >
                       <Icon size={22} />
                     </div>
 
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "clamp(20px, 2.2vw, 26px)", fontWeight: 900, lineHeight: 1.15 }}>
-                        {section.title}
-                      </div>
-                      <div style={{ marginTop: 6, fontSize: 14, color: "var(--muted)", lineHeight: 1.7 }}>
-                        {section.description}
-                      </div>
+                      <div className="dashboard-section-card__title">{section.title}</div>
+                      <div className="dashboard-section-card__description">{section.description}</div>
                     </div>
                   </div>
 
                   <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color: section.accent,
-                      flexShrink: 0,
-                    }}
+                    className="dashboard-section-card__open"
+                    style={{ color: section.accent }}
                   >
                     Open
                     <FaArrowRight />
@@ -611,130 +590,13 @@ export default function Dashboard() {
             );
           })}
 
-          {isOffline && (
-            <>
-              {filteredFavoriteTopics.length > 0 && (
-                <div className="card" style={{ padding: 22, borderRadius: 24 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                    <div
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 14,
-                        display: "grid",
-                        placeItems: "center",
-                        color: "var(--dashboard-library-favorites-color)",
-                        background: "var(--dashboard-library-favorites-background)",
-                        border: "1px solid var(--dashboard-library-favorites-border)",
-                      }}
-                    >
-                      <FaStar />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 900 }}>Saved Favorites</div>
-                      <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)" }}>
-                        Open your saved topics even when the internet is unavailable.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gap: 10 }}>
-                    {filteredFavoriteTopics.map((item) => (
-                      <button
-                        key={`${item.subject}-${item.slug}`}
-                        className="btn btn-outline"
-                        type="button"
-                        onClick={() => openFavorite(item)}
-                        style={{
-                          justifyContent: "space-between",
-                          padding: "14px 16px",
-                          borderRadius: 18,
-                          width: "100%",
-                        }}
-                      >
-                        <span style={{ display: "grid", textAlign: "left", gap: 4, minWidth: 0 }}>
-                          <span style={{ fontSize: 15, fontWeight: 800 }}>{item.topic_name}</span>
-                          <span style={{ fontSize: 12, color: "var(--muted)" }}>{item.subject}</span>
-                        </span>
-                        <FaArrowRight />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {filteredOfflineSubjects.length > 0 && (
-                <div className="card" style={{ padding: 22, borderRadius: 24 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                    <div
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 14,
-                        display: "grid",
-                        placeItems: "center",
-                        color: "var(--dashboard-library-offline-color)",
-                        background: "var(--dashboard-library-offline-background)",
-                        border: "1px solid var(--dashboard-library-offline-border)",
-                      }}
-                    >
-                      <FaDownload />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 900 }}>Saved Offline Subjects</div>
-                      <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)" }}>
-                        Reopen subjects that were downloaded on this device.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gap: 10 }}>
-                    {filteredOfflineSubjects.map((item) => (
-                      <button
-                        key={item.subject}
-                        className="btn btn-outline"
-                        type="button"
-                        onClick={() => openOfflineSubject(item)}
-                        style={{
-                          justifyContent: "space-between",
-                          padding: "14px 16px",
-                          borderRadius: 18,
-                          width: "100%",
-                        }}
-                      >
-                        <span style={{ display: "grid", textAlign: "left", gap: 4, minWidth: 0 }}>
-                          <span style={{ fontSize: 15, fontWeight: 800 }}>{item.subject}</span>
-                          <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                            {item.topicCount} topic{item.topicCount === 1 ? "" : "s"} saved
-                          </span>
-                        </span>
-                        <FaArrowRight />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {!isOffline && filteredSections.length === 0 && (
+          {filteredSections.length === 0 && (
             <div className="card" style={{ padding: 22, borderRadius: 24, textAlign: "center" }}>
               <div style={{ fontSize: 14, color: "var(--muted)" }}>
                 No section matched your search. Try "interview", "courses", or "cbt".
               </div>
             </div>
           )}
-
-          {isOffline &&
-            filteredFavoriteTopics.length === 0 &&
-            filteredOfflineSubjects.length === 0 && (
-              <div className="card" style={{ padding: 22, borderRadius: 24, textAlign: "center" }}>
-                <div style={{ fontSize: 18, fontWeight: 900 }}>Offline library is empty</div>
-                <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)", lineHeight: 1.7 }}>
-                  Save a subject or add a favorite while online, and it will appear here when you go offline.
-                </div>
-              </div>
-            )}
         </section>
       </main>
 
@@ -773,7 +635,7 @@ export default function Dashboard() {
               <div>
                 <div style={{ fontSize: 24, fontWeight: 900 }}>Library</div>
                 <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>
-                  Favorites and offline subjects saved on this account.
+                  Favorite topics saved on this account.
                 </div>
               </div>
 
@@ -793,8 +655,8 @@ export default function Dashboard() {
                   FAVORITES
                 </div>
                 <div style={{ display: "grid", gap: 10 }}>
-                  {favoriteTopics.length > 0 ? (
-                    favoriteTopics.map((item) => (
+                  {filteredFavoriteTopics.length > 0 ? (
+                    filteredFavoriteTopics.map((item) => (
                       <button
                         key={`${item.subject}-${item.slug}`}
                         className="btn btn-outline"
@@ -816,43 +678,7 @@ export default function Dashboard() {
                     ))
                   ) : (
                     <div className="soft" style={{ padding: 14, borderRadius: 18, fontSize: 13, color: "var(--muted)" }}>
-                      No favorites saved yet.
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              <section>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)", marginBottom: 10 }}>
-                  OFFLINE SUBJECTS
-                </div>
-                <div style={{ display: "grid", gap: 10 }}>
-                  {offlineSubjects.length > 0 ? (
-                    offlineSubjects.map((item) => (
-                      <button
-                        key={item.subject}
-                        className="btn btn-outline"
-                        type="button"
-                        onClick={() => openOfflineSubject(item)}
-                        style={{
-                          justifyContent: "space-between",
-                          padding: "14px 16px",
-                          borderRadius: 18,
-                          width: "100%",
-                        }}
-                      >
-                        <span style={{ display: "grid", textAlign: "left", gap: 4, minWidth: 0 }}>
-                          <span style={{ fontSize: 15, fontWeight: 800 }}>{item.subject}</span>
-                          <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                            {item.topicCount} topic{item.topicCount === 1 ? "" : "s"} saved
-                          </span>
-                        </span>
-                        <FaArrowRight />
-                      </button>
-                    ))
-                  ) : (
-                    <div className="soft" style={{ padding: 14, borderRadius: 18, fontSize: 13, color: "var(--muted)" }}>
-                      No offline subject saved yet.
+                      {q ? "No favorites matched your search." : "No favorites saved yet."}
                     </div>
                   )}
                 </div>

@@ -3,25 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
 import { FaArrowLeft, FaArrowRight, FaMoon, FaSearch, FaSun } from "react-icons/fa";
 
+import CachedRepoImage from "../components/content/CachedRepoImage";
 import TickerBar from "../components/content/TickerBar";
 import { ThemeContext } from "../context/ThemeContext";
+import { useAppSession } from "../lib/app-session";
 import { fetchCourseSubjects, fetchTickerItems } from "../lib/content-client";
 import type { CourseSubject, TickerItem } from "../lib/content-types";
 import { buildPublicEntryUrl } from "../lib/public-entry";
 
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
-const getCourseInitials = (subject: string) =>
-  subject
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("") || "C";
 
 const accentByCategory = (category: string) => {
   const normalized = normalizeSearch(category);
@@ -67,7 +60,7 @@ const accentByCategory = (category: string) => {
 
 export default function CoursesPage() {
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = useAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [courses, setCourses] = useState<CourseSubject[]>([]);
   const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
@@ -164,7 +157,7 @@ export default function CoursesPage() {
           </div>
 
           {tickerItems.length > 0 && (
-            <div style={{ marginTop: 18 }}>
+            <div className="desktop-ticker-slot" style={{ marginTop: 18 }}>
               <TickerBar items={tickerItems} />
             </div>
           )}
@@ -199,7 +192,7 @@ export default function CoursesPage() {
           )}
 
           {!loading && error && (
-            <div className="card" style={{ padding: 18, borderRadius: 18, color: "crimson" }}>
+            <div className="card" style={{ padding: 18, borderRadius: 18, color: "var(--status-offline-color)" }}>
               {error}
             </div>
           )}
@@ -242,20 +235,18 @@ export default function CoursesPage() {
                       />
 
                       <div className="course-library-card__header">
-                        <div
-                          className="course-library-card__icon-shell"
-                          style={{
-                            border: `1px solid ${tone.border}`,
-                            background: tone.background,
-                            color: tone.color,
-                          }}
-                        >
-                          {course.icon_url ? (
-                            <img src={course.icon_url} alt={`${course.subject} icon`} loading="lazy" />
-                          ) : (
-                            <span style={{ fontSize: 18, fontWeight: 900 }}>{getCourseInitials(course.subject)}</span>
-                          )}
-                        </div>
+                        {course.icon_url ? (
+                          <div
+                            className="course-library-card__icon-shell"
+                            style={{
+                              border: `1px solid ${tone.border}`,
+                              background: tone.background,
+                              color: tone.color,
+                            }}
+                          >
+                            <CachedRepoImage src={course.icon_url} alt={`${course.subject} icon`} loading="lazy" />
+                          </div>
+                        ) : null}
 
                         <div className="course-library-card__meta">
                           <span

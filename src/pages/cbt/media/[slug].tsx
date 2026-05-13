@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { FaArrowLeft, FaMoon, FaSun } from "react-icons/fa";
+import RepoMarkdown from "../../../components/content/RepoMarkdown";
 import { ThemeContext } from "../../../context/ThemeContext";
+import { useAppSession } from "../../../lib/app-session";
 import { fetchMediaItem } from "../../../lib/content-client";
 import type { MediaCollectionItem } from "../../../lib/content-types";
 import { buildPublicEntryUrl } from "../../../lib/public-entry";
+import { toGithubProxyUrl } from "../../../lib/readme-utils";
 
 const isMediaKind = (value: string): value is "training-videos" | "audio-books" =>
   value === "training-videos" || value === "audio-books";
@@ -18,7 +18,7 @@ const isMediaKind = (value: string): value is "training-videos" | "audio-books" 
 export default function MediaDetailPage() {
   const router = useRouter();
   const { slug, kind } = router.query;
-  const { status } = useSession();
+  const { status } = useAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [item, setItem] = useState<MediaCollectionItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +72,7 @@ export default function MediaDetailPage() {
   }, [kind, slug, status]);
 
   const pageLabel = kind === "audio-books" ? "Audio Book" : "Training Video";
+  const hasNativeMedia = Boolean(item?.mediaUrl);
 
   return (
     <div className="app-shell">
@@ -104,7 +105,7 @@ export default function MediaDetailPage() {
         )}
 
         {!loading && error && (
-          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "crimson" }}>
+          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "var(--status-offline-color)" }}>
             {error}
           </div>
         )}
@@ -112,7 +113,7 @@ export default function MediaDetailPage() {
         {!loading && item && (
           <>
             <section style={{ marginTop: 18 }}>
-              <div className="card" style={{ padding: 18, borderRadius: 22 }}>
+              <div className="card reader-card reader-card--compact" style={{ padding: 18, borderRadius: 22 }}>
                 <div style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.7 }}>
                   {item.summary}
                 </div>
@@ -127,21 +128,59 @@ export default function MediaDetailPage() {
                   ))}
                 </div>
                 <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 10 }}>
-                  <a
-                    href={item.playlistUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn btn-primary"
-                  >
-                    Open Source Link
-                  </a>
+                  {item.playlistUrl ? (
+                    <a
+                      href={item.playlistUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-primary"
+                    >
+                      Open Source Link
+                    </a>
+                  ) : null}
+                  {item.mediaUrl ? (
+                    <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="btn btn-outline">
+                      Open Media File
+                    </a>
+                  ) : null}
                 </div>
               </div>
             </section>
 
-            {item.embedUrl && (
+            {item.mediaUrl && kind === "training-videos" && (
               <section style={{ marginTop: 18 }}>
-                <div className="card" style={{ padding: 18, borderRadius: 22 }}>
+                <div className="card reader-card reader-card--compact" style={{ padding: 18, borderRadius: 22 }}>
+                  <video
+                    controls
+                    preload="metadata"
+                    poster={item.posterUrl ? toGithubProxyUrl(item.posterUrl) : undefined}
+                    style={{
+                      width: "100%",
+                      borderRadius: 18,
+                      background: "var(--text)",
+                    }}
+                  >
+                    <source src={item.mediaUrl} type={item.mimeType || undefined} />
+                    Your browser does not support HTML5 video playback.
+                  </video>
+                </div>
+              </section>
+            )}
+
+            {item.mediaUrl && kind === "audio-books" && (
+              <section style={{ marginTop: 18 }}>
+                <div className="card reader-card reader-card--compact" style={{ padding: 18, borderRadius: 22 }}>
+                  <audio controls preload="metadata" style={{ width: "100%" }}>
+                    <source src={item.mediaUrl} type={item.mimeType || undefined} />
+                    Your browser does not support HTML5 audio playback.
+                  </audio>
+                </div>
+              </section>
+            )}
+
+            {!hasNativeMedia && item.embedUrl && (
+              <section style={{ marginTop: 18 }}>
+                <div className="card reader-card reader-card--compact" style={{ padding: 18, borderRadius: 22 }}>
                   <div
                     style={{
                       position: "relative",
@@ -171,9 +210,9 @@ export default function MediaDetailPage() {
 
             {item.notesMarkdown && (
               <section style={{ marginTop: 18 }}>
-                <div className="card" style={{ padding: 22, borderRadius: 22 }}>
+                <div className="card reader-card" style={{ padding: 22, borderRadius: 22 }}>
                   <div className="prose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.notesMarkdown}</ReactMarkdown>
+                    <RepoMarkdown baseUrl={item.notesMarkdownUrl}>{item.notesMarkdown}</RepoMarkdown>
                   </div>
                 </div>
               </section>

@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { FaArrowLeft, FaMoon, FaSun } from "react-icons/fa";
+import RepoMarkdown from "../../components/content/RepoMarkdown";
 import { ThemeContext } from "../../context/ThemeContext";
+import { useAppSession } from "../../lib/app-session";
 import { fetchInterviewQuestion } from "../../lib/content-client";
 import type { InterviewQuestionDetail } from "../../lib/content-types";
 import { buildPublicEntryUrl } from "../../lib/public-entry";
@@ -15,7 +14,7 @@ import { buildPublicEntryUrl } from "../../lib/public-entry";
 export default function InterviewDetailPage() {
   const router = useRouter();
   const { slug } = router.query;
-  const { status } = useSession();
+  const { status } = useAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [item, setItem] = useState<InterviewQuestionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +92,7 @@ export default function InterviewDetailPage() {
         )}
 
         {!loading && error && (
-          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "crimson" }}>
+          <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18, color: "var(--status-offline-color)" }}>
             {error}
           </div>
         )}
@@ -101,8 +100,8 @@ export default function InterviewDetailPage() {
         {!loading && item && (
           <>
             <section style={{ marginTop: 18 }}>
-              <div className="card" style={{ padding: 18, borderRadius: 22 }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="card reader-card reader-card--compact" style={{ padding: 18, borderRadius: 22 }}>
+                <div className="content-card__tags" style={{ marginTop: 0 }}>
                   <span className="badge">{item.category}</span>
                   <span className="badge">{item.level}</span>
                   {item.tags.map((tag) => (
@@ -120,9 +119,9 @@ export default function InterviewDetailPage() {
             </section>
 
             <section style={{ marginTop: 18 }}>
-              <div className="card" style={{ padding: 22, borderRadius: 22 }}>
+              <div className="card reader-card" style={{ padding: 22, borderRadius: 22 }}>
                 <div className="prose">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.markdown}</ReactMarkdown>
+                  <RepoMarkdown baseUrl={item.markdown_url}>{item.markdown}</RepoMarkdown>
                 </div>
               </div>
             </section>

@@ -1,5 +1,5 @@
 import { buildContentRepoRawUrl } from "./content-repo-config";
-import { normalize, parseSubjectTopicsFromReadme, type ParsedTopic } from "./readme-utils";
+import { normalize, parseSubjectTopicsFromReadme, toRawGithub, type ParsedTopic } from "./readme-utils";
 import { readRepoContentSource, readRepoContentText } from "./server-content-source";
 import type {
   CbtCollections,
@@ -65,8 +65,13 @@ type MediaCatalogFile = {
     title: string;
     summary: string;
     speaker: string;
-    playlistUrl: string;
+    playlistUrl?: string;
     embedUrl?: string;
+    mediaPath?: string;
+    mediaUrl?: string;
+    posterPath?: string;
+    posterUrl?: string;
+    mimeType?: string;
     tags: string[];
     notesPath?: string;
   }>;
@@ -85,6 +90,17 @@ const fetchRepoText = (filePath: string, preferredRepoName?: string) =>
 
 const fetchRepoTextWithSource = (filePath: string, preferredRepoName?: string) =>
   readRepoContentSource(filePath, preferredRepoName);
+
+const resolveOptionalRepoAssetUrl = (value: string | undefined, repoName: string) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return undefined;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return toRawGithub(trimmed);
+  }
+
+  return buildContentRepoRawUrl(trimmed, repoName);
+};
 
 const fetchRepoJsonWithSource = async <T>(filePath: string, preferredRepoName?: string) => {
   const source = await fetchRepoTextWithSource(filePath, preferredRepoName);
@@ -120,6 +136,11 @@ const splitSlides = (markdown: string): SlideshowSlide[] =>
       title: extractSlideTitle(chunk, index),
       markdown: chunk,
     }));
+
+const readOptionalMarkdownSource = async (filePath: string | undefined, repoName: string) => {
+  if (!filePath) return undefined;
+  return fetchRepoTextWithSource(filePath, repoName);
+};
 
 const loadCourseTopics = async (
   subject: CourseCatalogEntry,
@@ -193,7 +214,7 @@ export const getInterviewQuestionBySlug = async (
 
   if (!entry) return null;
 
-  const markdown = await fetchRepoText(entry.answerPath, repoName);
+  const markdownSource = await fetchRepoTextWithSource(entry.answerPath, repoName);
 
   return {
     slug: entry.slug,
@@ -202,8 +223,9 @@ export const getInterviewQuestionBySlug = async (
     level: entry.level,
     question: entry.question,
     tags: entry.tags,
-    excerpt: summarizeMarkdown(markdown),
-    markdown,
+    excerpt: summarizeMarkdown(markdownSource.text),
+    markdown: markdownSource.text,
+    markdown_url: markdownSource.url,
   };
 };
 
@@ -247,7 +269,8 @@ export const getCourseSubjectByName = async (
 };
 
 const loadMediaCollection = async (
-  folderName: "training-videos" | "audio-books"
+  folderName: "training-videos" | "audio-books",
+  includeNotes = false
 ): Promise<MediaCollectionItem[]> => {
   const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
     resolveCbtPath(folderName, "av-metadata.json")
@@ -255,8 +278,8 @@ const loadMediaCollection = async (
 
   return Promise.all(
     catalog.items.map(async (item) => {
-      const notesMarkdown = item.notesPath
-        ? await fetchRepoText(item.notesPath, repoName)
+      const notesSource = includeNotes
+        ? await readOptionalMarkdownSource(item.notesPath, repoName)
         : undefined;
 
       return {
@@ -266,8 +289,16 @@ const loadMediaCollection = async (
         speaker: item.speaker,
         playlistUrl: item.playlistUrl,
         embedUrl: item.embedUrl,
+        mediaUrl:
+          resolveOptionalRepoAssetUrl(item.mediaPath, repoName) ||
+          resolveOptionalRepoAssetUrl(item.mediaUrl, repoName),
+        posterUrl:
+          resolveOptionalRepoAssetUrl(item.posterPath, repoName) ||
+          resolveOptionalRepoAssetUrl(item.posterUrl, repoName),
+        mimeType: item.mimeType,
         tags: item.tags,
-        notesMarkdown,
+        notesMarkdown: notesSource?.text,
+        notesMarkdownUrl: notesSource?.url,
       };
     })
   );
@@ -295,7 +326,7 @@ export const getSlideshowBySlug = async (slug: string): Promise<SlideshowDeck | 
 
   if (!deck) return null;
 
-  const markdown = await fetchRepoText(deck.contentPath, repoName);
+  const markdownSource = await fetchRepoTextWithSource(deck.contentPath, repoName);
 
   return {
     slug: deck.slug,
@@ -303,16 +334,17 @@ export const getSlideshowBySlug = async (slug: string): Promise<SlideshowDeck | 
     summary: deck.summary,
     audience: deck.audience,
     tags: deck.tags,
-    markdown,
-    slides: splitSlides(markdown),
+    markdown: markdownSource.text,
+    markdown_url: markdownSource.url,
+    slides: splitSlides(markdownSource.text),
   };
 };
 
 export const getCbtCollections = async (): Promise<CbtCollections> => {
   const [slideshows, trainingVideos, audioBooks] = await Promise.all([
     getSlideshows(),
-    loadMediaCollection("training-videos"),
-    loadMediaCollection("audio-books"),
+    loadMediaCollection("training-videos", false),
+    loadMediaCollection("audio-books", false),
   ]);
 
   return {
@@ -324,12 +356,39 @@ export const getCbtCollections = async (): Promise<CbtCollections> => {
 
 export const getMediaCollectionByKind = async (
   kind: "training-videos" | "audio-books"
-): Promise<MediaCollectionItem[]> => loadMediaCollection(kind);
+): Promise<MediaCollectionItem[]> => loadMediaCollection(kind, false);
 
 export const getMediaItemBySlug = async (
   kind: "training-videos" | "audio-books",
   slug: string
 ): Promise<MediaCollectionItem | null> => {
-  const items = await loadMediaCollection(kind);
-  return items.find((item) => item.slug === slug) || null;
+  const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
+    resolveCbtPath(kind, "av-metadata.json")
+  );
+  const item = catalog.items.find((entry) => entry.slug === slug);
+
+  if (!item) {
+    return null;
+  }
+
+  const notesSource = await readOptionalMarkdownSource(item.notesPath, repoName);
+
+  return {
+    slug: item.slug,
+    title: item.title,
+    summary: item.summary,
+    speaker: item.speaker,
+    playlistUrl: item.playlistUrl,
+    embedUrl: item.embedUrl,
+    mediaUrl:
+      resolveOptionalRepoAssetUrl(item.mediaPath, repoName) ||
+      resolveOptionalRepoAssetUrl(item.mediaUrl, repoName),
+    posterUrl:
+      resolveOptionalRepoAssetUrl(item.posterPath, repoName) ||
+      resolveOptionalRepoAssetUrl(item.posterUrl, repoName),
+    mimeType: item.mimeType,
+    tags: item.tags,
+    notesMarkdown: notesSource?.text,
+    notesMarkdownUrl: notesSource?.url,
+  };
 };
