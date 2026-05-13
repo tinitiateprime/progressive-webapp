@@ -164,6 +164,14 @@ export type CourseIconEntry = {
   iconUrl: string;
 };
 
+export type ContentRepoStatus = {
+  repoName: string;
+  branch: string;
+  source: string;
+  updatedAt: string | null;
+  commitSha: string | null;
+};
+
 export type DesignSystem = {
   repoName: string;
   theme: {

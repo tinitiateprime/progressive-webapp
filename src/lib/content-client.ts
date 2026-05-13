@@ -1,5 +1,6 @@
 import type {
   CbtCollections,
+  ContentRepoStatus,
   CourseSubject,
   DesignSystem,
   InterviewQuestionDetail,
@@ -51,6 +52,9 @@ export const fetchTickerItems = async (signal?: AbortSignal): Promise<TickerItem
 
 export const fetchDesignConfig = async (signal?: AbortSignal): Promise<DesignSystem> =>
   fetchJsonNoStore<DesignSystem>("/api/content/design", signal);
+
+export const fetchContentRepoStatus = async (signal?: AbortSignal): Promise<ContentRepoStatus> =>
+  fetchJsonNoStore<ContentRepoStatus>("/api/content/status", signal);
 
 export const fetchCourseSubjects = async (signal?: AbortSignal): Promise<CourseSubject[]> =>
   fetchJsonNoStore<CourseSubject[]>("/api/content/courses", signal);

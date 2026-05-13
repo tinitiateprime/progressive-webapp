@@ -24,7 +24,7 @@ import {
 import TickerBar from "../components/content/TickerBar";
 import { ThemeContext } from "../context/ThemeContext";
 import { clearBrowserSessionActive } from "../lib/browserSession";
-import { fetchTickerItems } from "../lib/content-client";
+import { fetchContentRepoStatus, fetchTickerItems } from "../lib/content-client";
 import type { TickerItem } from "../lib/content-types";
 import { buildPublicEntryUrl } from "../lib/public-entry";
 import {
@@ -210,14 +210,18 @@ export default function Dashboard() {
     (async () => {
       try {
         setSyncingContent(true);
-        const items = await fetchTickerItems(controller.signal);
+        const [items, statusInfo] = await Promise.all([
+          fetchTickerItems(controller.signal),
+          fetchContentRepoStatus(controller.signal),
+        ]);
         if (cancelled) return;
 
         setTickerItems(items);
-        setLastSyncedAt(Date.now());
+        setLastSyncedAt(statusInfo.updatedAt ? Date.parse(statusInfo.updatedAt) : null);
       } catch (err: unknown) {
         if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
           setTickerItems([]);
+          setLastSyncedAt(null);
         }
       } finally {
         if (!cancelled) {
@@ -340,13 +344,13 @@ export default function Dashboard() {
 
   const syncStatusText = isOffline
     ? lastSyncedAt
-      ? `Last updated ${formatDateTime(lastSyncedAt)}`
+      ? `Last GitHub update ${formatDateTime(lastSyncedAt)}`
       : "Offline mode is active"
     : syncingContent
-      ? "Syncing GitHub content..."
+      ? "Checking GitHub content..."
       : lastSyncedAt
-        ? `Updated ${formatDateTime(lastSyncedAt)}`
-        : "Open any section to load the latest content.";
+        ? `GitHub updated ${formatDateTime(lastSyncedAt)}`
+        : "GitHub update time is unavailable right now.";
 
   const secondaryStatusText = isOffline
     ? favoriteTopics.length || offlineSubjects.length

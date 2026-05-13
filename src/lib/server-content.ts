@@ -77,6 +77,9 @@ type TickerFeedFile = {
   items: TickerItem[];
 };
 
+const CBT_ROOT_FOLDER = "cbt";
+const resolveCbtPath = (...segments: string[]) => [CBT_ROOT_FOLDER, ...segments].join("/");
+
 const fetchRepoText = (filePath: string, preferredRepoName?: string) =>
   readRepoContentText(filePath, preferredRepoName);
 
@@ -247,7 +250,7 @@ const loadMediaCollection = async (
   folderName: "training-videos" | "audio-books"
 ): Promise<MediaCollectionItem[]> => {
   const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
-    `${folderName}/av-metadata.json`
+    resolveCbtPath(folderName, "av-metadata.json")
   );
 
   return Promise.all(
@@ -272,7 +275,7 @@ const loadMediaCollection = async (
 
 export const getSlideshows = async (): Promise<SlideshowSummary[]> => {
   const { data: catalog } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
-    "slideshows/av-metadata.json"
+    resolveCbtPath("slideshows", "av-metadata.json")
   );
 
   return catalog.decks.map((deck) => ({
@@ -286,7 +289,7 @@ export const getSlideshows = async (): Promise<SlideshowSummary[]> => {
 
 export const getSlideshowBySlug = async (slug: string): Promise<SlideshowDeck | null> => {
   const { data: catalog, repoName } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
-    "slideshows/av-metadata.json"
+    resolveCbtPath("slideshows", "av-metadata.json")
   );
   const deck = catalog.decks.find((item) => item.slug === slug);
 

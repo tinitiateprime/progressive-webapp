@@ -418,7 +418,9 @@ input:focus-visible {
 .course-library-card__icon-shell img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  display: block;
+  object-fit: contain;
+  padding: 6px;
 }
 
 .course-library-card__meta {
@@ -452,11 +454,14 @@ input:focus-visible {
 }
 
 .dashboard-profile-btn {
+  width: 124px;
   min-width: 0;
+  padding-inline: 12px;
   justify-content: center;
   gap: 10px;
   cursor: default;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .dashboard-profile-btn__avatar {
@@ -473,14 +478,19 @@ input:focus-visible {
 
 .dashboard-profile-btn__copy {
   min-width: 0;
+  flex: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .dashboard-profile-btn__name {
   font-size: 14px;
   font-weight: 800;
   line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dashboard-profile-btn__email {
@@ -569,6 +579,7 @@ main,
 
   .dashboard-profile-btn {
     grid-column: 1 / -1;
+    width: 100%;
   }
 
   .page-hero-search {
