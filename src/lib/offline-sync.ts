@@ -10,17 +10,24 @@ import {
   fetchMediaItem,
   fetchSlideshow,
   fetchTickerItems,
+  hasCachedContentUrl,
 } from "./content-client";
 import { extractMarkdownAssetUrls, fetchTextStrict, toGithubProxyUrl } from "./readme-utils";
 
-const START_URL_CACHE = "start-url";
-const APP_PAGES_CACHE = "app-pages";
+const APP_PAGES_CACHE = "app-pages-v2";
 const REPO_CONTENT_CACHE = "repo-content";
 const STATIC_IMAGE_CACHE = "static-image-assets";
 const STATIC_AUDIO_CACHE = "static-audio-assets";
 const STATIC_VIDEO_CACHE = "static-video-assets";
 const OFFLINE_SYNC_STATE_KEY = "tinitiate.offline.sync-state";
 export const OFFLINE_SYNC_STATE_EVENT = "tinitiate:offline-sync-state";
+const CORE_SECTION_ROUTES = ["/dashboard", "/courses", "/interview", "/cbt"] as const;
+const CORE_SECTION_CONTENT_URLS = [
+  "/api/content/design",
+  "/api/content/courses",
+  "/api/content/interview",
+  "/api/content/cbt",
+] as const;
 
 type OfflineSyncState = {
   syncedAt: number;
@@ -34,10 +41,32 @@ type OfflineSyncState = {
 };
 
 let activeSync: Promise<void> | null = null;
+const ROUTE_SYNC_CONCURRENCY = 4;
+const DETAIL_SYNC_CONCURRENCY = 3;
+const ASSET_SYNC_CONCURRENCY = 4;
 
 const toAbsoluteUrl = (href: string) => new URL(href, window.location.origin).toString();
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Unknown sync error";
+
+const hasCurrentOfflineWorkspace = (
+  existingState: OfflineSyncState | null,
+  statusInfo: { updatedAt: string | null; commitSha: string | null }
+) => {
+  if (!existingState || existingState.status !== "ready") {
+    return false;
+  }
+
+  if (statusInfo.commitSha && existingState.contentCommitSha) {
+    return existingState.contentCommitSha === statusInfo.commitSha;
+  }
+
+  if (statusInfo.updatedAt && existingState.contentUpdatedAt) {
+    return existingState.contentUpdatedAt === statusInfo.updatedAt;
+  }
+
+  return false;
+};
 
 const getImageCacheName = (url: string) => {
   if (typeof window === "undefined") return STATIC_IMAGE_CACHE;
@@ -75,7 +104,7 @@ export const readOfflineSyncState = (): OfflineSyncState | null => {
 const runWithConcurrency = async <T>(
   items: T[],
   worker: (item: T) => Promise<void>,
-  concurrency = 4
+  concurrency = 6
 ) => {
   const queue = [...items];
   const runners = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
@@ -105,8 +134,7 @@ const cacheRouteHtml = async (href: string) => {
     throw new Error(`Failed to cache route ${href} (${response.status})`);
   }
 
-  const cacheName = href === "/" ? START_URL_CACHE : APP_PAGES_CACHE;
-  const cache = await caches.open(cacheName);
+  const cache = await caches.open(APP_PAGES_CACHE);
   await cache.put(absoluteUrl, response.clone());
 };
 
@@ -152,6 +180,68 @@ const prefetchRoute = async (router: NextRouter | null, href: string) => {
   }
 };
 
+const verifyCoreOfflineSections = async () => {
+  const missingContentUrls: string[] = [];
+
+  for (const url of CORE_SECTION_CONTENT_URLS) {
+    const cached = await hasCachedContentUrl(url);
+    if (!cached) {
+      missingContentUrls.push(url);
+    }
+  }
+
+  if (missingContentUrls.length > 0) {
+    throw new Error(`Missing cached core content: ${missingContentUrls.join(", ")}`);
+  }
+
+  if (typeof window === "undefined" || !("caches" in window)) {
+    return;
+  }
+
+  const cache = await caches.open(APP_PAGES_CACHE);
+  const missingRoutes: string[] = [];
+
+  for (const href of CORE_SECTION_ROUTES) {
+    const match = await cache.match(toAbsoluteUrl(href), { ignoreSearch: false });
+    if (!match?.ok) {
+      missingRoutes.push(href);
+    }
+  }
+
+  if (missingRoutes.length > 0) {
+    throw new Error(`Missing cached core routes: ${missingRoutes.join(", ")}`);
+  }
+};
+
+export async function syncCoreOfflineSections(router?: NextRouter | null) {
+  if (typeof window === "undefined" || !navigator.onLine) {
+    return;
+  }
+
+  await Promise.all([
+    fetchDesignConfig(undefined, { strategy: "network-first" }),
+    fetchCourseSubjects(undefined, { strategy: "network-first" }),
+    fetchInterviewQuestions(undefined, { strategy: "network-first" }),
+    fetchCbtCollections(undefined, { strategy: "network-first" }),
+  ]);
+
+  await Promise.allSettled([
+    fetchTickerItems(undefined, { strategy: "network-first" }),
+    fetchContentRepoStatus(undefined, { strategy: "network-first" }),
+  ]);
+
+  await runWithConcurrency(
+    [...CORE_SECTION_ROUTES],
+    async (href) => {
+      await prefetchRoute(router || null, href);
+      await cacheRouteHtml(href);
+    },
+    CORE_SECTION_ROUTES.length
+  );
+
+  await verifyCoreOfflineSections();
+}
+
 export async function syncOfflineWorkspace(router?: NextRouter | null) {
   if (activeSync) {
     return activeSync;
@@ -179,6 +269,10 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       };
     } catch (error) {
       rememberWarning("Content repo status", error);
+    }
+
+    if (hasCurrentOfflineWorkspace(readOfflineSyncState(), statusInfo)) {
+      return;
     }
 
     await fetchTickerItems(undefined, { strategy: "network-first" }).catch((error) => {
@@ -264,31 +358,31 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
             });
             extractMarkdownAssetUrls(readmeMarkdown, readmeUrl).forEach(addImageUrl);
           } catch (error) {
-            rememberFailure(`Subject README ${course.subject}`, error);
+            rememberWarning(`Subject README ${course.subject}`, error);
           }
         });
       }
 
-      for (const topic of course.topics) {
-        if (topic.md_url) {
-          markdownUrls.add(topic.md_url);
-        }
-
+      for (const topic of course.topics || []) {
         routeHrefs.add(
           `/topic/${encodeURIComponent(topic.topic_name)}?subject=${encodeURIComponent(
             course.subject
           )}${readmeUrl ? `&readme=${encodeURIComponent(readmeUrl)}` : ""}`
         );
 
+        if (!topic.md_url) {
+          continue;
+        }
+
+        markdownUrls.add(topic.md_url);
         detailTasks.push(async () => {
-          if (!topic.md_url) return;
           try {
             const topicMarkdown = await fetchTextStrict(topic.md_url, undefined, {
               strategy: "network-first",
             });
             extractMarkdownAssetUrls(topicMarkdown, topic.md_url).forEach(addImageUrl);
           } catch (error) {
-            rememberFailure(`Topic markdown ${topic.topic_name}`, error);
+            rememberWarning(`Topic ${course.subject} / ${topic.topic_name}`, error);
           }
         });
       }
@@ -303,7 +397,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           });
           extractMarkdownAssetUrls(detail.markdown, detail.markdown_url).forEach(addImageUrl);
         } catch (error) {
-          rememberFailure(`Interview detail ${item.slug}`, error);
+          rememberWarning(`Interview detail ${item.slug}`, error);
         }
       });
     }
@@ -317,7 +411,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           });
           extractMarkdownAssetUrls(slideshow.markdown, slideshow.markdown_url).forEach(addImageUrl);
         } catch (error) {
-          rememberFailure(`Slideshow ${deck.slug}`, error);
+          rememberWarning(`Slideshow ${deck.slug}`, error);
         }
       });
     }
@@ -339,7 +433,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           }
           extractMarkdownAssetUrls(mediaItem.notesMarkdown || "", mediaItem.notesMarkdownUrl).forEach(addImageUrl);
         } catch (error) {
-          rememberFailure(`Training video ${item.slug}`, error);
+          rememberWarning(`Training video ${item.slug}`, error);
         }
       });
     }
@@ -361,53 +455,73 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           }
           extractMarkdownAssetUrls(mediaItem.notesMarkdown || "", mediaItem.notesMarkdownUrl).forEach(addImageUrl);
         } catch (error) {
-          rememberFailure(`Audio item ${item.slug}`, error);
+          rememberWarning(`Audio item ${item.slug}`, error);
         }
       });
     }
 
     try {
-      await runWithConcurrency(detailTasks, async (task) => {
-        await task();
-      });
-
-      await runWithConcurrency(Array.from(imageUrls), async (url) => {
-        try {
-          await cacheStaticAsset(url, getImageCacheName(url));
-        } catch (error) {
-          rememberFailure(`Image asset ${url}`, error);
-        }
-      });
-
-      await runWithConcurrency(Array.from(audioUrls), async (url) => {
-        try {
-          await cacheStaticAsset(url, STATIC_AUDIO_CACHE);
-        } catch (error) {
-          rememberFailure(`Audio asset ${url}`, error);
-        }
-      });
-
-      await runWithConcurrency(Array.from(videoUrls), async (url) => {
-        try {
-          await cacheStaticAsset(url, STATIC_VIDEO_CACHE);
-        } catch (error) {
-          rememberFailure(`Video asset ${url}`, error);
-        }
-      });
-
-      await runWithConcurrency(Array.from(routeHrefs), async (href) => {
-        try {
-          await prefetchRoute(router || null, href);
-          await cacheRouteHtml(href);
-          cachedRouteCount += 1;
-        } catch (error) {
-          rememberFailure(`Route ${href}`, error);
-        }
-      });
+      await runWithConcurrency(
+        Array.from(routeHrefs),
+        async (href) => {
+          try {
+            await prefetchRoute(router || null, href);
+            await cacheRouteHtml(href);
+            cachedRouteCount += 1;
+          } catch (error) {
+            rememberFailure(`Route ${href}`, error);
+          }
+        },
+        ROUTE_SYNC_CONCURRENCY
+      );
 
       if (cachedRouteCount === 0) {
         throw new Error("Could not cache any application routes.");
       }
+
+      await runWithConcurrency(
+        detailTasks,
+        async (task) => {
+          await task();
+        },
+        DETAIL_SYNC_CONCURRENCY
+      );
+
+      await runWithConcurrency(
+        Array.from(imageUrls),
+        async (url) => {
+          try {
+            await cacheStaticAsset(url, getImageCacheName(url));
+          } catch (error) {
+            rememberWarning(`Image asset ${url}`, error);
+          }
+        },
+        ASSET_SYNC_CONCURRENCY
+      );
+
+      await runWithConcurrency(
+        Array.from(audioUrls),
+        async (url) => {
+          try {
+            await cacheStaticAsset(url, STATIC_AUDIO_CACHE);
+          } catch (error) {
+            rememberWarning(`Audio asset ${url}`, error);
+          }
+        },
+        ASSET_SYNC_CONCURRENCY
+      );
+
+      await runWithConcurrency(
+        Array.from(videoUrls),
+        async (url) => {
+          try {
+            await cacheStaticAsset(url, STATIC_VIDEO_CACHE);
+          } catch (error) {
+            rememberWarning(`Video asset ${url}`, error);
+          }
+        },
+        ASSET_SYNC_CONCURRENCY
+      );
 
       if (syncFailures.length > 0) {
         throw new Error(syncFailures.slice(0, 5).join(" | "));

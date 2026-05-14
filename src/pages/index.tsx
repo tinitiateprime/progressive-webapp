@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import {
   FaArrowRight,
@@ -23,6 +23,7 @@ import {
 import { FaXTwitter } from "react-icons/fa6";
 import { useDesign } from "../context/DesignContext";
 import { ThemeContext } from "../context/ThemeContext";
+import { normalizeCallbackUrl } from "../lib/public-entry";
 
 const featureCards = [
   {
@@ -60,8 +61,7 @@ export default function Home() {
   const isAuthenticated = status === "authenticated";
   const sessionExpired =
     typeof router.query.reason === "string" && router.query.reason === "session-ended";
-  const callbackUrl =
-    typeof router.query.callbackUrl === "string" ? router.query.callbackUrl : "";
+  const callbackUrl = normalizeCallbackUrl(router.query.callbackUrl);
   const authParams = new URLSearchParams();
   if (callbackUrl) {
     authParams.set("callbackUrl", callbackUrl);
@@ -73,6 +73,13 @@ export default function Home() {
   const secondaryLabel = "Login";
   const logoSrc = theme === "dark" ? "/TinitiateLogo.png" : "/TinitiateLogoLight.png";
   const featureTones = design?.landing.features;
+
+  useEffect(() => {
+    const targets = isAuthenticated ? ["/dashboard"] : [primaryHref, secondaryHref];
+    targets.forEach((href) => {
+      void router.prefetch(href);
+    });
+  }, [isAuthenticated, primaryHref, router, secondaryHref]);
 
   return (
     <div className="app-shell app-shell--home">

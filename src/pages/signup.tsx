@@ -10,6 +10,8 @@ import {
   hasBrowserSessionActive,
   markBrowserSessionActive,
 } from "../lib/browserSession";
+import { writeCachedSessionUser } from "../lib/app-session";
+import { normalizeCallbackUrl } from "../lib/public-entry";
 import {
   FaMoon,
   FaSun,
@@ -54,9 +56,7 @@ export default function SignupPage() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const logoSrc = theme === "dark" ? "/TinitiateLogo.png" : "/TinitiateLogoLight.png";
   const callbackUrl =
-    typeof router.query.callbackUrl === "string"
-      ? router.query.callbackUrl
-      : "/dashboard";
+    normalizeCallbackUrl(router.query.callbackUrl, "/dashboard") || "/dashboard";
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -74,6 +74,11 @@ export default function SignupPage() {
       router.replace(callbackUrl);
     }
   }, [status, router, callbackUrl]);
+
+  useEffect(() => {
+    void router.prefetch(callbackUrl);
+    void router.prefetch("/login");
+  }, [callbackUrl, router]);
 
   async function onGoogle() {
     setError("");
@@ -137,6 +142,11 @@ export default function SignupPage() {
         return;
       }
 
+      writeCachedSessionUser({
+        id: data?.user?.id,
+        name: data?.user?.fullName,
+        email: data?.user?.email,
+      });
       router.replace(result?.url || callbackUrl);
     } catch {
       setError("Signup failed. Please try again.");

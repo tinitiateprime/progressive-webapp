@@ -1,30 +1,24 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { FaArrowLeft, FaMoon, FaSun } from "react-icons/fa";
 import RepoMarkdown from "../../components/content/RepoMarkdown";
 import { ThemeContext } from "../../context/ThemeContext";
-import { useAppSession } from "../../lib/app-session";
+import { useProtectedAppSession } from "../../lib/app-session";
 import { fetchInterviewQuestion } from "../../lib/content-client";
 import type { InterviewQuestionDetail } from "../../lib/content-types";
-import { buildPublicEntryUrl } from "../../lib/public-entry";
+import { goBackOr } from "../../lib/navigation";
 
 export default function InterviewDetailPage() {
   const router = useRouter();
   const { slug } = router.query;
-  const { status } = useAppSession();
+  const { status } = useProtectedAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [item, setItem] = useState<InterviewQuestionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+  const loadedSlugRef = useRef("");
 
   useEffect(() => {
     if (status !== "authenticated" || typeof slug !== "string") return;
@@ -34,13 +28,15 @@ export default function InterviewDetailPage() {
 
     (async () => {
       try {
-        setLoading(true);
+        if (loadedSlugRef.current !== slug) {
+          setLoading(true);
+        }
         setError("");
-        setItem(null);
 
         const nextItem = await fetchInterviewQuestion(slug, controller.signal);
         if (cancelled) return;
 
+        loadedSlugRef.current = slug;
         setItem(nextItem);
       } catch (err: unknown) {
         if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
@@ -74,9 +70,9 @@ export default function InterviewDetailPage() {
             </div>
 
             <div className="page-hero-actions">
-              <Link href="/interview" className="btn btn-outline">
-                <FaArrowLeft /> Back to QnA
-              </Link>
+              <button className="btn btn-outline" onClick={() => goBackOr(router, "/interview")} type="button">
+                <FaArrowLeft /> Back
+              </button>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
                 <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
@@ -131,5 +127,3 @@ export default function InterviewDetailPage() {
     </div>
   );
 }
-
-export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";

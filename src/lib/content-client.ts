@@ -10,14 +10,17 @@ import type {
   SlideshowSummary,
   TickerItem,
 } from "./content-types";
+import {
+  CONTENT_AVAILABILITY_EVENT,
+  readContentAvailability,
+  writeContentAvailability,
+} from "./content-availability";
 
 import { normalize } from "./readme-utils";
 
 class HttpStatusError extends Error {}
 
 const CONTENT_API_CACHE = "repo-content";
-const CONTENT_AVAILABILITY_KEY = "tinitiate.content.availability";
-export const CONTENT_AVAILABILITY_EVENT = "tinitiate:content-availability";
 const CORE_CONTENT_URLS = [
   "/api/content/design",
   "/api/content/ticker",
@@ -32,11 +35,6 @@ export type ContentRequestOptions = {
   revalidateOnCacheHit?: boolean;
 };
 
-type ContentAvailabilityState = {
-  offline: boolean;
-  updatedAt: number;
-};
-
 const canUseCacheStorage = () =>
   typeof window !== "undefined" && typeof window.caches !== "undefined";
 
@@ -46,39 +44,6 @@ const inflightJsonRequests = new Map<string, Promise<unknown>>();
 const toAbsoluteRequestUrl = (url: string) => {
   if (typeof window === "undefined") return url;
   return new URL(url, window.location.origin).toString();
-};
-
-const writeContentAvailability = (offline: boolean) => {
-  if (typeof window === "undefined") return;
-
-  const payload: ContentAvailabilityState = {
-    offline,
-    updatedAt: Date.now(),
-  };
-
-  try {
-    window.localStorage.setItem(CONTENT_AVAILABILITY_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore storage failures
-  }
-
-  window.dispatchEvent(
-    new CustomEvent(CONTENT_AVAILABILITY_EVENT, {
-      detail: payload,
-    })
-  );
-};
-
-export const readContentAvailability = (): ContentAvailabilityState | null => {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.localStorage.getItem(CONTENT_AVAILABILITY_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as ContentAvailabilityState;
-  } catch {
-    return null;
-  }
 };
 
 const getRequestKey = (url: string) => toAbsoluteRequestUrl(url);
@@ -97,6 +62,11 @@ const readCachedJson = async <T>(url: string): Promise<T | null> => {
   } catch {
     return null;
   }
+};
+
+export const hasCachedContentUrl = async (url: string) => {
+  const cached = await readCachedJson<unknown>(url);
+  return cached !== null;
 };
 
 const writeCachedJson = async (url: string, response: Response) => {
@@ -136,7 +106,6 @@ const fetchJsonFromNetwork = async <T>(url: string, signal?: AbortSignal): Promi
   await writeCachedJson(url, response);
   const payload = (await response.json()) as T;
   writeMemoryJson(url, payload);
-  writeContentAvailability(false);
   return payload;
 };
 
@@ -157,7 +126,17 @@ const requestJsonFromNetwork = <T>(url: string, signal?: AbortSignal): Promise<T
 
 const revalidateCachedJson = (url: string) => {
   if (typeof window === "undefined" || !navigator.onLine) return;
-  void requestJsonFromNetwork(url).catch(() => undefined);
+  void requestJsonFromNetwork(url).catch(async (error) => {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
+
+    const cached = await readCachedJson(url);
+    if (cached !== null) {
+      writeMemoryJson(url, cached);
+      writeContentAvailability(true);
+    }
+  });
 };
 
 const fetchJsonNoStore = async <T>(
@@ -306,3 +285,5 @@ export const fetchMediaItem = async (
     signal,
     options
   );
+
+export { CONTENT_AVAILABILITY_EVENT, readContentAvailability };

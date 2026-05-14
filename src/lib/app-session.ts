@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import type { Session } from "next-auth";
 
-import { clearBrowserSessionActive, hasBrowserSessionActive } from "./browserSession";
+import {
+  AUTH_BROWSER_SESSION_EVENT,
+  clearBrowserSessionActive,
+  hasBrowserSessionActive,
+} from "./browserSession";
+import { buildPublicEntryUrl } from "./public-entry";
 
 const CACHED_SESSION_USER_KEY = "tinitiate.auth.cached-user";
 
@@ -72,20 +78,60 @@ export const clearLegacyOfflineLibraryData = () => {
 export function useAppSession() {
   const session = useSession();
   const [isOffline, setIsOffline] = useState(false);
+  const [browserSessionActive, setBrowserSessionActive] = useState(false);
+  const [cachedUser, setCachedUser] = useState<CachedSessionUser | null>(null);
+  const [clientReady, setClientReady] = useState(false);
+  const [allowUnauthenticatedRedirect, setAllowUnauthenticatedRedirect] = useState(false);
 
   useEffect(() => {
-    const update = () => setIsOffline(typeof navigator !== "undefined" && !navigator.onLine);
-    update();
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
+    const updateOffline = () => setIsOffline(typeof navigator !== "undefined" && !navigator.onLine);
+    const updateBrowserSession = () => setBrowserSessionActive(hasBrowserSessionActive());
+    const updateCachedUser = () => setCachedUser(readCachedSessionUser());
+
+    updateOffline();
+    updateBrowserSession();
+    updateCachedUser();
+    setClientReady(true);
+
+    window.addEventListener("online", updateOffline);
+    window.addEventListener("offline", updateOffline);
+    window.addEventListener(AUTH_BROWSER_SESSION_EVENT, updateBrowserSession);
+    window.addEventListener("focus", updateBrowserSession);
+    window.addEventListener("focus", updateCachedUser);
+    window.addEventListener("storage", updateBrowserSession);
+    window.addEventListener("storage", updateCachedUser);
 
     return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
+      window.removeEventListener("online", updateOffline);
+      window.removeEventListener("offline", updateOffline);
+      window.removeEventListener(AUTH_BROWSER_SESSION_EVENT, updateBrowserSession);
+      window.removeEventListener("focus", updateBrowserSession);
+      window.removeEventListener("focus", updateCachedUser);
+      window.removeEventListener("storage", updateBrowserSession);
+      window.removeEventListener("storage", updateCachedUser);
     };
   }, []);
 
-  const cachedUser = readCachedSessionUser();
+  const cachedUserKey = cachedUser?.id || cachedUser?.email || "";
+  const canUseCachedSession = clientReady && Boolean(cachedUser) && isOffline;
+
+  useEffect(() => {
+    if (!clientReady) {
+      setAllowUnauthenticatedRedirect(false);
+      return;
+    }
+
+    if (session.status !== "unauthenticated" || isOffline) {
+      setAllowUnauthenticatedRedirect(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setAllowUnauthenticatedRedirect(true);
+    }, browserSessionActive || cachedUserKey ? 1400 : 900);
+
+    return () => window.clearTimeout(timeout);
+  }, [browserSessionActive, cachedUserKey, clientReady, isOffline, session.status]);
 
   if (session.status === "authenticated") {
     return {
@@ -94,7 +140,7 @@ export function useAppSession() {
     };
   }
 
-  if (isOffline && hasBrowserSessionActive() && cachedUser) {
+  if (cachedUser && canUseCachedSession) {
     return {
       data: { user: cachedUser } as Session,
       status: "authenticated" as const,
@@ -103,10 +149,48 @@ export function useAppSession() {
     };
   }
 
+  if (!clientReady) {
+    return {
+      ...session,
+      status: "loading" as const,
+      offlineFallback: false,
+    };
+  }
+
+  if (session.status === "unauthenticated" && !allowUnauthenticatedRedirect) {
+    return {
+      ...session,
+      status: "loading" as const,
+      offlineFallback: false,
+    };
+  }
+
   return {
     ...session,
     offlineFallback: false,
   };
+}
+
+export function useProtectedAppSession(callbackUrl?: string) {
+  const router = useRouter();
+  const session = useAppSession();
+  const redirectStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (session.status !== "unauthenticated") {
+      redirectStartedRef.current = false;
+      return;
+    }
+
+    if (!router.isReady || redirectStartedRef.current) {
+      return;
+    }
+
+    redirectStartedRef.current = true;
+    void router.replace(buildPublicEntryUrl(callbackUrl || router.asPath));
+  }, [callbackUrl, router.asPath, router.isReady, router, session.status]);
+
+  return session;
 }
 
 export const resetOfflineSessionState = () => {

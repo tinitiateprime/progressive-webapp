@@ -91,6 +91,29 @@ const fetchRepoText = (filePath: string, preferredRepoName?: string) =>
 const fetchRepoTextWithSource = (filePath: string, preferredRepoName?: string) =>
   readRepoContentSource(filePath, preferredRepoName);
 
+/** Run async tasks with bounded concurrency to avoid flooding GitHub. */
+const runConcurrent = async <T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency = 4
+): Promise<R[]> => {
+  const results: R[] = new Array(items.length);
+  const queue = items.map((item, index) => ({ item, index }));
+
+  const worker = async () => {
+    while (queue.length > 0) {
+      const task = queue.shift();
+      if (!task) return;
+      results[task.index] = await fn(task.item);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, worker)
+  );
+  return results;
+};
+
 const resolveOptionalRepoAssetUrl = (value: string | undefined, repoName: string) => {
   const trimmed = String(value || "").trim();
   if (!trimmed) return undefined;
@@ -183,25 +206,23 @@ export const getTickerItems = async (): Promise<TickerItem[]> => {
 };
 
 export const getInterviewQuestionSummaries = async (): Promise<InterviewQuestionSummary[]> => {
-  const { data: catalog, repoName } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
+  // ONE GitHub request: just the catalog JSON.
+  // The `question` field already contains the question text which serves as the
+  // excerpt on the list page — no need to fetch each answer markdown file here.
+  const { data: catalog } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
     "interview-qna/catalog.json"
   );
 
-  return Promise.all(
-    catalog.questions.map(async (entry) => {
-      const markdown = await fetchRepoText(entry.answerPath, repoName);
-
-      return {
-        slug: entry.slug,
-        title: entry.title,
-        category: entry.category,
-        level: entry.level,
-        question: entry.question,
-        tags: entry.tags,
-        excerpt: summarizeMarkdown(markdown),
-      };
-    })
-  );
+  return catalog.questions.map((entry) => ({
+    slug: entry.slug,
+    title: entry.title,
+    category: entry.category,
+    level: entry.level,
+    question: entry.question,
+    tags: entry.tags,
+    // Use the question itself as the excerpt — avoids N round-trips to GitHub.
+    excerpt: entry.question,
+  }));
 };
 
 export const getInterviewQuestionBySlug = async (
@@ -230,13 +251,18 @@ export const getInterviewQuestionBySlug = async (
 };
 
 export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
-  const { data: catalog, repoName } = await fetchRepoJsonWithSource<CoursesCatalogFile>(
-    "courses/catalog.json"
-  );
-  const courseIcons = await getCourseIconRegistry();
+  // Two parallel requests: catalog + icon registry (independent of each other).
+  const [{ data: catalog, repoName }, courseIcons] = await Promise.all([
+    fetchRepoJsonWithSource<CoursesCatalogFile>("courses/catalog.json"),
+    getCourseIconRegistry(),
+  ]);
 
-  return Promise.all(
-    catalog.subjects.map(async (entry) => {
+  // Fetch each course README with bounded concurrency (4 at a time).
+  // Previously this was Promise.all which fired ALL at once and could hit
+  // GitHub rate limits or saturate the connection on large catalogs.
+  return runConcurrent(
+    catalog.subjects,
+    async (entry) => {
       let topics: ParsedTopic[] = [];
 
       try {
@@ -252,7 +278,8 @@ export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
         icon_url: courseIcons[entry.slug]?.iconUrl,
         topics,
       };
-    })
+    },
+    4
   );
 };
 

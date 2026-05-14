@@ -10,6 +10,8 @@ import {
   hasBrowserSessionActive,
   markBrowserSessionActive,
 } from "../lib/browserSession";
+import { writeCachedSessionUser } from "../lib/app-session";
+import { normalizeCallbackUrl } from "../lib/public-entry";
 import {
   FaMoon,
   FaSun,
@@ -56,9 +58,7 @@ export default function LoginPage() {
   const logoSrc = theme === "dark" ? "/TinitiateLogo.png" : "/TinitiateLogoLight.png";
 
   const callbackUrl =
-    typeof router.query.callbackUrl === "string"
-      ? router.query.callbackUrl
-      : "/dashboard";
+    normalizeCallbackUrl(router.query.callbackUrl, "/dashboard") || "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,6 +72,11 @@ export default function LoginPage() {
       router.replace(callbackUrl);
     }
   }, [status, router, callbackUrl]);
+
+  useEffect(() => {
+    void router.prefetch(callbackUrl);
+    void router.prefetch("/signup");
+  }, [callbackUrl, router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -116,6 +121,11 @@ export default function LoginPage() {
         return;
       }
 
+      writeCachedSessionUser({
+        id: verifyData?.user?.id,
+        name: verifyData?.user?.fullName,
+        email: verifyData?.user?.email,
+      });
       router.replace(result?.url || callbackUrl);
     } catch {
       setError("Login failed. Please try again.");

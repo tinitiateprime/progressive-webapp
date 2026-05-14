@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import type { IconType } from "react-icons";
 import {
@@ -22,20 +22,19 @@ import {
 
 import TickerBar from "../components/content/TickerBar";
 import { ThemeContext } from "../context/ThemeContext";
-import { useAppSession } from "../lib/app-session";
+import { clearCachedSessionUser, useProtectedAppSession } from "../lib/app-session";
 import { clearBrowserSessionActive } from "../lib/browserSession";
 import {
-  CONTENT_AVAILABILITY_EVENT,
   fetchContentRepoStatus,
   fetchTickerItems,
-  readContentAvailability,
 } from "../lib/content-client";
 import type { TickerItem } from "../lib/content-types";
 import {
   OFFLINE_SYNC_STATE_EVENT,
   readOfflineSyncState,
 } from "../lib/offline-sync";
-import { buildPublicEntryUrl } from "../lib/public-entry";
+import { clearAppRouteHistory } from "../lib/navigation";
+import { useConnectionStatus } from "../lib/use-connection-status";
 import {
   getLibraryUserKey,
   mergeFavoriteTopics,
@@ -75,26 +74,21 @@ const formatDateTime = (timestamp: number) =>
 
 export default function Dashboard() {
   const router = useRouter();
-  const { data: session, status } = useAppSession();
+  const { data: session, status } = useProtectedAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const accountKey = useMemo(() => getLibraryUserKey(session?.user), [session]);
+  const isOffline = useConnectionStatus();
 
   const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
   const [q, setQ] = useState("");
-  const [isOffline, setIsOffline] = useState(false);
   const [syncingContent, setSyncingContent] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
-  const [offlineSyncState, setOfflineSyncState] = useState(() => readOfflineSyncState());
+  const [offlineSyncState, setOfflineSyncState] = useState<ReturnType<typeof readOfflineSyncState>>(null);
   const [favoriteTopics, setFavoriteTopics] = useState<SavedFavoriteTopic[]>([]);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installInstalled, setInstallInstalled] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+  const hasLoadedStatusRef = useRef(false);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -103,23 +97,6 @@ export default function Dashboard() {
       router.prefetch(route).catch(() => undefined);
     }
   }, [router, status]);
-
-  useEffect(() => {
-    const update = () => {
-      const cachedState = readContentAvailability()?.offline ?? false;
-      setIsOffline(!navigator.onLine || cachedState);
-    };
-    update();
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    window.addEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
-
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-      window.removeEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
-    };
-  }, []);
 
   useEffect(() => {
     const syncLibrary = () => {
@@ -230,7 +207,9 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        setSyncingContent(true);
+        if (!hasLoadedStatusRef.current) {
+          setSyncingContent(true);
+        }
         const [items, statusInfo] = await Promise.all([
           fetchTickerItems(controller.signal),
           fetchContentRepoStatus(controller.signal),
@@ -239,10 +218,13 @@ export default function Dashboard() {
 
         setTickerItems(items);
         setLastSyncedAt(statusInfo.updatedAt ? Date.parse(statusInfo.updatedAt) : null);
+        hasLoadedStatusRef.current = true;
       } catch (err: unknown) {
         if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
-          setTickerItems([]);
-          setLastSyncedAt(null);
+          if (!hasLoadedStatusRef.current) {
+            setTickerItems([]);
+            setLastSyncedAt(null);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -259,6 +241,8 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     clearBrowserSessionActive();
+    clearCachedSessionUser();
+    clearAppRouteHistory();
 
     try {
       await signOut({ redirect: false });
@@ -369,21 +353,22 @@ export default function Dashboard() {
   const secondaryStatusText =
     offlineSyncState?.status === "ready"
       ? isOffline
-        ? `Full workspace cached ${formatDateTime(offlineSyncState.syncedAt)}.`
+        ? `Workspace cached ${formatDateTime(offlineSyncState.syncedAt)}.`
         : `Offline workspace updated ${formatDateTime(offlineSyncState.syncedAt)}.`
       : offlineSyncState?.status === "failed"
         ? "Offline workspace needs another refresh."
         : isOffline
           ? "Offline mode is active. This device is waiting for a full online sync."
-          : "Preparing the full workspace for offline use.";
+          : "Preparing the workspace for offline use.";
 
   const searchPlaceholder = "Search interview, courses, or CBT...";
 
   const openFavorite = (item: SavedFavoriteTopic) => {
     setLibraryOpen(false);
     router.push({
-      pathname: `/topic/${encodeURIComponent(item.topic_name)}`,
+      pathname: "/topic/[topic]",
       query: {
+        topic: item.topic_name,
         subject: item.subject,
         ...(item.subject_readme_url ? { readme: item.subject_readme_url } : {}),
       },
@@ -690,5 +675,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-export { requireAuthenticatedPage as getServerSideProps } from "../lib/require-auth-page";

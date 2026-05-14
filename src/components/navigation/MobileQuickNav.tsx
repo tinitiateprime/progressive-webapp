@@ -3,30 +3,17 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { FaArrowLeft, FaArrowUp, FaHome } from "react-icons/fa";
+import { goBackOr, hasAppBackRoute } from "../../lib/navigation";
 
 const HIDDEN_ROUTES = new Set(["/", "/login", "/signup", "/dashboard"]);
-const ROUTE_DEPTH_KEY = "tinitiate.mobile-nav-route-depth";
-const LAST_ROUTE_KEY = "tinitiate.mobile-nav-last-route";
 
 export default function MobileQuickNav() {
   const router = useRouter();
   const [showTop, setShowTop] = useState(false);
-  const [hasDeepTrail, setHasDeepTrail] = useState(false);
+  const [hasBackTrail, setHasBackTrail] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const lastRoute = sessionStorage.getItem(LAST_ROUTE_KEY);
-    const currentRoute = router.asPath;
-    let routeDepth = Number(sessionStorage.getItem(ROUTE_DEPTH_KEY) || "0");
-
-    if (lastRoute && lastRoute !== currentRoute) {
-      routeDepth += 1;
-    }
-
-    sessionStorage.setItem(LAST_ROUTE_KEY, currentRoute);
-    sessionStorage.setItem(ROUTE_DEPTH_KEY, String(routeDepth));
-    setHasDeepTrail(routeDepth > 1);
+    setHasBackTrail(hasAppBackRoute(router.asPath));
   }, [router.asPath]);
 
   useEffect(() => {
@@ -43,22 +30,13 @@ export default function MobileQuickNav() {
     return null;
   }
 
-  if (!showTop && !hasDeepTrail) {
+  if (!showTop && !hasBackTrail) {
     return null;
   }
 
-  const goBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/dashboard");
-  };
-
   return (
     <nav className="mobile-quick-nav" aria-label="Mobile quick navigation">
-      <button className="btn btn-outline" type="button" onClick={goBack}>
+      <button className="btn btn-outline" type="button" onClick={() => goBackOr(router, "/dashboard")}>
         <FaArrowLeft />
         Back
       </button>

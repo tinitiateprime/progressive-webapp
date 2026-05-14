@@ -1,4 +1,5 @@
 // File: src/lib/readme-utils.ts
+import { writeContentAvailability } from "./content-availability";
 
 export type ParsedTopic = {
   topic_name: string;
@@ -40,6 +41,25 @@ export const toRawGithub = (u: string) => {
 
 export const buildGithubProxyUrl = (url: string) =>
   `/api/proxy?url=${encodeURIComponent(String(url || ""))}`;
+
+const toAbsoluteRequestUrl = (url: string) => {
+  if (typeof window === "undefined") return url;
+
+  try {
+    return new URL(url, window.location.origin).toString();
+  } catch {
+    return url;
+  }
+};
+
+const getRepoTextCacheKeys = (url: string) => {
+  const rawUrl = toRawGithub(String(url || "").trim());
+  const proxyUrl = buildGithubProxyUrl(rawUrl);
+
+  return Array.from(
+    new Set([rawUrl, proxyUrl, toAbsoluteRequestUrl(proxyUrl)].filter(Boolean))
+  );
+};
 
 const GITHUB_IMAGE_HOSTS = new Set(["raw.githubusercontent.com", "github.com"]);
 
@@ -379,36 +399,63 @@ export const extractMarkdownAssetUrls = (md: string, baseUrl?: string): string[]
   return Array.from(urls);
 };
 
-const readCachedRepoText = async (proxyUrl: string) => {
+export const readCachedRepoText = async (url: string) => {
   if (typeof window === "undefined" || !("caches" in window)) return null;
 
   try {
     const cache = await caches.open(REPO_CONTENT_CACHE);
-    const cached = await cache.match(proxyUrl);
+    for (const key of getRepoTextCacheKeys(url)) {
+      const cached = await cache.match(key, { ignoreSearch: false });
+      if (!cached?.ok) {
+        continue;
+      }
 
-    if (!cached?.ok) {
-      return null;
+      const text = await cached.text();
+      if (text) {
+        return text;
+      }
     }
-
-    const text = await cached.text();
-    return text || null;
   } catch {
     return null;
   }
+
+  return null;
 };
 
-const writeCachedRepoText = async (proxyUrl: string, response: Response) => {
+const writeCachedRepoText = async (url: string, response: Response) => {
   if (typeof window === "undefined" || !("caches" in window) || !response.ok) return;
 
   try {
     const cache = await caches.open(REPO_CONTENT_CACHE);
-    await cache.put(proxyUrl, response.clone());
+    await Promise.all(
+      getRepoTextCacheKeys(url).map((key) => cache.put(key, response.clone()))
+    );
   } catch {
     // ignore cache write failures
   }
 };
 
-const fetchRepoTextFromNetwork = async (proxyUrl: string, signal?: AbortSignal) => {
+export const cacheRepoTextValue = async (url: string, text: string) => {
+  if (typeof window === "undefined" || !("caches" in window)) return;
+
+  try {
+    const cache = await caches.open(REPO_CONTENT_CACHE);
+    const response = new Response(text, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
+
+    await Promise.all(
+      getRepoTextCacheKeys(url).map((key) => cache.put(key, response.clone()))
+    );
+  } catch {
+    // ignore cache write failures
+  }
+};
+
+const fetchRepoTextFromNetwork = async (url: string, signal?: AbortSignal) => {
+  const proxyUrl = buildGithubProxyUrl(url);
   const response = await fetch(proxyUrl, {
     cache: "no-store",
     headers: {
@@ -421,19 +468,20 @@ const fetchRepoTextFromNetwork = async (proxyUrl: string, signal?: AbortSignal) 
     throw new Error(`Fetch failed (HTTP ${response.status}) for ${proxyUrl}`);
   }
 
-  await writeCachedRepoText(proxyUrl, response);
+  await writeCachedRepoText(url, response);
   const text = await response.text();
   markdownMemoryCache.set(proxyUrl, text);
   return text;
 };
 
-const requestRepoTextFromNetwork = (proxyUrl: string, signal?: AbortSignal) => {
+const requestRepoTextFromNetwork = (url: string, signal?: AbortSignal) => {
+  const proxyUrl = buildGithubProxyUrl(url);
   const existing = inflightMarkdownRequests.get(proxyUrl);
   if (existing) {
     return existing;
   }
 
-  const request = fetchRepoTextFromNetwork(proxyUrl, signal).finally(() => {
+  const request = fetchRepoTextFromNetwork(url, signal).finally(() => {
     inflightMarkdownRequests.delete(proxyUrl);
   });
 
@@ -441,9 +489,19 @@ const requestRepoTextFromNetwork = (proxyUrl: string, signal?: AbortSignal) => {
   return request;
 };
 
-const revalidateRepoText = (proxyUrl: string) => {
+const revalidateRepoText = (url: string) => {
   if (typeof window === "undefined" || !navigator.onLine) return;
-  void requestRepoTextFromNetwork(proxyUrl).catch(() => undefined);
+  void requestRepoTextFromNetwork(url).catch(async (error) => {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
+
+    const cachedText = await readCachedRepoText(url);
+    if (cachedText) {
+      markdownMemoryCache.set(buildGithubProxyUrl(toRawGithub(url)), cachedText);
+      writeContentAvailability(true);
+    }
+  });
 };
 
 export async function fetchTextStrict(
@@ -451,7 +509,8 @@ export async function fetchTextStrict(
   signal?: AbortSignal,
   options?: RepoTextRequestOptions
 ): Promise<string> {
-  const proxyUrl = buildGithubProxyUrl(url);
+  const rawUrl = toRawGithub(url);
+  const proxyUrl = buildGithubProxyUrl(rawUrl);
   const strategy = options?.strategy || "cache-first";
   const revalidateOnCacheHit = options?.revalidateOnCacheHit ?? true;
 
@@ -459,28 +518,32 @@ export async function fetchTextStrict(
     const memoized = markdownMemoryCache.get(proxyUrl);
     if (typeof memoized === "string") {
       if (revalidateOnCacheHit) {
-        revalidateRepoText(proxyUrl);
+        revalidateRepoText(rawUrl);
       }
       return memoized;
     }
 
-    const cachedText = await readCachedRepoText(proxyUrl);
+    const cachedText = await readCachedRepoText(rawUrl);
     if (cachedText) {
       markdownMemoryCache.set(proxyUrl, cachedText);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        writeContentAvailability(true);
+      }
       if (revalidateOnCacheHit) {
-        revalidateRepoText(proxyUrl);
+        revalidateRepoText(rawUrl);
       }
       return cachedText;
     }
   }
 
   try {
-    return await requestRepoTextFromNetwork(proxyUrl, signal);
+    return await requestRepoTextFromNetwork(rawUrl, signal);
   } catch (error) {
     if (!(error instanceof DOMException && error.name === "AbortError")) {
-      const cachedText = await readCachedRepoText(proxyUrl);
+      const cachedText = await readCachedRepoText(rawUrl);
       if (cachedText) {
         markdownMemoryCache.set(proxyUrl, cachedText);
+        writeContentAvailability(true);
         return cachedText;
       }
     }

@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useState } from "react";
-import { FaArrowLeft, FaMoon, FaPlayCircle, FaSun, FaVolumeUp } from "react-icons/fa";
+import { useContext, useEffect, useRef, useState } from "react";
+import { FaArrowLeft, FaHome, FaMoon, FaPlayCircle, FaSun, FaVolumeUp } from "react-icons/fa";
 import { MdOutlineSlideshow } from "react-icons/md";
 import { ThemeContext } from "../../context/ThemeContext";
-import { useAppSession } from "../../lib/app-session";
+import { useProtectedAppSession } from "../../lib/app-session";
 import { fetchCbtCollections } from "../../lib/content-client";
 import type { CbtCollections } from "../../lib/content-types";
-import { buildPublicEntryUrl } from "../../lib/public-entry";
+import { goBackOr } from "../../lib/navigation";
+import { useConnectionStatus } from "../../lib/use-connection-status";
 
 type TabKey = "slideshows" | "trainingVideos" | "audioBooks";
 
@@ -21,18 +22,14 @@ const tabOrder: Array<{ key: TabKey; label: string }> = [
 
 export default function CbtPage() {
   const router = useRouter();
-  const { status } = useAppSession();
+  const { status } = useProtectedAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const isOffline = useConnectionStatus();
   const [tab, setTab] = useState<TabKey>("slideshows");
   const [data, setData] = useState<CbtCollections | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+  const hasLoadedDataRef = useRef(false);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -42,9 +39,13 @@ export default function CbtPage() {
 
     (async () => {
       try {
-        setLoading(true);
+        if (!hasLoadedDataRef.current) {
+          setLoading(true);
+        }
         setError("");
-        setData(await fetchCbtCollections(controller.signal));
+        const nextData = await fetchCbtCollections(controller.signal);
+        hasLoadedDataRef.current = true;
+        setData(nextData);
       } catch (err: unknown) {
         if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
           setError("Failed to load CBT content.");
@@ -77,11 +78,32 @@ export default function CbtPage() {
               <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
                 Choose the format that fits your study session and continue from the collection you want.
               </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                <span
+                  className="badge"
+                  style={{
+                    color: isOffline
+                      ? "var(--status-offline-color)"
+                      : "var(--status-online-color)",
+                    background: isOffline
+                      ? "var(--status-offline-background)"
+                      : "var(--status-online-background)",
+                    borderColor: isOffline
+                      ? "var(--status-offline-border)"
+                      : "var(--status-online-border)",
+                  }}
+                >
+                  {isOffline ? "Offline" : "Online"}
+                </span>
+              </div>
             </div>
 
             <div className="page-hero-actions">
-              <Link href="/dashboard" className="btn btn-outline">
-                <FaArrowLeft /> Dashboard
+              <button className="btn btn-outline" onClick={() => goBackOr(router, "/dashboard")} type="button">
+                <FaArrowLeft /> Back
+              </button>
+              <Link href="/dashboard" className="btn btn-outline" title="Home">
+                <FaHome />
               </Link>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
@@ -130,7 +152,10 @@ export default function CbtPage() {
             {slideItems.map((item) => (
               <Link
                 key={item.slug}
-                href={`/cbt/slides/${encodeURIComponent(item.slug)}`}
+                href={{
+                  pathname: "/cbt/slides/[slug]",
+                  query: { slug: item.slug },
+                }}
                 style={{ textDecoration: "none", color: "inherit" }}
               >
                 <div className="card content-card">
@@ -165,9 +190,13 @@ export default function CbtPage() {
             {(tab === "trainingVideos" ? trainingItems : audioItems).map((item) => (
               <Link
                 key={item.slug}
-                href={`/cbt/media/${encodeURIComponent(item.slug)}?kind=${encodeURIComponent(
-                  tab === "trainingVideos" ? "training-videos" : "audio-books"
-                )}`}
+                href={{
+                  pathname: "/cbt/media/[slug]",
+                  query: {
+                    slug: item.slug,
+                    kind: tab === "trainingVideos" ? "training-videos" : "audio-books",
+                  },
+                }}
                 style={{ textDecoration: "none", color: "inherit" }}
               >
                 <div className="card content-card">
@@ -195,5 +224,3 @@ export default function CbtPage() {
     </div>
   );
 }
-
-export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";

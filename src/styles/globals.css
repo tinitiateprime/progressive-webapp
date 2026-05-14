@@ -391,11 +391,15 @@ input:focus-visible {
   padding: 18px;
   border-radius: 22px;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  /* Defer offscreen card rendering — big win when there are many courses */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 320px;
 }
 
 .course-library-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-feature);
+  will-change: transform;
 }
 
 .course-library-card__header {
@@ -1496,3 +1500,36 @@ main,
     min-height: 38px;
   }
 }
+
+/* ── Performance: GPU-composite the ticker scrolling animation ──────────── */
+.ticker-track {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* ── Performance: Reduce motion for accessibility + battery saving ──────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .ticker-track {
+    animation: none !important;
+    will-change: auto;
+  }
+}
+
+/* ── Performance: Dashboard section list cards ──────────────────────────── */
+.dashboard-section-card {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.dashboard-section-card:hover {
+  will-change: transform;
+}
+

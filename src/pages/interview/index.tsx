@@ -2,33 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useMemo, useState } from "react";
-import { FaArrowLeft, FaMoon, FaSearch, FaSun } from "react-icons/fa";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { FaArrowLeft, FaHome, FaMoon, FaSearch, FaSun } from "react-icons/fa";
 import TickerBar from "../../components/content/TickerBar";
 import { ThemeContext } from "../../context/ThemeContext";
-import { useAppSession } from "../../lib/app-session";
+import { useProtectedAppSession } from "../../lib/app-session";
 import { fetchInterviewQuestions, fetchTickerItems } from "../../lib/content-client";
 import type { InterviewQuestionSummary, TickerItem } from "../../lib/content-types";
-import { buildPublicEntryUrl } from "../../lib/public-entry";
+import { goBackOr } from "../../lib/navigation";
+import { useConnectionStatus } from "../../lib/use-connection-status";
 
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 export default function InterviewIndexPage() {
   const router = useRouter();
-  const { status } = useAppSession();
+  const { status } = useProtectedAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const isOffline = useConnectionStatus();
   const [items, setItems] = useState<InterviewQuestionSummary[]>([]);
   const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+  const hasLoadedItemsRef = useRef(false);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -38,7 +35,9 @@ export default function InterviewIndexPage() {
 
     (async () => {
       try {
-        setLoading(true);
+        if (!hasLoadedItemsRef.current) {
+          setLoading(true);
+        }
         setError("");
 
         const results = await Promise.allSettled([
@@ -48,7 +47,10 @@ export default function InterviewIndexPage() {
 
         if (cancelled) return;
 
-        if (results[0].status === "fulfilled") setItems(results[0].value);
+        if (results[0].status === "fulfilled") {
+          hasLoadedItemsRef.current = true;
+          setItems(results[0].value);
+        }
         if (results[1].status === "fulfilled") setTickerItems(results[1].value);
 
         if (results[0].status === "rejected" && !cancelled) {
@@ -97,11 +99,32 @@ export default function InterviewIndexPage() {
               <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
                 Review concise explanations, key concepts, and likely follow-up areas.
               </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                <span
+                  className="badge"
+                  style={{
+                    color: isOffline
+                      ? "var(--status-offline-color)"
+                      : "var(--status-online-color)",
+                    background: isOffline
+                      ? "var(--status-offline-background)"
+                      : "var(--status-online-background)",
+                    borderColor: isOffline
+                      ? "var(--status-offline-border)"
+                      : "var(--status-online-border)",
+                  }}
+                >
+                  {isOffline ? "Offline" : "Online"}
+                </span>
+              </div>
             </div>
 
             <div className="page-hero-actions">
-              <Link href="/dashboard" className="btn btn-outline">
-                <FaArrowLeft /> Dashboard
+              <button className="btn btn-outline" onClick={() => goBackOr(router, "/dashboard")} type="button">
+                <FaArrowLeft /> Back
+              </button>
+              <Link href="/dashboard" className="btn btn-outline" title="Home">
+                <FaHome />
               </Link>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
@@ -156,7 +179,10 @@ export default function InterviewIndexPage() {
               {filteredItems.map((item) => (
                 <Link
                   key={item.slug}
-                  href={`/interview/${encodeURIComponent(item.slug)}`}
+                  href={{
+                    pathname: "/interview/[slug]",
+                    query: { slug: item.slug },
+                  }}
                   style={{ textDecoration: "none", color: "inherit" }}
                 >
                   <div className="card content-card">
@@ -194,5 +220,3 @@ export default function InterviewIndexPage() {
     </div>
   );
 }
-
-export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";

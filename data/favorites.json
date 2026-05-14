@@ -2,6 +2,24 @@
   "byUser": {
     "92247bfa-5d9f-4933-a1f4-4f14cb5a3ae4": [
       {
+        "slug": "server-actions",
+        "topic_name": "Server Actions",
+        "subject": "Next JS",
+        "savedAt": 1778674182808
+      },
+      {
+        "slug": "rendering--data-fetching",
+        "topic_name": "Rendering & Data Fetching",
+        "subject": "Next JS",
+        "savedAt": 1778674180999
+      },
+      {
+        "slug": "install-jdk--hello-world",
+        "topic_name": "Install JDK & Hello World",
+        "subject": "Java",
+        "savedAt": 1778674126327
+      },
+      {
         "slug": "sql-server-client-tools",
         "topic_name": "SQL Server Client Tools",
         "subject": "SQL Server",
@@ -14,6 +32,14 @@
         "savedAt": 1778582266385
       }
     ],
-    "03889f5c-3bc3-4896-bbf3-205bdfcc5d34": []
+    "03889f5c-3bc3-4896-bbf3-205bdfcc5d34": [],
+    "a184508f-519c-4023-97ce-c316d70ff487": [
+      {
+        "slug": "install-jdk--hello-world",
+        "topic_name": "Install JDK & Hello World",
+        "subject": "Java",
+        "savedAt": 1778760750144
+      }
+    ]
   }
 }

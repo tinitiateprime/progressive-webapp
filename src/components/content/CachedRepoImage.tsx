@@ -92,26 +92,17 @@ export default function CachedRepoImage({ src = "", alt = "", onError, ...props 
     clearObjectUrl();
     setDisplaySrc(normalizedSrc);
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      void loadCachedImage();
-    }
+    void loadCachedImage();
 
     const handleOffline = () => {
       void loadCachedImage();
     };
 
-    const handleOnline = () => {
-      clearObjectUrl();
-      setDisplaySrc(normalizedSrc);
-    };
-
     window.addEventListener("offline", handleOffline);
-    window.addEventListener("online", handleOnline);
 
     return () => {
       cancelled = true;
       window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("online", handleOnline);
       clearObjectUrl();
     };
   }, [normalizedSrc]);

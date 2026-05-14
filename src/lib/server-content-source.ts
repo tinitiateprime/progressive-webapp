@@ -26,12 +26,21 @@ export async function readRepoContentSource(
   for (const repoName of repoNameCandidates) {
     for (const pathCandidate of pathCandidates) {
       const remoteUrl = buildContentRepoRawUrl(pathCandidate, repoName);
-      const response = await fetch(remoteUrl, {
-        cache: "no-store",
-        headers: {
-          "User-Agent": "Tinitiate-Edu-App",
-        },
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      let response: Response;
+      try {
+        response = await fetch(remoteUrl, {
+          cache: "no-store",
+          headers: {
+            "User-Agent": "Tinitiate-Edu-App",
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (response.ok) {
         return {
@@ -72,13 +81,22 @@ export async function readContentRepoStatus(): Promise<ContentRepoStatus> {
   }
 
   const statusUrl = `https://api.github.com/repos/${CONTENT_REPO_OWNER}/${repoName}/commits?${params.toString()}`;
-  const response = await fetch(statusUrl, {
-    cache: "no-store",
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "Tinitiate-Edu-App",
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  let response: Response;
+  try {
+    response = await fetch(statusUrl, {
+      cache: "no-store",
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "Tinitiate-Edu-App",
+      },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch content repo status (${response.status})`);
@@ -103,4 +121,39 @@ export async function readContentRepoStatus(): Promise<ContentRepoStatus> {
     updatedAt,
     commitSha: latestCommit?.sha || null,
   };
+}
+
+export async function checkContentRepoReachability() {
+  const [repoName] = getContentRepoNameCandidates();
+
+  if (!repoName) {
+    return false;
+  }
+
+  // Use raw content instead of the GitHub commits API so browser status is not
+  // treated as offline just because the unauthenticated API rate limit is hit.
+  for (const filePath of ["design/colour.json", "news-ticker/feed.json"]) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(buildContentRepoRawUrl(filePath, repoName), {
+        cache: "no-store",
+        headers: {
+          "User-Agent": "Tinitiate-Edu-App",
+        },
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        return true;
+      }
+    } catch {
+      // try the next lightweight content file before reporting offline
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return false;
 }

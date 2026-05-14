@@ -1,8 +1,7 @@
 // File: src/pages/subject/[subject].tsx
 
 import { useRouter } from "next/router";
-import { useContext, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import CachedRepoImage from "../../components/content/CachedRepoImage";
 import { ThemeContext } from "../../context/ThemeContext";
 import {
@@ -15,7 +14,6 @@ import {
   FaHome,
 } from "react-icons/fa";
 import {
-  CACHE_NAME,
   cacheTextUrls,
   hydrateOfflineSubjectsForAccount,
   migrateLegacyOfflineSubjects,
@@ -24,9 +22,7 @@ import {
   type OfflineSubjectMeta as SharedOfflineSubjectMeta,
 } from "../../lib/offline";
 import {
-  CONTENT_AVAILABILITY_EVENT,
   lookupCourseSubject,
-  readContentAvailability,
 } from "../../lib/content-client";
 import {
   getLibraryUserKey,
@@ -38,10 +34,14 @@ import {
   writeFavoriteTopics,
   type SavedFavoriteTopic,
 } from "../../lib/library";
+import { useProtectedAppSession } from "../../lib/app-session";
+import { goBackOr } from "../../lib/navigation";
+import { useConnectionStatus } from "../../lib/use-connection-status";
 import {
-  buildGithubProxyUrl,
+  cacheRepoTextValue,
   fetchTextStrict,
   normalize,
+  readCachedRepoText,
   toRawGithub,
   type ParsedTopic,
 } from "../../lib/readme-utils";
@@ -299,41 +299,18 @@ const formatDate = (ts: number) => {
 
 // Cache-aware subject README loader backed by GitHub + Cache Storage only.
 async function loadGitHubTextCacheFirst(url: string, signal: AbortSignal) {
-  const proxyUrl = buildGithubProxyUrl(url);
   const freshPromise = (async () => {
     try {
       const fresh = await fetchTextStrict(url, signal, { strategy: "network-first" });
-
-      if ("caches" in window) {
-        try {
-          const cache = await caches.open(CACHE_NAME);
-          await cache.put(
-            url,
-            new Response(fresh, {
-              headers: { "Content-Type": "text/plain; charset=utf-8" },
-            })
-          );
-        } catch {}
-      }
-
+      await cacheRepoTextValue(url, fresh);
       return fresh;
     } catch {
       return null;
     }
   })();
 
-  let cachedText: string | null = null;
-
-  if ("caches" in window) {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = (await cache.match(url)) || (await cache.match(proxyUrl));
-      if (cached) cachedText = await cached.text();
-    } catch {}
-  }
-
   return {
-    cached: cachedText,
+    cached: await readCachedRepoText(url),
     freshPromise,
   };
 }
@@ -344,11 +321,12 @@ export default function SubjectPage() {
   const [mounted, setMounted] = useState(false);
 
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status } = useProtectedAppSession();
   const { subject, readme } = router.query;
   const subjectStr = String(subject || "");
   const readmeQueryUrl = typeof readme === "string" ? readme : "";
   const accountKey = useMemo(() => getLibraryUserKey(session?.user), [session]);
+  const accountKeyRef = useRef(accountKey);
 
   const { theme, toggleTheme } = useContext(ThemeContext);
 
@@ -362,12 +340,9 @@ export default function SubjectPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [isOffline, setIsOffline] = useState(
-    () =>
-      typeof navigator !== "undefined" &&
-      (!navigator.onLine || (readContentAvailability()?.offline ?? false))
-  );
+  const isOffline = useConnectionStatus();
   const [q, setQ] = useState("");
+  const loadedSubjectKeyRef = useRef("");
 
   const [favorites, setFavorites] = useState<SavedFavoriteTopic[]>([]);
 
@@ -379,35 +354,12 @@ export default function SubjectPage() {
   });
 
   useEffect(() => {
-    const update = () => {
-      const cachedState = readContentAvailability()?.offline ?? false;
-      setIsOffline((typeof navigator !== "undefined" && !navigator.onLine) || cachedState);
-    };
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        update();
-      }
-    };
-
-    update();
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    window.addEventListener("focus", update);
-    window.addEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-      window.removeEventListener("focus", update);
-      window.removeEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
+    setMounted(true);
   }, []);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    accountKeyRef.current = accountKey;
+  }, [accountKey]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -478,32 +430,38 @@ export default function SubjectPage() {
 
     const ac = new AbortController();
     let cancelled = false;
+    const loadKey = `${subjectStr}|${readmeQueryUrl}`;
 
-    const applySubjectReadme = (md: string, sourceUrl: string) => {
-      const parsed = parseSubjectReadmeTopics(md, sourceUrl);
-      const ordered = orderTopics(parsed);
-
+    const applyTopicList = (nextTopics: Topic[], sourceUrl: string) => {
+      const ordered = orderTopics(nextTopics);
       setSubjectReadmeUrl(sourceUrl);
 
       if (!ordered.length) {
-        setTopics([]);
-        setError(`No topics found in subject README for "${subjectStr}".`);
-        return;
+        return false;
       }
 
       setTopics(ordered);
       setError("");
+      return true;
     };
 
-    setLoading(true);
-    setSubjectMeta(null);
+    const applySubjectReadme = (md: string, sourceUrl: string) => {
+      const parsed = parseSubjectReadmeTopics(md, sourceUrl);
+      return applyTopicList(parsed, sourceUrl);
+    };
+
+    if (loadedSubjectKeyRef.current !== loadKey) {
+      setLoading(true);
+      setSubjectMeta(null);
+    }
 
     (async () => {
       try {
         setRefreshing(true);
         setError("");
 
-        const savedSubjectReadmeUrl = readOfflineMeta(subjectStr, accountKey)?.subject_readme_url || "";
+        const savedSubjectReadmeUrl =
+          readOfflineMeta(subjectStr, accountKeyRef.current)?.subject_readme_url || "";
         let resolvedSubjectReadme = readmeQueryUrl
           ? toRawGithub(readmeQueryUrl)
           : savedSubjectReadmeUrl
@@ -545,21 +503,46 @@ export default function SubjectPage() {
         );
         if (cancelled) return;
 
+        let hasRenderedTopics = false;
+
         if (cached) {
-          applySubjectReadme(cached, resolvedSubjectReadme);
-          setLoading(false);
+          hasRenderedTopics = applySubjectReadme(cached, resolvedSubjectReadme);
+          if (hasRenderedTopics) {
+            setLoading(false);
+          }
         }
 
         const fresh = await freshPromise;
         if (cancelled) return;
 
         if (fresh && fresh !== cached) {
-          applySubjectReadme(fresh, resolvedSubjectReadme);
+          hasRenderedTopics = applySubjectReadme(fresh, resolvedSubjectReadme) || hasRenderedTopics;
         }
 
-        if (!cached && !fresh) {
-          throw new Error("Subject README fetch returned no data");
+        if (!hasRenderedTopics) {
+          const match = await subjectLookupPromise.catch(() => null);
+          if (cancelled) return;
+
+          if (
+            match?.topics?.length &&
+            applyTopicList(
+              match.topics,
+              resolvedSubjectReadme || (match.readme_url ? toRawGithub(match.readme_url) : "")
+            )
+          ) {
+            hasRenderedTopics = true;
+          }
         }
+
+        if (!hasRenderedTopics) {
+          if (!cached && !fresh) {
+            throw new Error("Subject README fetch returned no data");
+          }
+
+          throw new Error(`No topics found in subject README for "${subjectStr}".`);
+        }
+
+        loadedSubjectKeyRef.current = loadKey;
       } catch (e) {
         console.error("Subject load error:", e);
         if (!cancelled) {
@@ -577,7 +560,7 @@ export default function SubjectPage() {
       cancelled = true;
       ac.abort();
     };
-  }, [router.isReady, subjectStr, accountKey, readmeQueryUrl]);
+  }, [router.isReady, subjectStr, readmeQueryUrl]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
@@ -857,7 +840,7 @@ export default function SubjectPage() {
                 )}
               </button>
 
-              <button className="btn btn-outline" onClick={() => router.push("/dashboard")} type="button">
+              <button className="btn btn-outline" onClick={() => goBackOr(router, "/courses")} type="button">
                 <FaArrowLeft /> Back
               </button>
 
@@ -911,8 +894,9 @@ export default function SubjectPage() {
 
                 // ✅ pass subject README URL so Topic page can re-read bullets/subtopics later
                 const hrefObj = {
-                  pathname: `/topic/${encodeURIComponent(t.topic_name)}`,
+                  pathname: "/topic/[topic]",
                   query: {
+                    topic: t.topic_name,
                     subject: subjectStr,
                     ...(subjectReadmeUrl ? { readme: subjectReadmeUrl } : {}),
                   },

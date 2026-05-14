@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useMemo, useState } from "react";
-import { FaArrowLeft, FaArrowRight, FaMoon, FaSearch, FaSun } from "react-icons/fa";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { FaArrowLeft, FaArrowRight, FaHome, FaMoon, FaSearch, FaSun } from "react-icons/fa";
 
 import CachedRepoImage from "../components/content/CachedRepoImage";
 import TickerBar from "../components/content/TickerBar";
 import { ThemeContext } from "../context/ThemeContext";
-import { useAppSession } from "../lib/app-session";
+import { useProtectedAppSession } from "../lib/app-session";
 import { fetchCourseSubjects, fetchTickerItems } from "../lib/content-client";
 import type { CourseSubject, TickerItem } from "../lib/content-types";
-import { buildPublicEntryUrl } from "../lib/public-entry";
+import { goBackOr } from "../lib/navigation";
+import { useConnectionStatus } from "../lib/use-connection-status";
 
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -60,19 +61,15 @@ const accentByCategory = (category: string) => {
 
 export default function CoursesPage() {
   const router = useRouter();
-  const { status } = useAppSession();
+  const { status } = useProtectedAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const isOffline = useConnectionStatus();
   const [courses, setCourses] = useState<CourseSubject[]>([]);
   const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+  const hasLoadedCoursesRef = useRef(false);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -82,7 +79,9 @@ export default function CoursesPage() {
 
     (async () => {
       try {
-        setLoading(true);
+        if (!hasLoadedCoursesRef.current) {
+          setLoading(true);
+        }
         setError("");
 
         const results = await Promise.allSettled([
@@ -92,7 +91,10 @@ export default function CoursesPage() {
 
         if (cancelled) return;
 
-        if (results[0].status === "fulfilled") setCourses(results[0].value);
+        if (results[0].status === "fulfilled") {
+          hasLoadedCoursesRef.current = true;
+          setCourses(results[0].value);
+        }
         if (results[1].status === "fulfilled") setTickerItems(results[1].value);
 
         if (results[0].status === "rejected") {
@@ -143,11 +145,32 @@ export default function CoursesPage() {
               <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
                 Open any subject to continue into its topic reader.
               </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                <span
+                  className="badge"
+                  style={{
+                    color: isOffline
+                      ? "var(--status-offline-color)"
+                      : "var(--status-online-color)",
+                    background: isOffline
+                      ? "var(--status-offline-background)"
+                      : "var(--status-online-background)",
+                    borderColor: isOffline
+                      ? "var(--status-offline-border)"
+                      : "var(--status-online-border)",
+                  }}
+                >
+                  {isOffline ? "Offline" : "Online"}
+                </span>
+              </div>
             </div>
 
             <div className="page-hero-actions">
-              <Link href="/dashboard" className="btn btn-outline">
-                <FaArrowLeft /> Dashboard
+              <button className="btn btn-outline" onClick={() => goBackOr(router, "/dashboard")} type="button">
+                <FaArrowLeft /> Back
+              </button>
+              <Link href="/dashboard" className="btn btn-outline" title="Home">
+                <FaHome />
               </Link>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
@@ -214,8 +237,8 @@ export default function CoursesPage() {
                   <Link
                     key={course.slug}
                     href={{
-                      pathname: `/subject/${encodeURIComponent(course.subject)}`,
-                      query: { readme: course.readme_url },
+                      pathname: "/subject/[subject]",
+                      query: { subject: course.subject, readme: course.readme_url },
                     }}
                     style={{ textDecoration: "none", color: "inherit" }}
                   >
@@ -313,5 +336,3 @@ export default function CoursesPage() {
     </div>
   );
 }
-
-export { requireAuthenticatedPage as getServerSideProps } from "../lib/require-auth-page";

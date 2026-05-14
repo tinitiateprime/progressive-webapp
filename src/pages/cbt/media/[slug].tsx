@@ -1,15 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { FaArrowLeft, FaMoon, FaSun } from "react-icons/fa";
 import RepoMarkdown from "../../../components/content/RepoMarkdown";
 import { ThemeContext } from "../../../context/ThemeContext";
-import { useAppSession } from "../../../lib/app-session";
+import { useProtectedAppSession } from "../../../lib/app-session";
 import { fetchMediaItem } from "../../../lib/content-client";
 import type { MediaCollectionItem } from "../../../lib/content-types";
-import { buildPublicEntryUrl } from "../../../lib/public-entry";
+import { goBackOr } from "../../../lib/navigation";
 import { toGithubProxyUrl } from "../../../lib/readme-utils";
 
 const isMediaKind = (value: string): value is "training-videos" | "audio-books" =>
@@ -18,17 +17,12 @@ const isMediaKind = (value: string): value is "training-videos" | "audio-books" 
 export default function MediaDetailPage() {
   const router = useRouter();
   const { slug, kind } = router.query;
-  const { status } = useAppSession();
+  const { status } = useProtectedAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [item, setItem] = useState<MediaCollectionItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+  const loadedKeyRef = useRef("");
 
   useEffect(() => {
     if (status !== "authenticated" || typeof slug !== "string" || typeof kind !== "string") {
@@ -43,16 +37,19 @@ export default function MediaDetailPage() {
 
     let cancelled = false;
     const controller = new AbortController();
+    const loadKey = `${kind}:${slug}`;
 
     (async () => {
       try {
-        setLoading(true);
+        if (loadedKeyRef.current !== loadKey) {
+          setLoading(true);
+        }
         setError("");
-        setItem(null);
 
         const nextItem = await fetchMediaItem(kind, slug, controller.signal);
         if (cancelled) return;
 
+        loadedKeyRef.current = loadKey;
         setItem(nextItem);
       } catch (err: unknown) {
         if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
@@ -87,9 +84,9 @@ export default function MediaDetailPage() {
             </div>
 
             <div className="page-hero-actions">
-              <Link href="/cbt" className="btn btn-outline">
-                <FaArrowLeft /> CBT Hub
-              </Link>
+              <button className="btn btn-outline" onClick={() => goBackOr(router, "/cbt")} type="button">
+                <FaArrowLeft /> Back
+              </button>
               <button className="btn btn-outline" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
                 <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
@@ -223,5 +220,3 @@ export default function MediaDetailPage() {
     </div>
   );
 }
-
-export { requireAuthenticatedPage as getServerSideProps } from "../../../lib/require-auth-page";

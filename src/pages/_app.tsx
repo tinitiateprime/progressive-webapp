@@ -4,21 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import "../styles/globals.css";
 
-import { SessionProvider, signOut, useSession } from "next-auth/react";
+import { SessionProvider, useSession } from "next-auth/react";
 import { DesignContext } from "../context/DesignContext";
 import { ThemeContext, Theme } from "../context/ThemeContext";
-import {
-  clearBrowserSessionActive,
-  hasBrowserSessionActive,
-  markBrowserSessionActive,
-} from "../lib/browserSession";
-import { clearCachedSessionUser, writeCachedSessionUser } from "../lib/app-session";
+import { markBrowserSessionActive } from "../lib/browserSession";
+import { writeCachedSessionUser } from "../lib/app-session";
 import { fetchDesignConfig, warmCoreContent } from "../lib/content-client";
 import type { DesignSystem } from "../lib/content-types";
-import { syncOfflineWorkspace } from "../lib/offline-sync";
-import { buildPublicEntryUrl } from "../lib/public-entry";
+import {
+  readPersistedDesignConfig,
+  writePersistedDesignConfig,
+} from "../lib/design-cache";
+import { recordAppRoute } from "../lib/navigation";
+import { syncCoreOfflineSections, syncOfflineWorkspace } from "../lib/offline-sync";
+import { registerPwaServiceWorker, teardownDisabledPwa } from "../lib/pwa";
 
-const AUTH_SESSION_CHANNEL = "tinitiate.auth.browser-session";
 const PUBLIC_BROWSER_SESSION_ROUTES = new Set(["/", "/login", "/signup"]);
 
 const toCssVarKey = (value: string) =>
@@ -137,116 +137,32 @@ const applyCssVariables = (design: DesignSystem, theme: Theme) => {
 };
 
 function SessionLifetimeGuard() {
-  const router = useRouter();
   const { status } = useSession();
-  const handledRef = useRef(false);
-  const channelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") {
-      return;
+    if (status === "authenticated") {
+      markBrowserSessionActive();
     }
+  }, [status]);
 
-    const channel = new BroadcastChannel(AUTH_SESSION_CHANNEL);
-    channelRef.current = channel;
+  return null;
+}
 
-    const responder = (event: MessageEvent) => {
-      const data = event.data as { type?: string; requestId?: string } | null;
-      if (!data || data.type !== "browser-session-check" || !hasBrowserSessionActive()) return;
-
-      channel.postMessage({
-        type: "browser-session-active",
-        requestId: data.requestId,
-      });
-    };
-
-    channel.addEventListener("message", responder);
-
-    return () => {
-      channel.removeEventListener("message", responder);
-      channel.close();
-      channelRef.current = null;
-    };
-  }, []);
+function RouteHistoryController() {
+  const router = useRouter();
 
   useEffect(() => {
-    if (status === "loading") return;
+    recordAppRoute(router.asPath);
 
-    const isPublicRoute = PUBLIC_BROWSER_SESSION_ROUTES.has(router.pathname);
-
-    if (status === "unauthenticated") {
-      handledRef.current = false;
-      clearBrowserSessionActive();
-      return;
-    }
-
-    if (isPublicRoute) {
-      markBrowserSessionActive();
-      handledRef.current = false;
-      return;
-    }
-
-    if (hasBrowserSessionActive()) {
-      handledRef.current = false;
-      return;
-    }
-
-    if (handledRef.current) return;
-    handledRef.current = true;
-
-    let cancelled = false;
-    const signOutStaleSession = async () => {
-      try {
-        await signOut({ redirect: false });
-      } catch {
-        // ignore
-      } finally {
-        clearBrowserSessionActive();
-        if (!cancelled) {
-          router.replace(buildPublicEntryUrl(router.asPath, "session-ended"));
-        }
-      }
+    const handleRouteComplete = (url: string) => {
+      recordAppRoute(url);
     };
 
-    const channel = channelRef.current;
-    if (!channel) {
-      signOutStaleSession();
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const requestId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random()}`;
-
-    const resolveExistingSession = (event: MessageEvent) => {
-      const data = event.data as { type?: string; requestId?: string } | null;
-      if (!data || data.type !== "browser-session-active" || data.requestId !== requestId) return;
-
-      markBrowserSessionActive();
-      handledRef.current = false;
-      window.clearTimeout(timeoutId);
-      channel.removeEventListener("message", resolveExistingSession);
-    };
-
-    channel.addEventListener("message", resolveExistingSession);
-    channel.postMessage({ type: "browser-session-check", requestId });
-
-    const timeoutId = window.setTimeout(() => {
-      channel.removeEventListener("message", resolveExistingSession);
-      if (!hasBrowserSessionActive()) {
-        signOutStaleSession();
-      }
-    }, 250);
-
+    router.events.on("routeChangeComplete", handleRouteComplete);
     return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-      channel.removeEventListener("message", resolveExistingSession);
+      router.events.off("routeChangeComplete", handleRouteComplete);
     };
-  }, [router, status]);
+  }, [router]);
 
   return null;
 }
@@ -256,22 +172,21 @@ function OfflineWorkspaceController() {
   const { data: session, status } = useSession();
   const syncStartedRef = useRef(false);
   const initialSyncCompletedRef = useRef(false);
+  const initialSyncAttemptedRef = useRef(false);
 
   useEffect(() => {
     if (status === "authenticated") {
       writeCachedSessionUser(session?.user);
-      return;
-    }
-
-    if (status === "unauthenticated") {
-      clearCachedSessionUser();
     }
   }, [session?.user, status]);
 
   useEffect(() => {
     if (status !== "authenticated") {
-      syncStartedRef.current = false;
-      initialSyncCompletedRef.current = false;
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        syncStartedRef.current = false;
+        initialSyncCompletedRef.current = false;
+        initialSyncAttemptedRef.current = false;
+      }
       return;
     }
 
@@ -284,18 +199,36 @@ function OfflineWorkspaceController() {
 
     let idleCallbackId: number | null = null;
     let timeoutId: number | null = null;
+    let retryTimeoutId: number | null = null;
+    let scheduleSync: (force?: boolean) => void = () => undefined;
 
     const runSync = (force = false) => {
       if (!navigator.onLine || syncStartedRef.current) return;
       if (!force && initialSyncCompletedRef.current) return;
+      if (!force && initialSyncAttemptedRef.current) return;
       syncStartedRef.current = true;
+      initialSyncAttemptedRef.current = true;
 
-      syncOfflineWorkspace(router)
+      syncCoreOfflineSections(router)
+        .catch(() => undefined)
+        .then(() => syncOfflineWorkspace(router))
         .then(() => {
           initialSyncCompletedRef.current = true;
         })
         .catch(() => {
           initialSyncCompletedRef.current = false;
+          initialSyncAttemptedRef.current = false;
+
+          if (navigator.onLine) {
+            if (retryTimeoutId !== null) {
+              window.clearTimeout(retryTimeoutId);
+            }
+
+            retryTimeoutId = window.setTimeout(() => {
+              retryTimeoutId = null;
+              scheduleSync(true);
+            }, 2500);
+          }
         })
         .finally(() => {
           syncStartedRef.current = false;
@@ -312,12 +245,17 @@ function OfflineWorkspaceController() {
         window.clearTimeout(timeoutId);
         timeoutId = null;
       }
+
+      if (retryTimeoutId !== null) {
+        window.clearTimeout(retryTimeoutId);
+        retryTimeoutId = null;
+      }
     };
 
-    const scheduleSync = (force = false) => {
+    scheduleSync = (force = false) => {
       clearScheduledSync();
 
-      const delay = force ? 1200 : 3500;
+      const delay = force ? 600 : 900;
       const startSync = () => {
         idleCallbackId = null;
         timeoutId = null;
@@ -333,7 +271,10 @@ function OfflineWorkspaceController() {
     };
 
     scheduleSync();
-    const handleOnline = () => scheduleSync(true);
+    const handleOnline = () => {
+      initialSyncAttemptedRef.current = false;
+      scheduleSync(true);
+    };
     window.addEventListener("online", handleOnline);
 
     return () => {
@@ -388,8 +329,9 @@ export default function App({ Component, pageProps }: AppProps) {
   const [theme, setTheme] = useState<Theme>("light");
   const [design, setDesign] = useState<DesignSystem | null>(null);
   const [designError, setDesignError] = useState("");
+  const [designHydrated, setDesignHydrated] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV !== "false";
+  const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV === "true";
 
   useEffect(() => {
     setMounted(true);
@@ -411,21 +353,35 @@ export default function App({ Component, pageProps }: AppProps) {
   }, [design, theme, mounted]);
 
   useEffect(() => {
+    const persistedDesign = readPersistedDesignConfig();
+
+    if (persistedDesign) {
+      setDesign(persistedDesign);
+    }
+
+    setDesignHydrated(true);
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
 
-    fetchDesignConfig(controller.signal)
+    fetchDesignConfig(controller.signal, {
+      strategy: "cache-first",
+      revalidateOnCacheHit: false,
+    })
       .then((nextDesign) => {
         if (cancelled) return;
         const currentTheme =
           document.documentElement.classList.contains("dark") ? "dark" : "light";
         applyCssVariables(nextDesign, currentTheme);
+        writePersistedDesignConfig(nextDesign);
         setDesign(nextDesign);
         setDesignError("");
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setDesign(null);
+        if (readPersistedDesignConfig()) return;
         setDesignError(
           error instanceof Error ? error.message : "Failed to load design configuration from GitHub."
         );
@@ -444,16 +400,13 @@ export default function App({ Component, pageProps }: AppProps) {
     const shouldRegister = process.env.NODE_ENV === "production" || enablePwaInDev;
 
     if (!shouldRegister) {
-      navigator.serviceWorker
-        .getRegistrations()
-        .then((registrations) =>
-          Promise.all(registrations.map((registration) => registration.unregister()))
-        )
+      void teardownDisabledPwa()
+        .then(() => undefined)
         .catch(console.error);
       return;
     }
 
-    navigator.serviceWorker.register("/sw.js").catch(console.error);
+    void registerPwaServiceWorker().catch(console.error);
   }, [enablePwaInDev]);
 
   const themeColor = design?.theme[theme].bg;
@@ -461,6 +414,24 @@ export default function App({ Component, pageProps }: AppProps) {
   const renderDesignState = () => {
     if (design) {
       return <Component {...pageProps} />;
+    }
+
+    if (!designHydrated) {
+      return (
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            textAlign: "center",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>Loading...</div>
+          </div>
+        </div>
+      );
     }
 
     if (designError) {
@@ -504,7 +475,12 @@ export default function App({ Component, pageProps }: AppProps) {
   };
 
   return (
-    <SessionProvider session={(pageProps as any).session} refetchWhenOffline={false}>
+    <SessionProvider
+      session={(pageProps as any).session}
+      refetchWhenOffline={false}
+      refetchOnWindowFocus={false}
+    >
+      <RouteHistoryController />
       <SessionLifetimeGuard />
       <CoreContentWarmupController />
       <OfflineWorkspaceController />

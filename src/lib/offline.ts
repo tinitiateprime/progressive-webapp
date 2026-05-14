@@ -1,5 +1,5 @@
 import { normalizeLibraryUserKey } from "./library";
-import { toRawGithub } from "./readme-utils";
+import { cacheRepoTextValue, toRawGithub } from "./readme-utils";
 
 export const CACHE_NAME = "repo-content";
 
@@ -196,19 +196,10 @@ export const cacheTextUrls = async (
     return { savedUrls, failedUrls: uniqueUrls };
   }
 
-  const cache = await caches.open(CACHE_NAME);
-
   for (const url of uniqueUrls) {
     try {
       const text = await fetcher(url);
-      await cache.put(
-        url,
-        new Response(text, {
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-          },
-        })
-      );
+      await cacheRepoTextValue(url, text);
       savedUrls.push(url);
     } catch {
       failedUrls.push(url);

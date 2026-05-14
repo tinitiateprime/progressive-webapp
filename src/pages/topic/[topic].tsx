@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -18,14 +18,12 @@ import {
 import { materialDark, materialLight } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import CachedRepoImage from "../../components/content/CachedRepoImage";
 import { ThemeContext } from "../../context/ThemeContext";
-import { useAppSession } from "../../lib/app-session";
+import { useProtectedAppSession } from "../../lib/app-session";
 import {
-  CONTENT_AVAILABILITY_EVENT,
   lookupCourseSubject,
-  readContentAvailability,
 } from "../../lib/content-client";
 import { getLibraryUserKey, setActiveLibraryUserKey } from "../../lib/library";
-import { buildPublicEntryUrl } from "../../lib/public-entry";
+import { goBackOr } from "../../lib/navigation";
 import {
   fetchTextStrict,
   normalize,
@@ -33,6 +31,7 @@ import {
   toGithubProxyUrl,
   toRawGithub,
 } from "../../lib/readme-utils";
+import { useConnectionStatus } from "../../lib/use-connection-status";
 
 const SyntaxHighlighter = dynamic(
   () => import("react-syntax-highlighter").then((mod) => mod.Prism),
@@ -62,7 +61,7 @@ export default function TopicPage() {
   const topicStr = String(topic || "");
   const subjectStr = String(subject || "");
   const readmeQuery = typeof readme === "string" ? readme : "";
-  const { data: session, status } = useAppSession();
+  const { data: session } = useProtectedAppSession();
   const accountKey = useMemo(() => getLibraryUserKey(session?.user), [session]);
   const { theme, toggleTheme } = useContext(ThemeContext);
 
@@ -75,17 +74,8 @@ export default function TopicPage() {
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [isDesktop, setIsDesktop] = useState(false);
-  const [isOffline, setIsOffline] = useState(
-    () =>
-      typeof navigator !== "undefined" &&
-      (!navigator.onLine || (readContentAvailability()?.offline ?? false))
-  );
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace(buildPublicEntryUrl(router.asPath));
-    }
-  }, [router, status]);
+  const loadedTopicKeyRef = useRef("");
+  const isOffline = useConnectionStatus();
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -94,33 +84,6 @@ export default function TopicPage() {
     mq.addEventListener?.("change", apply);
 
     return () => mq.removeEventListener?.("change", apply);
-  }, []);
-
-  useEffect(() => {
-    const update = () => {
-      const cachedState = readContentAvailability()?.offline ?? false;
-      setIsOffline((typeof navigator !== "undefined" && !navigator.onLine) || cachedState);
-    };
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        update();
-      }
-    };
-
-    update();
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    window.addEventListener("focus", update);
-    window.addEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-      window.removeEventListener("focus", update);
-      window.removeEventListener(CONTENT_AVAILABILITY_EVENT, update as EventListener);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
   }, []);
 
   useEffect(() => {
@@ -133,39 +96,70 @@ export default function TopicPage() {
 
     let cancelled = false;
     const controller = new AbortController();
+    const loadKey = `${subjectStr}|${topicStr}|${readmeQuery}`;
 
     (async () => {
       try {
-        setLoading(true);
+        if (loadedTopicKeyRef.current !== loadKey) {
+          setLoading(true);
+          setContent("");
+          setMdBaseUrl("");
+          setSubjectReadmeOutlineMd("");
+        }
         setError("");
-        setContent("");
-        setMdBaseUrl("");
-        setSubjectReadmeOutlineMd("");
 
         let resolvedSubjectReadmeUrl = readmeQuery ? toRawGithub(readmeQuery) : "";
-
-        if (!resolvedSubjectReadmeUrl) {
-          const match = await lookupCourseSubject(subjectStr, controller.signal);
-          if (!match) throw new Error("Subject not found in course catalog");
-          resolvedSubjectReadmeUrl = toRawGithub(match.readme_url);
-        }
-
-        if (cancelled) return;
-        setSubjectReadmeUrl(resolvedSubjectReadmeUrl);
-
-        const subjectReadmeText = await fetchTextStrict(resolvedSubjectReadmeUrl, controller.signal);
-
-        if (!subjectReadmeText) throw new Error("Subject README is empty or unavailable");
-
-        const parsedTopics = parseSubjectTopicsFromReadme(
-          subjectReadmeText,
-          resolvedSubjectReadmeUrl
-        ).map((item) => ({
+        const subjectMatch = await lookupCourseSubject(subjectStr, controller.signal);
+        const fallbackTopics = (subjectMatch?.topics || []).map((item) => ({
           topic_name: item.topic_name,
           md_url: item.md_url,
           section_markdown: item.section_markdown,
           bullets: item.bullets,
         }));
+
+        if (!resolvedSubjectReadmeUrl && subjectMatch?.readme_url) {
+          resolvedSubjectReadmeUrl = toRawGithub(subjectMatch.readme_url);
+        }
+
+        if (!resolvedSubjectReadmeUrl && fallbackTopics.length === 0) {
+          throw new Error("Subject not found in course catalog");
+        }
+
+        if (cancelled) return;
+        setSubjectReadmeUrl(resolvedSubjectReadmeUrl);
+
+        let parsedTopics = fallbackTopics;
+
+        if (resolvedSubjectReadmeUrl) {
+          try {
+            const subjectReadmeText = await fetchTextStrict(
+              resolvedSubjectReadmeUrl,
+              controller.signal
+            );
+
+            if (subjectReadmeText) {
+              const nextTopics = parseSubjectTopicsFromReadme(
+                subjectReadmeText,
+                resolvedSubjectReadmeUrl
+              ).map((item) => ({
+                topic_name: item.topic_name,
+                md_url: item.md_url,
+                section_markdown: item.section_markdown,
+                bullets: item.bullets,
+              }));
+
+              if (nextTopics.length > 0) {
+                parsedTopics = nextTopics;
+              }
+            }
+          } catch {
+            // Keep the already-cached course catalog topics as the offline fallback.
+          }
+        }
+
+        if (parsedTopics.length === 0) {
+          throw new Error("No topics found for this subject");
+        }
 
         const catalog: CatalogSubject = {
           subject: subjectStr,
@@ -193,6 +187,7 @@ export default function TopicPage() {
 
         if (cancelled) return;
 
+        loadedTopicKeyRef.current = loadKey;
         setMdBaseUrl(baseUrl);
         if (!topicMd && !outlineMd) {
           setError("Failed to load topic content.");
@@ -206,8 +201,9 @@ export default function TopicPage() {
         if (normalize(selectedTopic.topic_name) !== normalize(topicStr)) {
           void router.replace(
             {
-              pathname: `/topic/${encodeURIComponent(selectedTopic.topic_name)}`,
+              pathname: "/topic/[topic]",
               query: {
+                topic: selectedTopic.topic_name,
                 subject: subjectStr,
                 ...(resolvedSubjectReadmeUrl ? { readme: resolvedSubjectReadmeUrl } : {}),
               },
@@ -231,6 +227,17 @@ export default function TopicPage() {
   }, [readmeQuery, router, router.isReady, subjectStr, topicStr]);
 
   const topics = useMemo(() => catalogData?.topics ?? [], [catalogData]);
+  const subjectHref = subjectReadmeUrl
+    ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(subjectReadmeUrl)}`
+    : `/subject/${encodeURIComponent(subjectStr)}`;
+  const buildTopicHref = (topicName: string) => ({
+    pathname: "/topic/[topic]",
+    query: {
+      topic: topicName,
+      subject: subjectStr,
+      ...(subjectReadmeUrl ? { readme: subjectReadmeUrl } : {}),
+    },
+  });
 
   const filteredTopics = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -376,18 +383,9 @@ export default function TopicPage() {
             </div>
 
             <div className="page-hero-actions">
-              <Link
-                href={
-                  subjectReadmeUrl
-                    ? `/subject/${encodeURIComponent(subjectStr)}?readme=${encodeURIComponent(
-                        subjectReadmeUrl
-                      )}`
-                    : `/subject/${encodeURIComponent(subjectStr)}`
-                }
-                className="btn btn-outline"
-              >
-                <FaArrowLeft /> Subject
-              </Link>
+              <button className="btn btn-outline" onClick={() => goBackOr(router, subjectHref)} type="button">
+                <FaArrowLeft /> Back
+              </button>
               <Link href="/dashboard" className="btn btn-outline">
                 <FaHome />
               </Link>
@@ -442,18 +440,11 @@ export default function TopicPage() {
               <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
                 {filteredTopics.map((item) => {
                   const isActive = normalize(item.topic_name) === normalize(activeTopicName);
-                  const href = subjectReadmeUrl
-                    ? `/topic/${encodeURIComponent(item.topic_name)}?subject=${encodeURIComponent(
-                        subjectStr
-                      )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-                    : `/topic/${encodeURIComponent(item.topic_name)}?subject=${encodeURIComponent(
-                        subjectStr
-                      )}`;
 
                   return (
                     <Link
                       key={`${item.topic_name}-${item.md_url}`}
-                      href={href}
+                      href={buildTopicHref(item.topic_name)}
                       className={isActive ? "btn btn-primary" : "btn btn-outline"}
                       style={{ justifyContent: "flex-start" }}
                     >
@@ -486,34 +477,14 @@ export default function TopicPage() {
 
                 <div style={{ display: "flex", gap: 10 }}>
                   <Link
-                    href={
-                      prevTopic
-                        ? subjectReadmeUrl
-                          ? `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
-                              subjectStr
-                            )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-                          : `/topic/${encodeURIComponent(prevTopic.topic_name)}?subject=${encodeURIComponent(
-                              subjectStr
-                            )}`
-                        : "#"
-                    }
+                    href={prevTopic ? buildTopicHref(prevTopic.topic_name) : "#"}
                     className="btn btn-outline"
                     style={{ opacity: prevTopic ? 1 : 0.45, pointerEvents: prevTopic ? "auto" : "none" }}
                   >
                     <FaChevronLeft /> Prev
                   </Link>
                   <Link
-                    href={
-                      nextTopic
-                        ? subjectReadmeUrl
-                          ? `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
-                              subjectStr
-                            )}&readme=${encodeURIComponent(subjectReadmeUrl)}`
-                          : `/topic/${encodeURIComponent(nextTopic.topic_name)}?subject=${encodeURIComponent(
-                              subjectStr
-                            )}`
-                        : "#"
-                    }
+                    href={nextTopic ? buildTopicHref(nextTopic.topic_name) : "#"}
                     className="btn btn-outline"
                     style={{ opacity: nextTopic ? 1 : 0.45, pointerEvents: nextTopic ? "auto" : "none" }}
                   >
@@ -534,5 +505,3 @@ export default function TopicPage() {
     </div>
   );
 }
-
-export { requireAuthenticatedPage as getServerSideProps } from "../../lib/require-auth-page";
