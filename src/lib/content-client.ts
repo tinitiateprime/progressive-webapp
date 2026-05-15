@@ -10,6 +10,7 @@ import type {
   SlideshowSummary,
   TickerItem,
 } from "./content-types";
+import { notifyCacheStorageUpdated } from "./cache-events";
 import {
   CONTENT_AVAILABILITY_EVENT,
   readContentAvailability,
@@ -75,6 +76,7 @@ const writeCachedJson = async (url: string, response: Response) => {
   try {
     const cache = await caches.open(CONTENT_API_CACHE);
     await cache.put(toAbsoluteRequestUrl(url), response.clone());
+    notifyCacheStorageUpdated({ cacheName: CONTENT_API_CACHE, url });
   } catch {
     // ignore cache write failures
   }

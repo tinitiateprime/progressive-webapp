@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { FaArrowLeft, FaHome, FaMoon, FaSearch, FaSun } from "react-icons/fa";
+import CacheProgressBadge from "../../components/content/CacheProgressBadge";
 import TickerBar from "../../components/content/TickerBar";
 import { ThemeContext } from "../../context/ThemeContext";
 import { useProtectedAppSession } from "../../lib/app-session";
 import { fetchInterviewQuestions, fetchTickerItems } from "../../lib/content-client";
 import type { InterviewQuestionSummary, TickerItem } from "../../lib/content-types";
 import { goBackOr } from "../../lib/navigation";
+import { buildInterviewCacheTargets, useCacheSaveProgress } from "../../lib/use-cache-save-progress";
 import { useConnectionStatus } from "../../lib/use-connection-status";
 
 const normalizeSearch = (value: string) =>
@@ -83,6 +85,8 @@ export default function InterviewIndexPage() {
       return item.tags.some((tag) => normalizeSearch(tag).includes(query));
     });
   }, [items, q]);
+  const cacheTargets = useMemo(() => buildInterviewCacheTargets(items), [items]);
+  const cacheProgress = useCacheSaveProgress(cacheTargets);
 
   return (
     <div className="app-shell">
@@ -116,6 +120,7 @@ export default function InterviewIndexPage() {
                 >
                   {isOffline ? "Offline" : "Online"}
                 </span>
+                {cacheProgress.total > 0 ? <CacheProgressBadge progress={cacheProgress} /> : null}
               </div>
             </div>
 

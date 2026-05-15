@@ -1,4 +1,5 @@
 // File: src/lib/readme-utils.ts
+import { notifyCacheStorageUpdated } from "./cache-events";
 import { writeContentAvailability } from "./content-availability";
 
 export type ParsedTopic = {
@@ -430,6 +431,7 @@ const writeCachedRepoText = async (url: string, response: Response) => {
     await Promise.all(
       getRepoTextCacheKeys(url).map((key) => cache.put(key, response.clone()))
     );
+    notifyCacheStorageUpdated({ cacheName: REPO_CONTENT_CACHE, url });
   } catch {
     // ignore cache write failures
   }
@@ -449,6 +451,7 @@ export const cacheRepoTextValue = async (url: string, text: string) => {
     await Promise.all(
       getRepoTextCacheKeys(url).map((key) => cache.put(key, response.clone()))
     );
+    notifyCacheStorageUpdated({ cacheName: REPO_CONTENT_CACHE, url });
   } catch {
     // ignore cache write failures
   }

@@ -12,6 +12,7 @@ import {
   fetchTickerItems,
   hasCachedContentUrl,
 } from "./content-client";
+import { notifyCacheStorageUpdated } from "./cache-events";
 import { extractMarkdownAssetUrls, fetchTextStrict, toGithubProxyUrl } from "./readme-utils";
 
 const APP_PAGES_CACHE = "app-pages-v2";
@@ -136,6 +137,7 @@ const cacheRouteHtml = async (href: string) => {
 
   const cache = await caches.open(APP_PAGES_CACHE);
   await cache.put(absoluteUrl, response.clone());
+  notifyCacheStorageUpdated({ cacheName: APP_PAGES_CACHE, url: absoluteUrl });
 };
 
 const cacheStaticAsset = async (url: string, cacheName: string) => {
@@ -168,6 +170,7 @@ const cacheStaticAsset = async (url: string, cacheName: string) => {
 
   const cache = await caches.open(cacheName);
   await cache.put(absoluteUrl, response.clone());
+  notifyCacheStorageUpdated({ cacheName, url: absoluteUrl });
 };
 
 const prefetchRoute = async (router: NextRouter | null, href: string) => {
@@ -329,6 +332,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
     const imageUrls = new Set<string>();
     const audioUrls = new Set<string>();
     const videoUrls = new Set<string>();
+    const primaryContentTasks: Array<() => Promise<void>> = [];
     const detailTasks: Array<() => Promise<void>> = [];
     let cachedRouteCount = 0;
 
@@ -358,7 +362,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
 
       if (readmeUrl) {
         markdownUrls.add(readmeUrl);
-        detailTasks.push(async () => {
+        primaryContentTasks.push(async () => {
           try {
             const readmeMarkdown = await fetchTextStrict(readmeUrl, undefined, {
               strategy: "network-first",
@@ -397,7 +401,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
 
     for (const item of interviewSummaries) {
       routeHrefs.add(`/interview/${encodeURIComponent(item.slug)}`);
-      detailTasks.push(async () => {
+      primaryContentTasks.push(async () => {
         try {
           const detail = await fetchInterviewQuestion(item.slug, undefined, {
             strategy: "network-first",
@@ -411,7 +415,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
 
     for (const deck of cbtCollections.slideshows) {
       routeHrefs.add(`/cbt/slides/${encodeURIComponent(deck.slug)}`);
-      detailTasks.push(async () => {
+      primaryContentTasks.push(async () => {
         try {
           const slideshow = await fetchSlideshow(deck.slug, undefined, {
             strategy: "network-first",
@@ -427,7 +431,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       routeHrefs.add(
         `/cbt/media/${encodeURIComponent(item.slug)}?kind=${encodeURIComponent("training-videos")}`
       );
-      detailTasks.push(async () => {
+      primaryContentTasks.push(async () => {
         try {
           const mediaItem = await fetchMediaItem("training-videos", item.slug, undefined, {
             strategy: "network-first",
@@ -449,7 +453,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       routeHrefs.add(
         `/cbt/media/${encodeURIComponent(item.slug)}?kind=${encodeURIComponent("audio-books")}`
       );
-      detailTasks.push(async () => {
+      primaryContentTasks.push(async () => {
         try {
           const mediaItem = await fetchMediaItem("audio-books", item.slug, undefined, {
             strategy: "network-first",
@@ -468,7 +472,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
     }
 
     try {
-      await runWithConcurrency(
+      const routeSyncPromise = runWithConcurrency(
         Array.from(routeHrefs),
         async (href) => {
           try {
@@ -481,6 +485,16 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
         },
         ROUTE_SYNC_CONCURRENCY
       );
+
+      await runWithConcurrency(
+        primaryContentTasks,
+        async (task) => {
+          await task();
+        },
+        DETAIL_SYNC_CONCURRENCY
+      );
+
+      await routeSyncPromise;
 
       if (cachedRouteCount === 0) {
         throw new Error("Could not cache any application routes.");
@@ -540,7 +554,12 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
         contentCommitSha: statusInfo.commitSha,
         routeCount: routeHrefs.size,
         markdownCount: markdownUrls.size,
-        detailCount: detailTasks.length + imageUrls.size + audioUrls.size + videoUrls.size,
+        detailCount:
+          primaryContentTasks.length +
+          detailTasks.length +
+          imageUrls.size +
+          audioUrls.size +
+          videoUrls.size,
         status: "ready",
         error: syncWarnings.length > 0 ? syncWarnings.slice(0, 5).join(" | ") : undefined,
       });
@@ -555,7 +574,12 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
         contentCommitSha: statusInfo.commitSha,
         routeCount: routeHrefs.size,
         markdownCount: markdownUrls.size,
-        detailCount: detailTasks.length + imageUrls.size + audioUrls.size + videoUrls.size,
+        detailCount:
+          primaryContentTasks.length +
+          detailTasks.length +
+          imageUrls.size +
+          audioUrls.size +
+          videoUrls.size,
         status: "failed",
         error: warningMessage ? `${warningMessage} | ${failureMessage}` : failureMessage,
       });

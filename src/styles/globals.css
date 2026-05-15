@@ -744,10 +744,6 @@ input:focus-visible {
   background-size: 26px 26px;
 }
 
-.mobile-quick-nav {
-  display: none;
-}
-
 main,
 .prose,
 .card {
@@ -959,20 +955,6 @@ main,
   .reader-layout__content {
     padding: 14px !important;
     border-radius: 20px !important;
-  }
-
-  .mobile-quick-nav {
-    left: 10px;
-    right: 10px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-    gap: 7px;
-    padding: 8px;
-    border-radius: 22px;
-  }
-
-  .mobile-quick-nav .btn {
-    min-height: 42px;
-    border-radius: 16px;
   }
 
   .page-hero-card--dashboard {
@@ -1260,28 +1242,6 @@ main,
     box-shadow: none;
   }
 
-  .mobile-quick-nav {
-    position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-    z-index: 70;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    padding: 8px;
-    border-radius: 22px;
-    border: 1px solid var(--mobile-quick-nav-border);
-    background: var(--mobile-quick-nav-surface);
-    box-shadow: var(--mobile-quick-nav-shadow);
-    backdrop-filter: blur(18px);
-  }
-
-  .mobile-quick-nav .btn {
-    flex: 1;
-    min-width: 0;
-  }
 }
 
 @media (max-width: 640px) {
@@ -1404,21 +1364,6 @@ main,
     padding: 4px 8px;
   }
 
-  .mobile-quick-nav {
-    animation: mobileNavRise 180ms ease-out both;
-  }
-}
-
-@keyframes mobileNavRise {
-  from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.98);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
 
 @media (max-width: 760px) {
@@ -1433,10 +1378,6 @@ main,
 
   .dashboard-search-result-card {
     min-height: 0;
-  }
-
-  .mobile-quick-nav {
-    display: none !important;
   }
 
   .app-shell:not(.app-shell--dashboard):not(.app-shell--home) .page-main {

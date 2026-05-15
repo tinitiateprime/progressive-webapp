@@ -114,12 +114,6 @@ const applyCssVariables = (design: DesignSystem, theme: Theme) => {
         ? design.courses.cardBackgroundDark
         : design.courses.cardBackgroundLight,
     "--landing-hero-accent": design.landing.heroAccentGradient,
-    "--mobile-quick-nav-surface":
-      theme === "dark" ? design.mobile.quickNavSurfaceDark : design.mobile.quickNavSurfaceLight,
-    "--mobile-quick-nav-border":
-      theme === "dark" ? design.mobile.quickNavBorderDark : design.mobile.quickNavBorderLight,
-    "--mobile-quick-nav-shadow":
-      theme === "dark" ? design.mobile.quickNavShadowDark : design.mobile.quickNavShadowLight,
   };
 
   Object.entries(design.courses.categoryTones).forEach(([key, tone]) => {
@@ -200,9 +194,10 @@ function OfflineWorkspaceController() {
       syncStartedRef.current = true;
       initialSyncAttemptedRef.current = true;
 
-      syncCoreOfflineSections(router)
-        .catch(() => undefined)
-        .then(() => syncOfflineWorkspace(router))
+      Promise.all([
+        syncCoreOfflineSections(router).catch(() => undefined),
+        syncOfflineWorkspace(router),
+      ])
         .then(() => {
           initialSyncCompletedRef.current = true;
         })

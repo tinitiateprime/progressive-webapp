@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { FaArrowLeft, FaArrowRight, FaHome, FaMoon, FaSearch, FaSun } from "react-icons/fa";
 
+import CacheProgressBadge from "../components/content/CacheProgressBadge";
 import CachedRepoImage from "../components/content/CachedRepoImage";
 import TickerBar from "../components/content/TickerBar";
 import { ThemeContext } from "../context/ThemeContext";
@@ -12,6 +13,7 @@ import { useProtectedAppSession } from "../lib/app-session";
 import { fetchCourseSubjects, fetchTickerItems } from "../lib/content-client";
 import type { CourseSubject, TickerItem } from "../lib/content-types";
 import { goBackOr } from "../lib/navigation";
+import { buildCourseCacheTargets, useCacheSaveProgress } from "../lib/use-cache-save-progress";
 import { useConnectionStatus } from "../lib/use-connection-status";
 
 const normalizeSearch = (value: string) =>
@@ -145,6 +147,8 @@ export default function CoursesPage() {
       );
     });
   }, [courses, q]);
+  const cacheTargets = useMemo(() => buildCourseCacheTargets(courses), [courses]);
+  const cacheProgress = useCacheSaveProgress(cacheTargets);
 
   return (
     <div className="app-shell">
@@ -178,6 +182,7 @@ export default function CoursesPage() {
                 >
                   {isOffline ? "Offline" : "Online"}
                 </span>
+                {cacheProgress.total > 0 ? <CacheProgressBadge progress={cacheProgress} /> : null}
               </div>
             </div>
 

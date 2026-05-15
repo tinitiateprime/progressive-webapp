@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { FaArrowLeft, FaHome, FaMoon, FaPlayCircle, FaSun, FaVolumeUp } from "react-icons/fa";
 import { MdOutlineSlideshow } from "react-icons/md";
+import CacheProgressBadge from "../../components/content/CacheProgressBadge";
 import { ThemeContext } from "../../context/ThemeContext";
 import { useProtectedAppSession } from "../../lib/app-session";
 import { fetchCbtCollections } from "../../lib/content-client";
 import type { CbtCollections } from "../../lib/content-types";
 import { goBackOr } from "../../lib/navigation";
+import { buildCbtCacheTargets, useCacheSaveProgress } from "../../lib/use-cache-save-progress";
 import { useConnectionStatus } from "../../lib/use-connection-status";
 
 type TabKey = "slideshows" | "trainingVideos" | "audioBooks";
@@ -64,6 +66,8 @@ export default function CbtPage() {
   const slideItems = data?.slideshows || [];
   const trainingItems = data?.trainingVideos || [];
   const audioItems = data?.audioBooks || [];
+  const cacheTargets = useMemo(() => buildCbtCacheTargets(data), [data]);
+  const cacheProgress = useCacheSaveProgress(cacheTargets);
 
   return (
     <div className="app-shell">
@@ -95,6 +99,7 @@ export default function CbtPage() {
                 >
                   {isOffline ? "Offline" : "Online"}
                 </span>
+                {cacheProgress.total > 0 ? <CacheProgressBadge progress={cacheProgress} /> : null}
               </div>
             </div>
 
