@@ -6,7 +6,8 @@
     "predev": "node scripts/prepare-dev-runtime.cjs",
     "dev": "next dev --webpack -p 3001",
     "build": "next build --webpack",
-    "start": "next start -p 3000",
+    "prestart": "node scripts/kill-listening-ports.cjs 3001",
+    "start": "next start -p 3001",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "typecheck": "tsc --noEmit"
   },

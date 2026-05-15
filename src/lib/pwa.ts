@@ -66,14 +66,16 @@ export const teardownDisabledPwa = async () => {
     return { shouldReload: false };
   }
 
+  const hadController = Boolean(navigator.serviceWorker.controller);
   const registrations = await navigator.serviceWorker
     .getRegistrations()
     .catch(() => []);
 
-  await Promise.all(
-    registrations.map((registration) =>
-      registration.unregister().catch(() => false)
-    )
+  const unregisterResults = await Promise.all(
+    registrations.map(async (registration) => {
+      await registration.update().catch(() => undefined);
+      return registration.unregister().catch(() => false);
+    })
   );
 
   if ("caches" in window) {
@@ -85,5 +87,5 @@ export const teardownDisabledPwa = async () => {
     );
   }
 
-  return { shouldReload: false };
+  return { shouldReload: hadController && unregisterResults.some(Boolean) };
 };

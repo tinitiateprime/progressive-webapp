@@ -111,13 +111,8 @@ export const useConnectionStatus = () => {
 
     const handleContentAvailability = (event: Event) => {
       const payload = (event as CustomEvent<ContentAvailabilityState>).detail;
-
-      if (payload?.offline) {
-        void verify();
-        return;
-      }
-
-      update();
+      if (!active || !payload) return;
+      setIsOffline(Boolean(payload.offline) || readBrowserOfflineState());
     };
 
     update();

@@ -9,6 +9,7 @@ export type ContentAvailabilityState = {
 export const writeContentAvailability = (offline: boolean) => {
   if (typeof window === "undefined") return;
 
+  const previous = readContentAvailability();
   const payload: ContentAvailabilityState = {
     offline,
     updatedAt: Date.now(),
@@ -18,6 +19,10 @@ export const writeContentAvailability = (offline: boolean) => {
     window.localStorage.setItem(CONTENT_AVAILABILITY_KEY, JSON.stringify(payload));
   } catch {
     // ignore storage failures
+  }
+
+  if (previous?.offline === offline) {
+    return;
   }
 
   window.dispatchEvent(

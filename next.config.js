@@ -3,6 +3,19 @@ const runtimeCaching = require("./runtime-caching");
 
 const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV === "true";
 const shouldDisablePwa = process.env.NODE_ENV !== "production" && !enablePwaInDev;
+const devWatchIgnored = [
+  "**/.git/**",
+  "**/.next/**",
+  "**/node_modules/**",
+  "**/*.log",
+  "**/*.tsbuildinfo",
+  "**/next-env.d.ts",
+  "**/public/sw.js",
+  "**/public/workbox-*.js",
+  "**/data/users.json",
+  "**/data/favorites.json",
+  "**/data/offline-subjects.json",
+];
 
 const withPWA = require("next-pwa")({
   dest: "public",
@@ -42,6 +55,13 @@ const nextConfig = {
 
   // Performance-oriented webpack tweaks
   webpack(config, { isServer, dev }) {
+    if (dev) {
+      config.watchOptions = {
+        ...config.watchOptions,
+        ignored: devWatchIgnored,
+      };
+    }
+
     if (!dev && !isServer) {
       // Split react-syntax-highlighter (large) into its own chunk
       config.optimization.splitChunks = {
@@ -66,19 +86,9 @@ const nextConfig = {
     return config;
   },
 
-  // Add long-lived cache headers for Next.js static assets and fonts
+  // Add cache headers for public assets and auth-sensitive pages.
   async headers() {
     return [
-      {
-        // Immutable static assets (hashed filenames)
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
       {
         // Public directory assets (icons, manifest, etc.)
         source: "/icons/:path*",

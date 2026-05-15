@@ -19,6 +19,32 @@ import { recordAppRoute } from "../lib/navigation";
 import { syncCoreOfflineSections, syncOfflineWorkspace } from "../lib/offline-sync";
 import { registerPwaServiceWorker, teardownDisabledPwa } from "../lib/pwa";
 
+const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV === "true";
+const shouldRunPwaBackgroundTasks = process.env.NODE_ENV === "production" || enablePwaInDev;
+const PWA_DEV_TEARDOWN_RELOAD_KEY = "tinitiate.pwa.dev-teardown-reloaded.v2";
+
+const markDevPwaTeardownReload = () => {
+  try {
+    if (window.localStorage.getItem(PWA_DEV_TEARDOWN_RELOAD_KEY) === "1") {
+      return false;
+    }
+
+    window.localStorage.setItem(PWA_DEV_TEARDOWN_RELOAD_KEY, "1");
+    return true;
+  } catch {
+    try {
+      if (window.sessionStorage.getItem(PWA_DEV_TEARDOWN_RELOAD_KEY) === "1") {
+        return false;
+      }
+
+      window.sessionStorage.setItem(PWA_DEV_TEARDOWN_RELOAD_KEY, "1");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
 const toCssVarKey = (value: string) =>
   value
     .toLowerCase()
@@ -173,6 +199,13 @@ function OfflineWorkspaceController() {
   }, [session?.user, status]);
 
   useEffect(() => {
+    if (!shouldRunPwaBackgroundTasks) {
+      syncStartedRef.current = false;
+      initialSyncCompletedRef.current = false;
+      initialSyncAttemptedRef.current = false;
+      return;
+    }
+
     if (status !== "authenticated") {
       if (typeof navigator === "undefined" || navigator.onLine) {
         syncStartedRef.current = false;
@@ -279,6 +312,11 @@ function CoreContentWarmupController() {
   const warmedRef = useRef(false);
 
   useEffect(() => {
+    if (!shouldRunPwaBackgroundTasks) {
+      warmedRef.current = false;
+      return;
+    }
+
     if (status !== "authenticated") {
       warmedRef.current = false;
       return;
@@ -295,6 +333,7 @@ function CoreContentWarmupController() {
   }, [router.pathname, status]);
 
   useEffect(() => {
+    if (!shouldRunPwaBackgroundTasks) return;
     if (status !== "authenticated") return;
 
     const handleOnline = () => {
@@ -320,7 +359,6 @@ export default function App({ Component, pageProps }: AppProps) {
   const [designError, setDesignError] = useState("");
   const [designHydrated, setDesignHydrated] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const enablePwaInDev = process.env.NEXT_PUBLIC_ENABLE_PWA_DEV === "true";
 
   useEffect(() => {
     setMounted(true);
@@ -389,13 +427,21 @@ export default function App({ Component, pageProps }: AppProps) {
 
     if (!shouldRegister) {
       void teardownDisabledPwa()
-        .then(() => undefined)
+        .then(({ shouldReload }) => {
+          if (!shouldReload) {
+            return;
+          }
+
+          if (markDevPwaTeardownReload()) {
+            window.location.reload();
+          }
+        })
         .catch(console.error);
       return;
     }
 
     void registerPwaServiceWorker().catch(console.error);
-  }, [enablePwaInDev]);
+  }, []);
 
   const themeColor = design?.theme[theme].bg;
 
