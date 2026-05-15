@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState, useContext, useEffect, ReactNode } from "react";
 import { useRouter } from "next/router";
-import { signIn, useSession } from "next-auth/react";
+import { getProviders, signIn, useSession } from "next-auth/react";
 import { ThemeContext } from "../context/ThemeContext";
 import {
   clearBrowserSessionActive,
@@ -68,6 +68,7 @@ export default function SignupPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && hasBrowserSessionActive()) {
@@ -80,8 +81,34 @@ export default function SignupPage() {
     void router.prefetch("/login");
   }, [callbackUrl, router]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void getProviders()
+      .then((providers) => {
+        if (!cancelled) {
+          setGoogleAvailable(Boolean(providers?.google));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGoogleAvailable(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function onGoogle() {
     setError("");
+
+    if (!googleAvailable) {
+      setError("Google sign-up is not configured for this deployment.");
+      return;
+    }
+
     setLoading(true);
     try {
       markBrowserSessionActive();
@@ -273,11 +300,15 @@ export default function SignupPage() {
                   className="btn btn-outline w-full !rounded-2xl disabled:opacity-60 disabled:cursor-not-allowed"
                   type="button"
                   onClick={onGoogle}
-                  disabled={loading}
+                  disabled={loading || googleAvailable !== true}
                 >
                   <span className="inline-flex items-center gap-2">
                     <FaGoogle />
-                    Continue with Google
+                    {googleAvailable === null
+                      ? "Checking Google..."
+                      : googleAvailable
+                        ? "Continue with Google"
+                        : "Google sign-up unavailable"}
                   </span>
                 </button>
 

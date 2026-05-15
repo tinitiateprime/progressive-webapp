@@ -18,17 +18,28 @@ type AppSession = Session & {
 
 const AUTH_FALLBACK_SECRET = "tinitiate-local-auth-secret-v1";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
-const AUTH_FALLBACK_URL = `http://localhost:${process.env.PORT || "3000"}`;
 
 if (!process.env.NEXTAUTH_SECRET) {
   process.env.NEXTAUTH_SECRET = AUTH_FALLBACK_SECRET;
 }
 
-if (!process.env.NEXTAUTH_URL) {
-  process.env.NEXTAUTH_URL = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : AUTH_FALLBACK_URL;
-}
+const getGoogleClientId = () =>
+  process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_ID || process.env.AUTH_GOOGLE_ID || "";
+
+const getGoogleClientSecret = () =>
+  process.env.GOOGLE_CLIENT_SECRET ||
+  process.env.GOOGLE_SECRET ||
+  process.env.AUTH_GOOGLE_SECRET ||
+  "";
+
+export const isGoogleAuthConfigured = () =>
+  Boolean(getGoogleClientId() && getGoogleClientSecret());
+
+const googleProvider = () =>
+  GoogleProvider({
+    clientId: getGoogleClientId(),
+    clientSecret: getGoogleClientSecret(),
+  });
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET || AUTH_FALLBACK_SECRET,
@@ -84,10 +95,7 @@ export const authOptions: NextAuthOptions = {
       },
     }),
 
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
+    ...(isGoogleAuthConfigured() ? [googleProvider()] : []),
   ],
 
   pages: {

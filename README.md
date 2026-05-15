@@ -17,7 +17,23 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3001`.
+
+## Google OAuth
+
+Set these environment variables before using Google login or signup:
+
+```bash
+NEXTAUTH_SECRET=your-nextauth-secret
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+
+For local development, add this authorized redirect URI in Google Cloud:
+
+```text
+http://localhost:3001/api/auth/callback/google
+```
 
 ## Important folders
 
