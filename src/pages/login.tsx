@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState, useContext, useEffect, ReactNode } from "react";
 import { useRouter } from "next/router";
-import { getProviders, signIn, useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { ThemeContext } from "../context/ThemeContext";
 import {
   clearBrowserSessionActive,
@@ -28,6 +28,22 @@ type FieldProps = {
   icon: ReactNode;
   children: ReactNode;
   hint?: string;
+};
+
+type AuthProviderMap = Record<string, { id?: string }>;
+
+const fetchGoogleProviderAvailable = async () => {
+  const res = await fetch(`/api/auth/providers?ts=${Date.now()}`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-store" },
+  });
+
+  if (!res.ok) {
+    return false;
+  }
+
+  const providers = (await res.json().catch(() => null)) as AuthProviderMap | null;
+  return Boolean(providers?.google);
 };
 
 function Field({ label, icon, children, hint }: FieldProps) {
@@ -82,10 +98,10 @@ export default function LoginPage() {
   useEffect(() => {
     let cancelled = false;
 
-    void getProviders()
-      .then((providers) => {
+    void fetchGoogleProviderAvailable()
+      .then((available) => {
         if (!cancelled) {
-          setGoogleAvailable(Boolean(providers?.google));
+          setGoogleAvailable(available);
         }
       })
       .catch(() => {
@@ -159,7 +175,9 @@ export default function LoginPage() {
     setError("");
 
     if (!googleAvailable) {
-      setError("Google sign-in is not configured for this deployment.");
+      setError(
+        "Google sign-in is not configured on this server. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then restart or redeploy."
+      );
       return;
     }
 
@@ -306,15 +324,11 @@ export default function LoginPage() {
                   className="btn btn-outline w-full !rounded-2xl disabled:opacity-60 disabled:cursor-not-allowed"
                   type="button"
                   onClick={onGoogle}
-                  disabled={loading || googleAvailable !== true}
+                  disabled={loading || googleAvailable === null}
                 >
                   <span className="inline-flex items-center gap-2">
                     <FaGoogle />
-                    {googleAvailable === null
-                      ? "Checking Google..."
-                      : googleAvailable
-                        ? "Continue with Google"
-                        : "Google sign-in unavailable"}
+                    {googleAvailable === null ? "Checking Google..." : "Continue with Google"}
                   </span>
                 </button>
 

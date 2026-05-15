@@ -46,5 +46,7 @@ const ensureNextAuthUrl = (req: NextApiRequest) => {
 
 export default function auth(req: NextApiRequest, res: NextApiResponse) {
   ensureNextAuthUrl(req);
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
   return NextAuth(req, res, authOptions);
 }

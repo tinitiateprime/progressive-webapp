@@ -29,6 +29,8 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
+The app also accepts `GOOGLE_ID`/`GOOGLE_SECRET`, `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`, and `AUTH_GOOGLE_CLIENT_ID`/`AUTH_GOOGLE_CLIENT_SECRET`. Restart the dev server or redeploy after changing auth environment variables.
+
 For local development, add this authorized redirect URI in Google Cloud:
 
 ```text

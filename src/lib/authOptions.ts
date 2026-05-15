@@ -19,18 +19,37 @@ type AppSession = Session & {
 const AUTH_FALLBACK_SECRET = "tinitiate-local-auth-secret-v1";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
 
+const firstEnvValue = (...names: string[]) => {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+
+  return "";
+};
+
 if (!process.env.NEXTAUTH_SECRET) {
-  process.env.NEXTAUTH_SECRET = AUTH_FALLBACK_SECRET;
+  process.env.NEXTAUTH_SECRET =
+    firstEnvValue("AUTH_SECRET", "NEXTAUTH_SECRET") || AUTH_FALLBACK_SECRET;
 }
 
 const getGoogleClientId = () =>
-  process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_ID || process.env.AUTH_GOOGLE_ID || "";
+  firstEnvValue(
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_ID",
+    "AUTH_GOOGLE_ID",
+    "AUTH_GOOGLE_CLIENT_ID",
+    "NEXTAUTH_GOOGLE_CLIENT_ID"
+  );
 
 const getGoogleClientSecret = () =>
-  process.env.GOOGLE_CLIENT_SECRET ||
-  process.env.GOOGLE_SECRET ||
-  process.env.AUTH_GOOGLE_SECRET ||
-  "";
+  firstEnvValue(
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_SECRET",
+    "AUTH_GOOGLE_SECRET",
+    "AUTH_GOOGLE_CLIENT_SECRET",
+    "NEXTAUTH_GOOGLE_CLIENT_SECRET"
+  );
 
 export const isGoogleAuthConfigured = () =>
   Boolean(getGoogleClientId() && getGoogleClientSecret());
@@ -39,6 +58,13 @@ const googleProvider = () =>
   GoogleProvider({
     clientId: getGoogleClientId(),
     clientSecret: getGoogleClientSecret(),
+    authorization: {
+      params: {
+        prompt: "select_account",
+        access_type: "offline",
+        response_type: "code",
+      },
+    },
   });
 
 export const authOptions: NextAuthOptions = {
