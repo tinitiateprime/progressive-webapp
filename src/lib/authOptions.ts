@@ -16,31 +16,61 @@ type AppSession = Session & {
   };
 };
 
+type GoogleTokenInfo = {
+  aud?: string;
+  email?: string;
+  email_verified?: boolean | string;
+  error?: string;
+  error_description?: string;
+};
+
+type GoogleUserInfo = {
+  email?: string;
+  email_verified?: boolean | string;
+  name?: string;
+  given_name?: string;
+  picture?: string;
+};
+
 const AUTH_FALLBACK_SECRET = "tinitiate-local-auth-secret-v1";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
+const GOOGLE_ACCESS_TOKEN_PROVIDER_ID = "google-access-token";
 
-const firstEnvValue = (...names: string[]) => {
+const envValues = (...names: string[]) => {
+  const values: string[] = [];
+
   for (const name of names) {
-    const value = process.env[name]?.trim();
-    if (value) return value;
+    const value = process.env[name];
+    if (!value) continue;
+
+    value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .forEach((entry) => values.push(entry));
   }
 
-  return "";
+  return Array.from(new Set(values));
 };
+
+const firstEnvValue = (...names: string[]) => envValues(...names)[0] || "";
 
 if (!process.env.NEXTAUTH_SECRET) {
   process.env.NEXTAUTH_SECRET =
     firstEnvValue("AUTH_SECRET", "NEXTAUTH_SECRET") || AUTH_FALLBACK_SECRET;
 }
 
-const getGoogleClientId = () =>
-  firstEnvValue(
+const getGoogleClientIds = () =>
+  envValues(
     "GOOGLE_CLIENT_ID",
     "GOOGLE_ID",
     "AUTH_GOOGLE_ID",
     "AUTH_GOOGLE_CLIENT_ID",
-    "NEXTAUTH_GOOGLE_CLIENT_ID"
+    "NEXTAUTH_GOOGLE_CLIENT_ID",
+    "NEXT_PUBLIC_GOOGLE_CLIENT_ID"
   );
+
+const getGoogleClientId = () => getGoogleClientIds()[0] || "";
 
 const getGoogleClientSecret = () =>
   firstEnvValue(
@@ -51,8 +81,36 @@ const getGoogleClientSecret = () =>
     "NEXTAUTH_GOOGLE_CLIENT_SECRET"
   );
 
-export const isGoogleAuthConfigured = () =>
-  Boolean(getGoogleClientId() && getGoogleClientSecret());
+export const isGoogleClientConfigured = () => Boolean(getGoogleClientId());
+
+export const isGoogleAuthConfigured = () => Boolean(getGoogleClientId() && getGoogleClientSecret());
+
+export const getGoogleAuthClientConfig = () => {
+  const clientId = getGoogleClientId();
+
+  return {
+    enabled: Boolean(clientId),
+    clientId,
+    oauth: Boolean(clientId && getGoogleClientSecret()),
+    tokenProviderId: GOOGLE_ACCESS_TOKEN_PROVIDER_ID,
+  };
+};
+
+const isGoogleEmailVerified = (value: unknown) =>
+  value === true || value === "true" || value === "1";
+
+const fetchJson = async <T,>(url: string, init?: RequestInit) => {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+
+  const data = (await response.json().catch(() => ({}))) as T;
+  return { response, data };
+};
 
 const googleProvider = () =>
   GoogleProvider({
@@ -64,6 +122,94 @@ const googleProvider = () =>
         access_type: "offline",
         response_type: "code",
       },
+    },
+  });
+
+const googleAccessTokenProvider = () =>
+  CredentialsProvider({
+    id: GOOGLE_ACCESS_TOKEN_PROVIDER_ID,
+    name: "Google",
+    credentials: {
+      accessToken: { label: "Google Access Token", type: "text" },
+    },
+
+    async authorize(credentials) {
+      const accessToken = String(credentials?.accessToken || "").trim();
+      const clientIds = getGoogleClientIds();
+
+      if (!accessToken || clientIds.length === 0) {
+        throw new Error("Google sign-in is not configured.");
+      }
+
+      const tokenInfoUrl = `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(
+        accessToken
+      )}`;
+      const { response: tokenResponse, data: tokenInfo } = await fetchJson<GoogleTokenInfo>(
+        tokenInfoUrl
+      );
+
+      if (!tokenResponse.ok || !tokenInfo.aud || !clientIds.includes(tokenInfo.aud)) {
+        throw new Error(tokenInfo.error_description || "Google sign-in token is invalid.");
+      }
+
+      const { response: userResponse, data: userInfo } = await fetchJson<GoogleUserInfo>(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!userResponse.ok) {
+        throw new Error("Could not read Google account profile.");
+      }
+
+      const email = normalizeEmail(userInfo.email || tokenInfo.email);
+
+      if (!email || !isGoogleEmailVerified(userInfo.email_verified ?? tokenInfo.email_verified)) {
+        throw new Error("Google account email is not verified.");
+      }
+
+      const existing = await findUserByEmail(email);
+      const image = typeof userInfo.picture === "string" ? userInfo.picture : null;
+
+      if (existing) {
+        return {
+          id: existing.id,
+          name: existing.fullName,
+          email: existing.email,
+          image,
+        };
+      }
+
+      const fullName =
+        String(userInfo.name || userInfo.given_name || "").trim() ||
+        email.split("@")[0] ||
+        "Google User";
+      const created = await addUser({ fullName, email });
+
+      if (created.ok) {
+        return {
+          id: created.user.id,
+          name: created.user.fullName,
+          email: created.user.email,
+          image,
+        };
+      }
+
+      const createdLater = await findUserByEmail(email);
+
+      if (createdLater) {
+        return {
+          id: createdLater.id,
+          name: createdLater.fullName,
+          email: createdLater.email,
+          image,
+        };
+      }
+
+      throw new Error(created.message || "Could not create Google account.");
     },
   });
 
@@ -121,6 +267,7 @@ export const authOptions: NextAuthOptions = {
       },
     }),
 
+    ...(isGoogleClientConfigured() ? [googleAccessTokenProvider()] : []),
     ...(isGoogleAuthConfigured() ? [googleProvider()] : []),
   ],
 
@@ -159,11 +306,15 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, account }) {
       const appToken = token as AppToken;
 
-      if (account?.provider === "credentials" && user) {
+      if (
+        (account?.provider === "credentials" ||
+          account?.provider === GOOGLE_ACCESS_TOKEN_PROVIDER_ID) &&
+        user
+      ) {
         appToken.id = String(user.id || "");
         appToken.name = user.name || "";
         appToken.email = user.email || "";
-        appToken.picture = null;
+        appToken.picture = typeof user.image === "string" ? user.image : null;
       }
 
       if (account?.provider === "google") {

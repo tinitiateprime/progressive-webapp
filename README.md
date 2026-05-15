@@ -29,12 +29,18 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
-The app also accepts `GOOGLE_ID`/`GOOGLE_SECRET`, `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`, and `AUTH_GOOGLE_CLIENT_ID`/`AUTH_GOOGLE_CLIENT_SECRET`. Restart the dev server or redeploy after changing auth environment variables.
+`GOOGLE_CLIENT_ID` is required for the visible Google login/signup button. The button uses Google Identity Services in the browser and verifies the Google access token on the server before creating a NextAuth session. `GOOGLE_CLIENT_SECRET` is optional and enables the full NextAuth redirect OAuth route too. The app also accepts `GOOGLE_ID`/`GOOGLE_SECRET`, `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`, and `AUTH_GOOGLE_CLIENT_ID`/`AUTH_GOOGLE_CLIENT_SECRET`. Restart the dev server or redeploy after changing auth environment variables.
 
 For local development, add this authorized redirect URI in Google Cloud:
 
 ```text
 http://localhost:3001/api/auth/callback/google
+```
+
+Also add this authorized JavaScript origin:
+
+```text
+http://localhost:3001
 ```
 
 ## Important folders

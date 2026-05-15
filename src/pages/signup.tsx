@@ -11,6 +11,13 @@ import {
   markBrowserSessionActive,
 } from "../lib/browserSession";
 import { writeCachedSessionUser } from "../lib/app-session";
+import {
+  cacheCurrentSessionUser,
+  fetchGoogleAuthClientConfig,
+  loadGoogleIdentityScript,
+  requestGoogleAccessToken,
+  type GoogleAuthClientConfig,
+} from "../lib/google-auth-client";
 import { normalizeCallbackUrl } from "../lib/public-entry";
 import {
   FaMoon,
@@ -29,22 +36,6 @@ type FieldProps = {
   icon: ReactNode;
   children: ReactNode;
   hint?: string;
-};
-
-type AuthProviderMap = Record<string, { id?: string }>;
-
-const fetchGoogleProviderAvailable = async () => {
-  const res = await fetch(`/api/auth/providers?ts=${Date.now()}`, {
-    cache: "no-store",
-    headers: { "Cache-Control": "no-store" },
-  });
-
-  if (!res.ok) {
-    return false;
-  }
-
-  const providers = (await res.json().catch(() => null)) as AuthProviderMap | null;
-  return Boolean(providers?.google);
 };
 
 function Field({ label, icon, children, hint }: FieldProps) {
@@ -84,7 +75,8 @@ export default function SignupPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
+  const [googleConfig, setGoogleConfig] = useState<GoogleAuthClientConfig | null>(null);
+  const [googleReady, setGoogleReady] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && hasBrowserSessionActive()) {
@@ -99,16 +91,38 @@ export default function SignupPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setGoogleReady(false);
 
-    void fetchGoogleProviderAvailable()
-      .then((available) => {
+    void fetchGoogleAuthClientConfig()
+      .then((config) => {
         if (!cancelled) {
-          setGoogleAvailable(available);
+          setGoogleConfig(config);
+        }
+
+        if (!cancelled && config.enabled) {
+          void loadGoogleIdentityScript()
+            .catch(() => undefined)
+            .finally(() => {
+              if (!cancelled) {
+                setGoogleReady(true);
+              }
+            });
+          return;
+        }
+
+        if (!cancelled) {
+          setGoogleReady(true);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setGoogleAvailable(false);
+          setGoogleConfig({
+            enabled: false,
+            clientId: "",
+            oauth: false,
+            tokenProviderId: "google-access-token",
+          });
+          setGoogleReady(true);
         }
       });
 
@@ -120,9 +134,13 @@ export default function SignupPage() {
   async function onGoogle() {
     setError("");
 
-    if (!googleAvailable) {
+    if (!googleConfig || !googleReady) {
+      return;
+    }
+
+    if (!googleConfig.enabled || !googleConfig.clientId) {
       setError(
-        "Google sign-up is not configured on this server. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then restart or redeploy."
+        "Google sign-up needs a Google Client ID on this server. Add GOOGLE_CLIENT_ID, then restart or redeploy."
       );
       return;
     }
@@ -130,10 +148,25 @@ export default function SignupPage() {
     setLoading(true);
     try {
       markBrowserSessionActive();
-      await signIn("google", { callbackUrl });
-    } catch {
+      const accessToken = await requestGoogleAccessToken(googleConfig.clientId);
+      const result = await signIn(googleConfig.tokenProviderId, {
+        accessToken,
+        redirect: false,
+        callbackUrl,
+      });
+
+      if (result?.error || result?.ok === false) {
+        clearBrowserSessionActive();
+        setError("Google sign-up failed. Please try again.");
+        return;
+      }
+
+      await cacheCurrentSessionUser();
+      router.replace(result?.url || callbackUrl);
+    } catch (err) {
       clearBrowserSessionActive();
-      setError("Google sign-up failed.");
+      setError(err instanceof Error ? err.message : "Google sign-up failed.");
+    } finally {
       setLoading(false);
     }
   }
@@ -318,11 +351,11 @@ export default function SignupPage() {
                   className="btn btn-outline w-full !rounded-2xl disabled:opacity-60 disabled:cursor-not-allowed"
                   type="button"
                   onClick={onGoogle}
-                  disabled={loading || googleAvailable === null}
+                  disabled={loading || !googleReady}
                 >
                   <span className="inline-flex items-center gap-2">
                     <FaGoogle />
-                    {googleAvailable === null ? "Checking Google..." : "Continue with Google"}
+                    {googleReady ? "Continue with Google" : "Checking Google..."}
                   </span>
                 </button>
 
