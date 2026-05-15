@@ -1,15 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getInterviewQuestionBySlug } from "../../../../lib/server-content";
-import { withServerCache } from "../../../../lib/server-cache";
+import {
+  setContentNoStoreHeaders,
+  withContentServerCache,
+} from "../../../../lib/server-content-cache";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const slug = String(req.query.slug || "");
 
   try {
-    const item = await withServerCache(
+    const item = await withContentServerCache(
       `interview:${slug}`,
-      () => getInterviewQuestionBySlug(slug),
-      3 * 60 * 1000
+      (repoRef) => getInterviewQuestionBySlug(slug, repoRef)
     );
 
     if (!item) {
@@ -17,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     }
 
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    setContentNoStoreHeaders(res);
     res.status(200).json(item);
   } catch (error) {
     res.status(500).json({

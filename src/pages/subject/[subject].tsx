@@ -68,6 +68,15 @@ const slugify = (text: string) =>
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
+const getSearchTokens = (value: string) =>
+  normalizeSearch(value).split(/\s+/).filter(Boolean);
+
+const matchesSearchTokens = (tokens: string[], ...values: Array<string | undefined>) => {
+  if (tokens.length === 0) return true;
+  const haystack = normalizeSearch(values.filter(Boolean).join(" "));
+  return tokens.every((token) => haystack.includes(token));
+};
+
 const accentByCategory = (category: string) => {
   const normalizedCategory = normalizeSearch(category);
 
@@ -563,8 +572,17 @@ export default function SubjectPage() {
   }, [router.isReady, subjectStr, readmeQueryUrl]);
 
   const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    return qq ? topics.filter((t) => t.topic_name.toLowerCase().includes(qq)) : topics;
+    const tokens = getSearchTokens(q);
+    return tokens.length > 0
+      ? topics.filter((topic) =>
+          matchesSearchTokens(
+            tokens,
+            topic.topic_name,
+            topic.section_markdown,
+            ...(topic.bullets || [])
+          )
+        )
+      : topics;
   }, [topics, q]);
 
   const handleSaveOffline = async () => {

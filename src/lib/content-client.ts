@@ -125,7 +125,13 @@ const requestJsonFromNetwork = <T>(url: string, signal?: AbortSignal): Promise<T
 };
 
 const revalidateCachedJson = (url: string) => {
-  if (typeof window === "undefined" || !navigator.onLine) return;
+  if (
+    typeof window === "undefined" ||
+    !navigator.onLine
+  ) {
+    return;
+  }
+
   void requestJsonFromNetwork(url).catch(async (error) => {
     if (error instanceof DOMException && error.name === "AbortError") {
       return;
@@ -144,7 +150,7 @@ const fetchJsonNoStore = async <T>(
   signal?: AbortSignal,
   options?: ContentRequestOptions
 ): Promise<T> => {
-  const strategy = options?.strategy || "cache-first";
+  const strategy = options?.strategy || "network-first";
   const revalidateOnCacheHit = options?.revalidateOnCacheHit ?? true;
 
   if (strategy === "cache-first") {
@@ -186,7 +192,12 @@ const fetchJsonNoStore = async <T>(
 };
 
 export const warmCoreContent = async () => {
-  if (typeof window === "undefined" || !navigator.onLine) return;
+  if (
+    typeof window === "undefined" ||
+    !navigator.onLine
+  ) {
+    return;
+  }
 
   await Promise.allSettled(
     CORE_CONTENT_URLS.map((url) =>

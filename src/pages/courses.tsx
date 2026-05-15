@@ -17,6 +17,15 @@ import { useConnectionStatus } from "../lib/use-connection-status";
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
+const getSearchTokens = (value: string) =>
+  normalizeSearch(value).split(/\s+/).filter(Boolean);
+
+const matchesSearchTokens = (tokens: string[], ...values: Array<string | undefined>) => {
+  if (tokens.length === 0) return true;
+  const haystack = normalizeSearch(values.filter(Boolean).join(" "));
+  return tokens.every((token) => haystack.includes(token));
+};
+
 const accentByCategory = (category: string) => {
   const normalized = normalizeSearch(category);
 
@@ -118,15 +127,22 @@ export default function CoursesPage() {
   }, [status]);
 
   const filteredCourses = useMemo(() => {
-    const query = normalizeSearch(q);
-    if (!query) return courses;
+    const tokens = getSearchTokens(q);
+    if (tokens.length === 0) return courses;
 
     return courses.filter((course) => {
-      if (normalizeSearch(course.subject).includes(query)) return true;
-      if (normalizeSearch(course.category).includes(query)) return true;
-      if (normalizeSearch(course.level).includes(query)) return true;
-      if (normalizeSearch(course.summary).includes(query)) return true;
-      return course.topics.some((topic) => normalizeSearch(topic.topic_name).includes(query));
+      return matchesSearchTokens(
+        tokens,
+        course.subject,
+        course.category,
+        course.level,
+        course.summary,
+        ...course.topics.flatMap((topic) => [
+          topic.topic_name,
+          topic.section_markdown,
+          ...(topic.bullets || []),
+        ])
+      );
     });
   }, [courses, q]);
 

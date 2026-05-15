@@ -55,6 +55,18 @@ const getSelectedTopic = (topics: CatalogTopic[], preferredTopicName: string) =>
   topics[0] ||
   null;
 
+const normalizeSearch = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const getSearchTokens = (value: string) =>
+  normalizeSearch(value).split(/\s+/).filter(Boolean);
+
+const matchesSearchTokens = (tokens: string[], ...values: Array<string | undefined>) => {
+  if (tokens.length === 0) return true;
+  const haystack = normalizeSearch(values.filter(Boolean).join(" "));
+  return tokens.every((token) => haystack.includes(token));
+};
+
 export default function TopicPage() {
   const router = useRouter();
   const { topic, subject, readme } = router.query;
@@ -240,9 +252,16 @@ export default function TopicPage() {
   });
 
   const filteredTopics = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return topics;
-    return topics.filter((item) => item.topic_name.toLowerCase().includes(query));
+    const tokens = getSearchTokens(q);
+    if (tokens.length === 0) return topics;
+    return topics.filter((item) =>
+      matchesSearchTokens(
+        tokens,
+        item.topic_name,
+        item.section_markdown,
+        ...(item.bullets || [])
+      )
+    );
   }, [q, topics]);
 
   const activeTopic = useMemo(() => getSelectedTopic(topics, topicStr), [topicStr, topics]);

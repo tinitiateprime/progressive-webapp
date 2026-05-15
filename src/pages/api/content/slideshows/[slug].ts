@@ -1,15 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getSlideshowBySlug } from "../../../../lib/server-content";
-import { withServerCache } from "../../../../lib/server-cache";
+import {
+  setContentNoStoreHeaders,
+  withContentServerCache,
+} from "../../../../lib/server-content-cache";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const slug = String(req.query.slug || "");
 
   try {
-    const deck = await withServerCache(
+    const deck = await withContentServerCache(
       `slideshow:${slug}`,
-      () => getSlideshowBySlug(slug),
-      3 * 60 * 1000
+      (repoRef) => getSlideshowBySlug(slug, repoRef)
     );
 
     if (!deck) {
@@ -17,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     }
 
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    setContentNoStoreHeaders(res);
     res.status(200).json(deck);
   } catch (error) {
     res.status(500).json({

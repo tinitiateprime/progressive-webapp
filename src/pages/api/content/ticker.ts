@@ -1,11 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getTickerItems } from "../../../lib/server-content";
-import { withServerCache } from "../../../lib/server-cache";
+import {
+  setContentNoStoreHeaders,
+  withContentServerCache,
+} from "../../../lib/server-content-cache";
 
 export default async function handler(_: NextApiRequest, res: NextApiResponse) {
   try {
-    const items = await withServerCache("ticker", getTickerItems, 2 * 60 * 1000);
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    const items = await withContentServerCache("ticker", getTickerItems);
+    setContentNoStoreHeaders(res);
     res.status(200).json(items);
   } catch (error) {
     res.status(500).json({

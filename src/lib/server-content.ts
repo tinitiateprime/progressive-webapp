@@ -85,11 +85,11 @@ type TickerFeedFile = {
 const CBT_ROOT_FOLDER = "cbt";
 const resolveCbtPath = (...segments: string[]) => [CBT_ROOT_FOLDER, ...segments].join("/");
 
-const fetchRepoText = (filePath: string, preferredRepoName?: string) =>
-  readRepoContentText(filePath, preferredRepoName);
+const fetchRepoText = (filePath: string, preferredRepoName?: string, repoRef?: string) =>
+  readRepoContentText(filePath, preferredRepoName, repoRef);
 
-const fetchRepoTextWithSource = (filePath: string, preferredRepoName?: string) =>
-  readRepoContentSource(filePath, preferredRepoName);
+const fetchRepoTextWithSource = (filePath: string, preferredRepoName?: string, repoRef?: string) =>
+  readRepoContentSource(filePath, preferredRepoName, repoRef);
 
 /** Run async tasks with bounded concurrency to avoid flooding GitHub. */
 const runConcurrent = async <T, R>(
@@ -114,7 +114,11 @@ const runConcurrent = async <T, R>(
   return results;
 };
 
-const resolveOptionalRepoAssetUrl = (value: string | undefined, repoName: string) => {
+const resolveOptionalRepoAssetUrl = (
+  value: string | undefined,
+  repoName: string,
+  repoRef?: string
+) => {
   const trimmed = String(value || "").trim();
   if (!trimmed) return undefined;
 
@@ -122,11 +126,15 @@ const resolveOptionalRepoAssetUrl = (value: string | undefined, repoName: string
     return toRawGithub(trimmed);
   }
 
-  return buildContentRepoRawUrl(trimmed, repoName);
+  return buildContentRepoRawUrl(trimmed, repoName, repoRef);
 };
 
-const fetchRepoJsonWithSource = async <T>(filePath: string, preferredRepoName?: string) => {
-  const source = await fetchRepoTextWithSource(filePath, preferredRepoName);
+const fetchRepoJsonWithSource = async <T>(
+  filePath: string,
+  preferredRepoName?: string,
+  repoRef?: string
+) => {
+  const source = await fetchRepoTextWithSource(filePath, preferredRepoName, repoRef);
   return {
     ...source,
     data: JSON.parse(source.text) as T,
@@ -160,38 +168,47 @@ const splitSlides = (markdown: string): SlideshowSlide[] =>
       markdown: chunk,
     }));
 
-const readOptionalMarkdownSource = async (filePath: string | undefined, repoName: string) => {
+const readOptionalMarkdownSource = async (
+  filePath: string | undefined,
+  repoName: string,
+  repoRef?: string
+) => {
   if (!filePath) return undefined;
-  return fetchRepoTextWithSource(filePath, repoName);
+  return fetchRepoTextWithSource(filePath, repoName, repoRef);
 };
 
 const loadCourseTopics = async (
   subject: CourseCatalogEntry,
-  repoName: string
+  repoName: string,
+  repoRef?: string
 ): Promise<ParsedTopic[]> => {
-  const readmeUrl = buildContentRepoRawUrl(subject.readmePath, repoName);
-  const readmeText = await fetchRepoText(subject.readmePath, repoName);
+  const readmeUrl = buildContentRepoRawUrl(subject.readmePath, repoName, repoRef);
+  const readmeText = await fetchRepoText(subject.readmePath, repoName, repoRef);
   return parseSubjectTopicsFromReadme(readmeText, readmeUrl);
 };
 
-const getCourseIconRegistry = async () => {
-  const { data: iconFile, repoName } = await fetchRepoJsonWithSource<DesignIconFile>("design/icon.json");
+const getCourseIconRegistry = async (repoRef?: string) => {
+  const { data: iconFile, repoName } = await fetchRepoJsonWithSource<DesignIconFile>(
+    "design/icon.json",
+    undefined,
+    repoRef
+  );
 
   return Object.fromEntries(
     Object.entries(iconFile.courses || {}).map(([slug, entry]) => [
       slug,
       {
         ...entry,
-        iconUrl: buildContentRepoRawUrl(entry.iconPath, repoName),
+        iconUrl: buildContentRepoRawUrl(entry.iconPath, repoName, repoRef),
       },
     ])
   );
 };
 
-export const getDesignSystem = async (): Promise<DesignSystem> => {
+export const getDesignSystem = async (repoRef?: string): Promise<DesignSystem> => {
   const [{ data: colorFile }, courseIcons] = await Promise.all([
-    fetchRepoJsonWithSource<DesignColorFile>("design/colour.json"),
-    getCourseIconRegistry(),
+    fetchRepoJsonWithSource<DesignColorFile>("design/colour.json", undefined, repoRef),
+    getCourseIconRegistry(repoRef),
   ]);
 
   return {
@@ -200,17 +217,25 @@ export const getDesignSystem = async (): Promise<DesignSystem> => {
   };
 };
 
-export const getTickerItems = async (): Promise<TickerItem[]> => {
-  const { data: feed } = await fetchRepoJsonWithSource<TickerFeedFile>("news-ticker/feed.json");
+export const getTickerItems = async (repoRef?: string): Promise<TickerItem[]> => {
+  const { data: feed } = await fetchRepoJsonWithSource<TickerFeedFile>(
+    "news-ticker/feed.json",
+    undefined,
+    repoRef
+  );
   return [...feed.items].sort((a, b) => a.priority - b.priority);
 };
 
-export const getInterviewQuestionSummaries = async (): Promise<InterviewQuestionSummary[]> => {
+export const getInterviewQuestionSummaries = async (
+  repoRef?: string
+): Promise<InterviewQuestionSummary[]> => {
   // ONE GitHub request: just the catalog JSON.
   // The `question` field already contains the question text which serves as the
   // excerpt on the list page — no need to fetch each answer markdown file here.
   const { data: catalog } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
-    "interview-qna/catalog.json"
+    "interview-qna/catalog.json",
+    undefined,
+    repoRef
   );
 
   return catalog.questions.map((entry) => ({
@@ -226,16 +251,19 @@ export const getInterviewQuestionSummaries = async (): Promise<InterviewQuestion
 };
 
 export const getInterviewQuestionBySlug = async (
-  slug: string
+  slug: string,
+  repoRef?: string
 ): Promise<InterviewQuestionDetail | null> => {
   const { data: catalog, repoName } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
-    "interview-qna/catalog.json"
+    "interview-qna/catalog.json",
+    undefined,
+    repoRef
   );
   const entry = catalog.questions.find((item) => item.slug === slug);
 
   if (!entry) return null;
 
-  const markdownSource = await fetchRepoTextWithSource(entry.answerPath, repoName);
+  const markdownSource = await fetchRepoTextWithSource(entry.answerPath, repoName, repoRef);
 
   return {
     slug: entry.slug,
@@ -250,11 +278,11 @@ export const getInterviewQuestionBySlug = async (
   };
 };
 
-export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
+export const getCourseSubjects = async (repoRef?: string): Promise<CourseSubject[]> => {
   // Two parallel requests: catalog + icon registry (independent of each other).
   const [{ data: catalog, repoName }, courseIcons] = await Promise.all([
-    fetchRepoJsonWithSource<CoursesCatalogFile>("courses/catalog.json"),
-    getCourseIconRegistry(),
+    fetchRepoJsonWithSource<CoursesCatalogFile>("courses/catalog.json", undefined, repoRef),
+    getCourseIconRegistry(repoRef),
   ]);
 
   // Fetch each course README with bounded concurrency (4 at a time).
@@ -266,7 +294,7 @@ export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
       let topics: ParsedTopic[] = [];
 
       try {
-        topics = await loadCourseTopics(entry, repoName);
+        topics = await loadCourseTopics(entry, repoName, repoRef);
       } catch {
         topics = [];
       }
@@ -274,7 +302,7 @@ export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
       return {
         ...entry,
         subject: entry.title,
-        readme_url: buildContentRepoRawUrl(entry.readmePath, repoName),
+        readme_url: buildContentRepoRawUrl(entry.readmePath, repoName, repoRef),
         icon_url: courseIcons[entry.slug]?.iconUrl,
         topics,
       };
@@ -284,9 +312,10 @@ export const getCourseSubjects = async (): Promise<CourseSubject[]> => {
 };
 
 export const getCourseSubjectByName = async (
-  subjectName: string
+  subjectName: string,
+  repoRef?: string
 ): Promise<CourseSubject | null> => {
-  const subjects = await getCourseSubjects();
+  const subjects = await getCourseSubjects(repoRef);
   return (
     subjects.find(
       (subject) =>
@@ -297,16 +326,19 @@ export const getCourseSubjectByName = async (
 
 const loadMediaCollection = async (
   folderName: "training-videos" | "audio-books",
-  includeNotes = false
+  includeNotes = false,
+  repoRef?: string
 ): Promise<MediaCollectionItem[]> => {
   const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
-    resolveCbtPath(folderName, "av-metadata.json")
+    resolveCbtPath(folderName, "av-metadata.json"),
+    undefined,
+    repoRef
   );
 
   return Promise.all(
     catalog.items.map(async (item) => {
       const notesSource = includeNotes
-        ? await readOptionalMarkdownSource(item.notesPath, repoName)
+        ? await readOptionalMarkdownSource(item.notesPath, repoName, repoRef)
         : undefined;
 
       return {
@@ -317,11 +349,11 @@ const loadMediaCollection = async (
         playlistUrl: item.playlistUrl,
         embedUrl: item.embedUrl,
         mediaUrl:
-          resolveOptionalRepoAssetUrl(item.mediaPath, repoName) ||
-          resolveOptionalRepoAssetUrl(item.mediaUrl, repoName),
+          resolveOptionalRepoAssetUrl(item.mediaPath, repoName, repoRef) ||
+          resolveOptionalRepoAssetUrl(item.mediaUrl, repoName, repoRef),
         posterUrl:
-          resolveOptionalRepoAssetUrl(item.posterPath, repoName) ||
-          resolveOptionalRepoAssetUrl(item.posterUrl, repoName),
+          resolveOptionalRepoAssetUrl(item.posterPath, repoName, repoRef) ||
+          resolveOptionalRepoAssetUrl(item.posterUrl, repoName, repoRef),
         mimeType: item.mimeType,
         tags: item.tags,
         notesMarkdown: notesSource?.text,
@@ -331,9 +363,11 @@ const loadMediaCollection = async (
   );
 };
 
-export const getSlideshows = async (): Promise<SlideshowSummary[]> => {
+export const getSlideshows = async (repoRef?: string): Promise<SlideshowSummary[]> => {
   const { data: catalog } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
-    resolveCbtPath("slideshows", "av-metadata.json")
+    resolveCbtPath("slideshows", "av-metadata.json"),
+    undefined,
+    repoRef
   );
 
   return catalog.decks.map((deck) => ({
@@ -345,15 +379,20 @@ export const getSlideshows = async (): Promise<SlideshowSummary[]> => {
   }));
 };
 
-export const getSlideshowBySlug = async (slug: string): Promise<SlideshowDeck | null> => {
+export const getSlideshowBySlug = async (
+  slug: string,
+  repoRef?: string
+): Promise<SlideshowDeck | null> => {
   const { data: catalog, repoName } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
-    resolveCbtPath("slideshows", "av-metadata.json")
+    resolveCbtPath("slideshows", "av-metadata.json"),
+    undefined,
+    repoRef
   );
   const deck = catalog.decks.find((item) => item.slug === slug);
 
   if (!deck) return null;
 
-  const markdownSource = await fetchRepoTextWithSource(deck.contentPath, repoName);
+  const markdownSource = await fetchRepoTextWithSource(deck.contentPath, repoName, repoRef);
 
   return {
     slug: deck.slug,
@@ -367,11 +406,11 @@ export const getSlideshowBySlug = async (slug: string): Promise<SlideshowDeck | 
   };
 };
 
-export const getCbtCollections = async (): Promise<CbtCollections> => {
+export const getCbtCollections = async (repoRef?: string): Promise<CbtCollections> => {
   const [slideshows, trainingVideos, audioBooks] = await Promise.all([
-    getSlideshows(),
-    loadMediaCollection("training-videos", false),
-    loadMediaCollection("audio-books", false),
+    getSlideshows(repoRef),
+    loadMediaCollection("training-videos", false, repoRef),
+    loadMediaCollection("audio-books", false, repoRef),
   ]);
 
   return {
@@ -382,15 +421,19 @@ export const getCbtCollections = async (): Promise<CbtCollections> => {
 };
 
 export const getMediaCollectionByKind = async (
-  kind: "training-videos" | "audio-books"
-): Promise<MediaCollectionItem[]> => loadMediaCollection(kind, false);
+  kind: "training-videos" | "audio-books",
+  repoRef?: string
+): Promise<MediaCollectionItem[]> => loadMediaCollection(kind, false, repoRef);
 
 export const getMediaItemBySlug = async (
   kind: "training-videos" | "audio-books",
-  slug: string
+  slug: string,
+  repoRef?: string
 ): Promise<MediaCollectionItem | null> => {
   const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
-    resolveCbtPath(kind, "av-metadata.json")
+    resolveCbtPath(kind, "av-metadata.json"),
+    undefined,
+    repoRef
   );
   const item = catalog.items.find((entry) => entry.slug === slug);
 
@@ -398,7 +441,7 @@ export const getMediaItemBySlug = async (
     return null;
   }
 
-  const notesSource = await readOptionalMarkdownSource(item.notesPath, repoName);
+  const notesSource = await readOptionalMarkdownSource(item.notesPath, repoName, repoRef);
 
   return {
     slug: item.slug,
@@ -408,11 +451,11 @@ export const getMediaItemBySlug = async (
     playlistUrl: item.playlistUrl,
     embedUrl: item.embedUrl,
     mediaUrl:
-      resolveOptionalRepoAssetUrl(item.mediaPath, repoName) ||
-      resolveOptionalRepoAssetUrl(item.mediaUrl, repoName),
+      resolveOptionalRepoAssetUrl(item.mediaPath, repoName, repoRef) ||
+      resolveOptionalRepoAssetUrl(item.mediaUrl, repoName, repoRef),
     posterUrl:
-      resolveOptionalRepoAssetUrl(item.posterPath, repoName) ||
-      resolveOptionalRepoAssetUrl(item.posterUrl, repoName),
+      resolveOptionalRepoAssetUrl(item.posterPath, repoName, repoRef) ||
+      resolveOptionalRepoAssetUrl(item.posterUrl, repoName, repoRef),
     mimeType: item.mimeType,
     tags: item.tags,
     notesMarkdown: notesSource?.text,

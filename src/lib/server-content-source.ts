@@ -17,7 +17,8 @@ export type RepoContentSource = {
 
 export async function readRepoContentSource(
   repoFilePath: string,
-  preferredRepoName?: string
+  preferredRepoName?: string,
+  repoRef = CONTENT_REPO_BRANCH
 ): Promise<RepoContentSource> {
   const pathCandidates = getContentRepoPathCandidates(repoFilePath);
   const repoNameCandidates = getContentRepoNameCandidates(preferredRepoName);
@@ -25,7 +26,7 @@ export async function readRepoContentSource(
 
   for (const repoName of repoNameCandidates) {
     for (const pathCandidate of pathCandidates) {
-      const remoteUrl = buildContentRepoRawUrl(pathCandidate, repoName);
+      const remoteUrl = buildContentRepoRawUrl(pathCandidate, repoName, repoRef);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
 
@@ -59,8 +60,12 @@ export async function readRepoContentSource(
   );
 }
 
-export async function readRepoContentText(repoFilePath: string, preferredRepoName?: string) {
-  const source = await readRepoContentSource(repoFilePath, preferredRepoName);
+export async function readRepoContentText(
+  repoFilePath: string,
+  preferredRepoName?: string,
+  repoRef = CONTENT_REPO_BRANCH
+) {
+  const source = await readRepoContentSource(repoFilePath, preferredRepoName, repoRef);
   return source.text;
 }
 

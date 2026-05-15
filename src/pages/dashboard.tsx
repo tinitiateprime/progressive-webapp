@@ -25,10 +25,18 @@ import { ThemeContext } from "../context/ThemeContext";
 import { clearCachedSessionUser, useProtectedAppSession } from "../lib/app-session";
 import { clearBrowserSessionActive } from "../lib/browserSession";
 import {
+  fetchCbtCollections,
   fetchContentRepoStatus,
+  fetchCourseSubjects,
+  fetchInterviewQuestions,
   fetchTickerItems,
 } from "../lib/content-client";
-import type { TickerItem } from "../lib/content-types";
+import type {
+  CbtCollections,
+  CourseSubject,
+  InterviewQuestionSummary,
+  TickerItem,
+} from "../lib/content-types";
 import {
   OFFLINE_SYNC_STATE_EVENT,
   readOfflineSyncState,
@@ -60,8 +68,28 @@ type SectionCard = {
   keywords: string[];
 };
 
+type DashboardSearchResult = {
+  key: string;
+  kind: string;
+  title: string;
+  description: string;
+  meta: string;
+  href: string | { pathname: string; query: Record<string, string> };
+  icon: IconType;
+  accent: string;
+};
+
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const getSearchTokens = (value: string) =>
+  normalizeSearch(value).split(/\s+/).filter(Boolean);
+
+const matchesSearchTokens = (tokens: string[], ...values: Array<string | undefined>) => {
+  if (tokens.length === 0) return true;
+  const haystack = normalizeSearch(values.filter(Boolean).join(" "));
+  return tokens.every((token) => haystack.includes(token));
+};
 
 const formatDateTime = (timestamp: number) =>
   new Date(timestamp).toLocaleString(undefined, {
@@ -80,6 +108,9 @@ export default function Dashboard() {
   const isOffline = useConnectionStatus();
 
   const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
+  const [courses, setCourses] = useState<CourseSubject[]>([]);
+  const [interviewItems, setInterviewItems] = useState<InterviewQuestionSummary[]>([]);
+  const [cbtCollections, setCbtCollections] = useState<CbtCollections | null>(null);
   const [q, setQ] = useState("");
   const [syncingContent, setSyncingContent] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -210,14 +241,30 @@ export default function Dashboard() {
         if (!hasLoadedStatusRef.current) {
           setSyncingContent(true);
         }
-        const [items, statusInfo] = await Promise.all([
+        const results = await Promise.allSettled([
           fetchTickerItems(controller.signal),
           fetchContentRepoStatus(controller.signal),
+          fetchCourseSubjects(controller.signal),
+          fetchInterviewQuestions(controller.signal),
+          fetchCbtCollections(controller.signal),
         ]);
         if (cancelled) return;
 
-        setTickerItems(items);
-        setLastSyncedAt(statusInfo.updatedAt ? Date.parse(statusInfo.updatedAt) : null);
+        if (results[0].status === "fulfilled") {
+          setTickerItems(results[0].value);
+        }
+        if (results[1].status === "fulfilled") {
+          setLastSyncedAt(results[1].value.updatedAt ? Date.parse(results[1].value.updatedAt) : null);
+        }
+        if (results[2].status === "fulfilled") {
+          setCourses(results[2].value);
+        }
+        if (results[3].status === "fulfilled") {
+          setInterviewItems(results[3].value);
+        }
+        if (results[4].status === "fulfilled") {
+          setCbtCollections(results[4].value);
+        }
         hasLoadedStatusRef.current = true;
       } catch (err: unknown) {
         if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
@@ -340,6 +387,180 @@ export default function Dashboard() {
     });
   }, [favoriteTopics, q]);
 
+  const searchResults = useMemo<DashboardSearchResult[]>(() => {
+    const tokens = getSearchTokens(q);
+    if (tokens.length === 0) return [];
+
+    const results: DashboardSearchResult[] = [];
+    const seen = new Set<string>();
+    const addResult = (result: DashboardSearchResult) => {
+      if (seen.has(result.key)) return;
+      seen.add(result.key);
+      results.push(result);
+    };
+
+    for (const course of courses) {
+      if (
+        matchesSearchTokens(
+          tokens,
+          course.subject,
+          course.title,
+          course.category,
+          course.level,
+          course.summary,
+          ...course.topics.map((topic) => topic.topic_name)
+        )
+      ) {
+        addResult({
+          key: `course:${course.slug}`,
+          kind: "Course",
+          title: course.subject,
+          description: course.summary,
+          meta: `${course.category} - ${course.level} - ${course.topics.length} topics`,
+          href: {
+            pathname: "/subject/[subject]",
+            query: { subject: course.subject, readme: course.readme_url },
+          },
+          icon: FaBookOpen,
+          accent: "var(--dashboard-section-courses-accent)",
+        });
+      }
+
+      for (const topic of course.topics) {
+        if (
+          !matchesSearchTokens(
+            tokens,
+            topic.topic_name,
+            ...(topic.bullets || []),
+            topic.section_markdown
+          )
+        ) {
+          continue;
+        }
+
+        addResult({
+          key: `topic:${course.slug}:${topic.md_url || topic.topic_name}`,
+          kind: "Topic",
+          title: topic.topic_name,
+          description: course.subject,
+          meta: "Course topic",
+          href: {
+            pathname: "/topic/[topic]",
+            query: {
+              topic: topic.topic_name,
+              subject: course.subject,
+              ...(course.readme_url ? { readme: course.readme_url } : {}),
+            },
+          },
+          icon: FaBookOpen,
+          accent: "var(--dashboard-section-courses-accent)",
+        });
+      }
+    }
+
+    for (const item of interviewItems) {
+      if (
+        !matchesSearchTokens(
+          tokens,
+          item.title,
+          item.category,
+          item.level,
+          item.question,
+          item.excerpt,
+          ...item.tags
+        )
+      ) {
+        continue;
+      }
+
+      addResult({
+        key: `interview:${item.slug}`,
+        kind: "Interview",
+        title: item.title,
+        description: item.question,
+        meta: `${item.category} - ${item.level}`,
+        href: {
+          pathname: "/interview/[slug]",
+          query: { slug: item.slug },
+        },
+        icon: FaUserTie,
+        accent: "var(--dashboard-section-interview-accent)",
+      });
+    }
+
+    for (const deck of cbtCollections?.slideshows || []) {
+      if (!matchesSearchTokens(tokens, deck.title, deck.summary, deck.audience, ...deck.tags)) {
+        continue;
+      }
+
+      addResult({
+        key: `slideshow:${deck.slug}`,
+        kind: "Slideshow",
+        title: deck.title,
+        description: deck.summary,
+        meta: deck.audience,
+        href: {
+          pathname: "/cbt/slides/[slug]",
+          query: { slug: deck.slug },
+        },
+        icon: FaLayerGroup,
+        accent: "var(--dashboard-section-cbt-accent)",
+      });
+    }
+
+    for (const item of [
+      ...(cbtCollections?.trainingVideos || []).map((entry) => ({ ...entry, kind: "Training Video" })),
+      ...(cbtCollections?.audioBooks || []).map((entry) => ({ ...entry, kind: "Audio Book" })),
+    ]) {
+      if (!matchesSearchTokens(tokens, item.title, item.summary, item.speaker, ...item.tags)) {
+        continue;
+      }
+
+      addResult({
+        key: `media:${item.kind}:${item.slug}`,
+        kind: item.kind,
+        title: item.title,
+        description: item.summary,
+        meta: item.speaker,
+        href: {
+          pathname: "/cbt/media/[slug]",
+          query: {
+            slug: item.slug,
+            kind: item.kind === "Training Video" ? "training-videos" : "audio-books",
+          },
+        },
+        icon: FaLayerGroup,
+        accent: "var(--dashboard-section-cbt-accent)",
+      });
+    }
+
+    for (const item of favoriteTopics) {
+      if (!matchesSearchTokens(tokens, item.topic_name, item.subject)) {
+        continue;
+      }
+
+      addResult({
+        key: `favorite:${item.subject}:${item.slug}`,
+        kind: "Favorite",
+        title: item.topic_name,
+        description: item.subject,
+        meta: "Saved topic",
+        href: {
+          pathname: "/topic/[topic]",
+          query: {
+            topic: item.topic_name,
+            subject: item.subject,
+            ...(item.subject_readme_url ? { readme: item.subject_readme_url } : {}),
+          },
+        },
+        icon: FaBookOpen,
+        accent: "var(--dashboard-library-favorites-color)",
+      });
+    }
+
+    return results.slice(0, 12);
+  }, [cbtCollections, courses, favoriteTopics, interviewItems, q]);
+
   const syncStatusText = isOffline
     ? lastSyncedAt
       ? `Last GitHub update ${formatDateTime(lastSyncedAt)}`
@@ -361,7 +582,7 @@ export default function Dashboard() {
           ? "Offline mode is active. This device is waiting for a full online sync."
           : "Preparing the workspace for offline use.";
 
-  const searchPlaceholder = "Search interview, courses, or CBT...";
+  const searchPlaceholder = "Search Java, topics, interview questions, videos...";
 
   const openFavorite = (item: SavedFavoriteTopic) => {
     setLibraryOpen(false);
@@ -481,49 +702,93 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="card search-bar-elevated page-hero-search">
-            <FaSearch style={{ color: "var(--muted)", fontSize: 16, flexShrink: 0 }} />
-            <input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              placeholder={searchPlaceholder}
-              style={{
-                width: "100%",
-                border: "none",
-                outline: "none",
-                background: "transparent",
-                color: "var(--text)",
-                fontSize: 15,
-              }}
-            />
-            {q && (
-              <button
-                onClick={() => setQ("")}
-                type="button"
+          <div className="dashboard-search-tools">
+            <div className="card search-bar-elevated page-hero-search dashboard-search-tools__search">
+              <FaSearch style={{ color: "var(--muted)", fontSize: 16, flexShrink: 0 }} />
+              <input
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                placeholder={searchPlaceholder}
                 style={{
-                  background: "var(--border)",
+                  width: "100%",
                   border: "none",
-                  borderRadius: 999,
-                  width: 24,
-                  height: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  fontSize: 12,
+                  outline: "none",
+                  background: "transparent",
                   color: "var(--text)",
-                  flexShrink: 0,
+                  fontSize: 15,
                 }}
-              >
-                x
-              </button>
-            )}
+              />
+              {q && (
+                <button
+                  onClick={() => setQ("")}
+                  type="button"
+                  aria-label="Clear search"
+                  style={{
+                    background: "var(--border)",
+                    border: "none",
+                    borderRadius: 999,
+                    width: 24,
+                    height: 24,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    color: "var(--text)",
+                    flexShrink: 0,
+                  }}
+                >
+                  x
+                </button>
+              )}
+            </div>
+
           </div>
         </section>
 
         {tickerItems.length > 0 && (
           <section className="dashboard-ticker-slot mobile-flat-ticker" style={{ marginBottom: 16 }}>
             <TickerBar items={tickerItems} />
+          </section>
+        )}
+
+        {q.trim() && searchResults.length > 0 && (
+          <section className="dashboard-search-results" style={{ marginBottom: 16 }}>
+            <div className="dashboard-search-results__heading">
+              Best matches
+              <span>{searchResults.length} result{searchResults.length === 1 ? "" : "s"}</span>
+            </div>
+
+            <div className="dashboard-search-results__grid">
+              {searchResults.map((result) => {
+                const Icon = result.icon;
+
+                return (
+                  <Link
+                    key={result.key}
+                    href={result.href}
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    <div className="card dashboard-search-result-card">
+                      <div
+                        className="dashboard-search-result-card__icon"
+                        style={{ color: result.accent }}
+                      >
+                        <Icon />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="dashboard-search-result-card__kind">{result.kind}</div>
+                        <div className="dashboard-search-result-card__title">{result.title}</div>
+                        <div className="dashboard-search-result-card__description">
+                          {result.description}
+                        </div>
+                        <div className="dashboard-search-result-card__meta">{result.meta}</div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
           </section>
         )}
 
@@ -575,10 +840,18 @@ export default function Dashboard() {
             );
           })}
 
-          {filteredSections.length === 0 && (
+          {q.trim() && syncingContent && searchResults.length === 0 && filteredSections.length === 0 && (
             <div className="card" style={{ padding: 22, borderRadius: 24, textAlign: "center" }}>
               <div style={{ fontSize: 14, color: "var(--muted)" }}>
-                No section matched your search. Try "interview", "courses", or "cbt".
+                Searching cached content...
+              </div>
+            </div>
+          )}
+
+          {filteredSections.length === 0 && searchResults.length === 0 && !syncingContent && (
+            <div className="card" style={{ padding: 22, borderRadius: 24, textAlign: "center" }}>
+              <div style={{ fontSize: 14, color: "var(--muted)" }}>
+                No content matched your search. Try a subject, topic, technology, or question.
               </div>
             </div>
           )}

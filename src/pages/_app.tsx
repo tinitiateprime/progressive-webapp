@@ -19,8 +19,6 @@ import { recordAppRoute } from "../lib/navigation";
 import { syncCoreOfflineSections, syncOfflineWorkspace } from "../lib/offline-sync";
 import { registerPwaServiceWorker, teardownDisabledPwa } from "../lib/pwa";
 
-const PUBLIC_BROWSER_SESSION_ROUTES = new Set(["/", "/login", "/signup"]);
-
 const toCssVarKey = (value: string) =>
   value
     .toLowerCase()
@@ -190,13 +188,6 @@ function OfflineWorkspaceController() {
       return;
     }
 
-    const isPublicRoute = PUBLIC_BROWSER_SESSION_ROUTES.has(router.pathname);
-
-    if (isPublicRoute) {
-      syncStartedRef.current = false;
-      return;
-    }
-
     let idleCallbackId: number | null = null;
     let timeoutId: number | null = null;
     let retryTimeoutId: number | null = null;
@@ -275,6 +266,7 @@ function OfflineWorkspaceController() {
       initialSyncAttemptedRef.current = false;
       scheduleSync(true);
     };
+
     window.addEventListener("online", handleOnline);
 
     return () => {
@@ -297,7 +289,7 @@ function CoreContentWarmupController() {
       return;
     }
 
-    if (PUBLIC_BROWSER_SESSION_ROUTES.has(router.pathname) || !navigator.onLine || warmedRef.current) {
+    if (!navigator.onLine || warmedRef.current) {
       return;
     }
 
@@ -319,7 +311,9 @@ function CoreContentWarmupController() {
     };
 
     window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
   }, [status]);
 
   return null;
@@ -367,8 +361,7 @@ export default function App({ Component, pageProps }: AppProps) {
     let cancelled = false;
 
     fetchDesignConfig(controller.signal, {
-      strategy: "cache-first",
-      revalidateOnCacheHit: false,
+      strategy: "network-first",
     })
       .then((nextDesign) => {
         if (cancelled) return;

@@ -214,7 +214,10 @@ const verifyCoreOfflineSections = async () => {
 };
 
 export async function syncCoreOfflineSections(router?: NextRouter | null) {
-  if (typeof window === "undefined" || !navigator.onLine) {
+  if (
+    typeof window === "undefined" ||
+    !navigator.onLine
+  ) {
     return;
   }
 
@@ -243,6 +246,10 @@ export async function syncCoreOfflineSections(router?: NextRouter | null) {
 }
 
 export async function syncOfflineWorkspace(router?: NextRouter | null) {
+  if (typeof window !== "undefined" && !navigator.onLine) {
+    return;
+  }
+
   if (activeSync) {
     return activeSync;
   }

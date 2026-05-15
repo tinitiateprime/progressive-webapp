@@ -1,6 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
 import { withServerCache } from "../../lib/server-cache";
+import {
+  CONTENT_NO_STORE,
+  withContentServerCache,
+} from "../../lib/server-content-cache";
+import {
+  buildContentRepoRawUrl,
+  parseContentRepoPathFromUrl,
+} from "../../lib/content-repo-config";
 
 const ALLOW_HOSTS = new Set([
   "raw.githubusercontent.com",
@@ -73,13 +81,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      const payload = await withServerCache(
-        `proxy:${u.toString()}`,
-        () => fetchGitHubPayload(u.toString()),
-        PROXY_CACHE_TTL_MS
-      );
+      const contentPath = parseContentRepoPathFromUrl(u.toString());
+      const cacheKey = `proxy:${u.toString()}`;
+      const loadPayload = (repoRef?: string) =>
+        fetchGitHubPayload(
+          contentPath !== null && repoRef
+            ? buildContentRepoRawUrl(contentPath, undefined, repoRef)
+            : u.toString()
+        );
+      const payload =
+        contentPath !== null
+          ? await withContentServerCache(cacheKey, loadPayload, PROXY_CACHE_TTL_MS)
+          : await withServerCache(cacheKey, loadPayload, PROXY_CACHE_TTL_MS);
 
-      sendPayload(res, payload, "public, max-age=3600, stale-while-revalidate=86400");
+      sendPayload(res, payload, CONTENT_NO_STORE);
       return;
     } catch (error) {
       if (error instanceof ProxyHttpError) {

@@ -490,7 +490,13 @@ const requestRepoTextFromNetwork = (url: string, signal?: AbortSignal) => {
 };
 
 const revalidateRepoText = (url: string) => {
-  if (typeof window === "undefined" || !navigator.onLine) return;
+  if (
+    typeof window === "undefined" ||
+    !navigator.onLine
+  ) {
+    return;
+  }
+
   void requestRepoTextFromNetwork(url).catch(async (error) => {
     if (error instanceof DOMException && error.name === "AbortError") {
       return;
@@ -511,7 +517,7 @@ export async function fetchTextStrict(
 ): Promise<string> {
   const rawUrl = toRawGithub(url);
   const proxyUrl = buildGithubProxyUrl(rawUrl);
-  const strategy = options?.strategy || "cache-first";
+  const strategy = options?.strategy || "network-first";
   const revalidateOnCacheHit = options?.revalidateOnCacheHit ?? true;
 
   if (strategy === "cache-first") {

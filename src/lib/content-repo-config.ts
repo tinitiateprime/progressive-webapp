@@ -55,8 +55,12 @@ export const getContentRepoNameCandidates = (preferredRepoName?: string) => {
   return repoName ? [repoName] : [];
 };
 
-export const buildContentRepoRawUrl = (filePath: string, repoName = CONTENT_REPO_NAME) =>
-  `https://raw.githubusercontent.com/${CONTENT_REPO_OWNER}/${repoName}/${CONTENT_REPO_BRANCH}/${resolveContentRepoPath(filePath)}`;
+export const buildContentRepoRawUrl = (
+  filePath: string,
+  repoName = CONTENT_REPO_NAME,
+  repoRef = CONTENT_REPO_BRANCH
+) =>
+  `https://raw.githubusercontent.com/${CONTENT_REPO_OWNER}/${repoName}/${repoRef}/${resolveContentRepoPath(filePath)}`;
 
 export const buildContentRepoBlobUrl = (filePath: string, repoName = CONTENT_REPO_NAME) =>
   `https://github.com/${CONTENT_REPO_OWNER}/${repoName}/blob/${CONTENT_REPO_BRANCH}/${resolveContentRepoPath(filePath)}`;

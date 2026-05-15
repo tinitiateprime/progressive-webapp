@@ -16,11 +16,11 @@ const OMITTED_DEFAULT_CACHES = new Set([
 
 const contentRuntimeCaching = [
   {
-    // Content APIs and proxied repo files should feel instant after first view.
+    // GitHub-backed content should refresh while online and fall back to cache offline.
     urlPattern: ({ sameOrigin, url }) =>
       sameOrigin &&
       (url.pathname.startsWith("/api/content/") || url.pathname.startsWith("/api/proxy")),
-    handler: "StaleWhileRevalidate",
+    handler: "NetworkFirst",
     options: {
       cacheName: "repo-content",
       expiration: {
