@@ -36,6 +36,8 @@ const AUTH_FALLBACK_SECRET = "tinitiate-local-auth-secret-v1";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
 const GOOGLE_ACCESS_TOKEN_PROVIDER_ID = "google-access-token";
 
+const googleSessionUserId = (email: string) => `google:${email}`;
+
 const envValues = (...names: string[]) => {
   const values: string[] = [];
 
@@ -171,7 +173,7 @@ const googleAccessTokenProvider = () =>
         throw new Error("Google account email is not verified.");
       }
 
-      const existing = await findUserByEmail(email);
+      const existing = await findUserByEmail(email).catch(() => null);
       const image = typeof userInfo.picture === "string" ? userInfo.picture : null;
 
       if (existing) {
@@ -187,29 +189,39 @@ const googleAccessTokenProvider = () =>
         String(userInfo.name || userInfo.given_name || "").trim() ||
         email.split("@")[0] ||
         "Google User";
-      const created = await addUser({ fullName, email });
 
-      if (created.ok) {
-        return {
-          id: created.user.id,
-          name: created.user.fullName,
-          email: created.user.email,
-          image,
-        };
+      try {
+        const created = await addUser({ fullName, email });
+
+        if (created.ok) {
+          return {
+            id: created.user.id,
+            name: created.user.fullName,
+            email: created.user.email,
+            image,
+          };
+        }
+
+        const createdLater = await findUserByEmail(email);
+
+        if (createdLater) {
+          return {
+            id: createdLater.id,
+            name: createdLater.fullName,
+            email: createdLater.email,
+            image,
+          };
+        }
+      } catch {
+        // Serverless deployments such as Netlify may not allow writing bundled files.
       }
 
-      const createdLater = await findUserByEmail(email);
-
-      if (createdLater) {
-        return {
-          id: createdLater.id,
-          name: createdLater.fullName,
-          email: createdLater.email,
-          image,
-        };
-      }
-
-      throw new Error(created.message || "Could not create Google account.");
+      return {
+        id: googleSessionUserId(email),
+        name: fullName,
+        email,
+        image,
+      };
     },
   });
 
@@ -287,20 +299,25 @@ export const authOptions: NextAuthOptions = {
         return false;
       }
 
-      const existing = await findUserByEmail(email);
+      const existing = await findUserByEmail(email).catch(() => null);
       if (existing) {
         return true;
       }
 
       const fullName = String(user.name || "").trim() || email.split("@")[0] || "Google User";
-      const created = await addUser({ fullName, email });
 
-      if (created.ok) {
+      try {
+        const created = await addUser({ fullName, email });
+
+        if (created.ok) {
+          return true;
+        }
+
+        const createdLater = await findUserByEmail(email);
+        return Boolean(createdLater) || created.status === 409;
+      } catch {
         return true;
       }
-
-      const createdLater = await findUserByEmail(email);
-      return Boolean(createdLater);
     },
 
     async jwt({ token, user, account }) {
@@ -319,6 +336,10 @@ export const authOptions: NextAuthOptions = {
 
       if (account?.provider === "google") {
         const email = normalizeEmail(appToken.email || user?.email);
+        const fallbackName =
+          String(user?.name || appToken.name || "").trim() ||
+          email.split("@")[0] ||
+          "Google User";
         appToken.picture =
           typeof user?.image === "string"
             ? user.image
@@ -327,12 +348,16 @@ export const authOptions: NextAuthOptions = {
               : null;
 
         if (email) {
-          const existing = await findUserByEmail(email);
+          const existing = await findUserByEmail(email).catch(() => null);
 
           if (existing) {
             appToken.id = existing.id;
             appToken.name = existing.fullName;
             appToken.email = existing.email;
+          } else {
+            appToken.id = googleSessionUserId(email);
+            appToken.name = fallbackName;
+            appToken.email = email;
           }
         }
       }
