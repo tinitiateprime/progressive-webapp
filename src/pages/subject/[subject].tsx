@@ -788,7 +788,7 @@ export default function SubjectPage() {
 
         {!loading && !error && (
           <>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="subject-topic-grid grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((t, i) => {
                 const slug = slugify(t.topic_name);
                 const isFav = favorites.some((f) => f.slug === slug);
@@ -807,7 +807,7 @@ export default function SubjectPage() {
                 return (
                   <div
                     key={`${t.md_url}-${t.topic_name}`}
-                    className="card course-card-hover relative rounded-3xl p-6 transition-all duration-300 cursor-pointer"
+                    className="subject-topic-card card course-card-hover relative rounded-3xl p-6 transition-all duration-300 cursor-pointer"
                     style={isIntro ? introCardStyle : topicCardStyle}
                     role="button"
                     tabIndex={0}
@@ -846,7 +846,7 @@ export default function SubjectPage() {
                           savedAt: Date.now(),
                         });
                       }}
-                      className="absolute top-4 right-4 z-50 pointer-events-auto text-xl transition-transform hover:scale-125"
+                      className="subject-topic-card__favorite absolute top-4 right-4 z-50 pointer-events-auto text-xl transition-transform hover:scale-125"
                       style={{ color: isFav ? "var(--brand-2)" : "var(--muted)" }}
                       title={isFav ? "Remove from favorites" : "Add to favorites"}
                     >
@@ -858,25 +858,14 @@ export default function SubjectPage() {
                     </div>
 
                     <div className="mt-2">
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        Card Name
-                      </div>
-                      <h3 className="mt-1 text-lg font-semibold leading-snug line-clamp-2">
+                      <h3 className="subject-topic-card__title text-lg font-semibold leading-snug line-clamp-2">
                         {t.topic_name}
                       </h3>
                     </div>
 
                     {/* ✅ show bullet preview from subject README (if present) */}
                     {!!t.bullets?.length && (
-                      <div className="mt-3 space-y-1">
+                      <div className="subject-topic-card__bullets mt-3 space-y-1">
                         {t.bullets.slice(0, 3).map((b, idx) => (
                           <div key={idx} style={{ fontSize: 12, color: "var(--muted)" }}>
                             • {b}

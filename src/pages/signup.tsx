@@ -40,15 +40,15 @@ type FieldProps = {
 
 function Field({ label, icon, children, hint }: FieldProps) {
   return (
-    <div className="grid gap-2">
-      <div className="flex items-end justify-between gap-3">
-        <label className="text-sm font-semibold tracking-tight">{label}</label>
+    <div className="auth-field grid gap-2">
+      <div className="auth-field__label-row flex items-end justify-between gap-3">
+        <label className="auth-field__label text-sm font-semibold tracking-tight">{label}</label>
         {hint ? (
-          <span className="text-xs text-[color:var(--text-muted)]">{hint}</span>
+          <span className="auth-field__hint text-xs text-[color:var(--text-muted)]">{hint}</span>
         ) : null}
       </div>
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]">
+        <span className="auth-field__icon absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]">
           {icon}
         </span>
         {children}
@@ -252,7 +252,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="app-shell app-shell--home min-h-screen relative overflow-hidden px-4 sm:px-6 flex flex-col">
+    <div className="app-shell app-shell--home auth-shell min-h-screen relative overflow-hidden px-4 sm:px-6 flex flex-col">
       {/* Ambient background */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 -right-40 h-[520px] w-[520px] rounded-full bg-[color:var(--brand)] opacity-[0.10] blur-[90px]" />
@@ -261,8 +261,8 @@ export default function SignupPage() {
       </div>
 
       {/* Topbar */}
-      <header className="mx-auto max-w-6xl pt-5 sm:pt-7 w-full relative">
-        <div className="glass rounded-2xl px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between">
+      <header className="auth-header mx-auto max-w-6xl pt-5 sm:pt-7 w-full relative">
+        <div className="auth-topbar glass rounded-2xl px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between">
           <div
             className="flex items-center gap-3 min-w-0 cursor-pointer"
             onClick={() => router.push("/")}
@@ -294,24 +294,24 @@ export default function SignupPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl mt-8 sm:mt-12 w-full flex-1 relative">
-        <div className="grid lg:grid-cols-2 gap-6 lg:gap-10 items-stretch">
+      <main className="auth-main mx-auto max-w-6xl mt-8 sm:mt-12 w-full flex-1 relative">
+        <div className="auth-layout grid lg:grid-cols-2 gap-6 lg:gap-10 items-stretch">
           {/* Left panel */}
-          <section className="glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
+          <section className="auth-panel auth-promo-panel glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
             <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[color:var(--brand)] opacity-[0.10] blur-3xl" />
             <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-[color:var(--brand-2)] opacity-[0.10] blur-3xl" />
 
             <div className="relative">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
+              <div className="auth-eyebrow inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
                 <span className="h-2 w-2 rounded-full bg-[color:var(--brand)]" />
                 Quick onboarding - Modern UI
               </div>
 
-              <h2 className="mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">
+              <h2 className="auth-panel-title mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">
                 Create your account
               </h2>
 
-              <p className="mt-3 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-prose">
+              <p className="auth-panel-copy mt-3 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-prose">
                 Join Tinitiate to access your workspace, tools, and dashboard.
               </p>
 
@@ -330,7 +330,7 @@ export default function SignupPage() {
           </section>
 
           {/* Right form panel */}
-          <section className="glass auth-mobile-intro rounded-3xl p-6 sm:p-10 relative overflow-hidden">
+          <section className="auth-panel auth-form-panel glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
             <div
               className="pointer-events-none absolute top-0 left-0 right-0 h-[120px] opacity-[0.55]"
               style={{
@@ -340,21 +340,21 @@ export default function SignupPage() {
             />
 
             <div className="max-w-xl relative">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
+              <div className="auth-eyebrow inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
                 <span className="h-2 w-2 rounded-full bg-[color:var(--brand)]" />
                 New user signup
               </div>
 
-              <h1 className="mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">
+              <h1 className="auth-form-title mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">
                 Create account
               </h1>
-              <p className="mt-2 text-sm text-[color:var(--text-muted)]">
+              <p className="auth-form-copy mt-2 text-sm text-[color:var(--text-muted)]">
                 Continue with Google or fill the details below.
               </p>
 
-              <div className="mt-6 grid gap-3">
+              <div className="auth-provider-actions mt-6 grid gap-3">
                 <button
-                  className="btn btn-outline w-full !rounded-2xl disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="auth-btn btn btn-outline w-full !rounded-2xl disabled:opacity-60 disabled:cursor-not-allowed"
                   type="button"
                   onClick={onGoogle}
                   disabled={loading || !googleReady}
@@ -372,10 +372,10 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              <form onSubmit={onSubmit} className="mt-6 grid gap-4">
+              <form onSubmit={onSubmit} className="auth-form mt-6 grid gap-4">
                 <Field label="Full name" icon={<FaUser />} hint="Shown on your profile">
                   <input
-                    className="w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-4 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
+                    className="auth-input w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-4 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
                     placeholder="Enter your name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
@@ -385,7 +385,7 @@ export default function SignupPage() {
 
                 <Field label="Email" icon={<FaAt />} hint="Use a valid email">
                   <input
-                    className="w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-4 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
+                    className="auth-input w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-4 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -397,7 +397,7 @@ export default function SignupPage() {
                 <Field label="Password" icon={<FaLock />} hint="Minimum 6 characters">
                   <div className="relative">
                     <input
-                      className="w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-12 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
+                      className="auth-input w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-12 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
                       placeholder="Create a password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -407,7 +407,7 @@ export default function SignupPage() {
                     <button
                       type="button"
                       onClick={() => setShowPass((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 inline-flex items-center justify-center rounded-2xl border border-[color:var(--border)] hover:opacity-80 transition"
+                      className="auth-password-toggle absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 inline-flex items-center justify-center rounded-2xl border border-[color:var(--border)] hover:opacity-80 transition"
                       aria-label="Toggle password visibility"
                     >
                       {showPass ? <FaEyeSlash /> : <FaEye />}
@@ -422,7 +422,7 @@ export default function SignupPage() {
                 >
                   <div className="relative">
                     <input
-                      className="w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-12 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
+                      className="auth-input w-full rounded-2xl border border-[color:var(--border)] bg-transparent pl-10 pr-12 py-3.5 outline-none focus:ring-2 focus:ring-[color:var(--brand)] transition"
                       placeholder="Re-enter password"
                       value={confirm}
                       onChange={(e) => setConfirm(e.target.value)}
@@ -432,7 +432,7 @@ export default function SignupPage() {
                     <button
                       type="button"
                       onClick={() => setShowConfirm((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 inline-flex items-center justify-center rounded-2xl border border-[color:var(--border)] hover:opacity-80 transition"
+                      className="auth-password-toggle absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 inline-flex items-center justify-center rounded-2xl border border-[color:var(--border)] hover:opacity-80 transition"
                       aria-label="Toggle confirm password visibility"
                     >
                       {showConfirm ? <FaEyeSlash /> : <FaEye />}
@@ -455,7 +455,7 @@ export default function SignupPage() {
                 ) : null}
 
                 <button
-                  className="btn btn-primary w-full !rounded-2xl group disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="auth-btn btn btn-primary w-full !rounded-2xl group disabled:opacity-60 disabled:cursor-not-allowed"
                   type="submit"
                   disabled={loading}
                 >
@@ -466,7 +466,7 @@ export default function SignupPage() {
                 </button>
 
                 <button
-                  className="btn btn-outline w-full !rounded-2xl"
+                  className="auth-btn btn btn-outline w-full !rounded-2xl"
                   type="button"
                   onClick={() => router.push("/login")}
                   disabled={loading}
@@ -479,7 +479,7 @@ export default function SignupPage() {
         </div>
       </main>
 
-      <footer className="mx-auto max-w-6xl w-full py-8 sm:py-10 relative">
+      <footer className="auth-footer mx-auto max-w-6xl w-full py-8 sm:py-10 relative">
         <div className="glass rounded-3xl p-5 sm:p-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
             <span>Copyright {new Date().getFullYear()} TINITIATE Technologies Pvt Ltd.</span>
