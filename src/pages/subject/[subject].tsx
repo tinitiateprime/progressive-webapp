@@ -9,17 +9,13 @@ import {
   FaMoon,
   FaSearch,
   FaSun,
-  FaDownload,
-  FaCheckCircle,
   FaHome,
 } from "react-icons/fa";
 import {
-  cacheAssetUrls,
   cacheTextUrls,
   hydrateOfflineSubjectsForAccount,
   migrateLegacyOfflineSubjects,
   readOfflineSubjectMeta,
-  writeOfflineSubjectMeta,
   type OfflineSubjectMeta as SharedOfflineSubjectMeta,
 } from "../../lib/offline";
 import {
@@ -298,15 +294,6 @@ const orderTopics = (raw: Topic[]) => {
 const readOfflineMeta = (subject: string, accountKey?: string): OfflineSubjectMeta | null =>
   readOfflineSubjectMeta(subject, accountKey);
 
-const formatDate = (ts: number) => {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(
-    d.getMinutes()
-  ).padStart(2, "0")}`;
-};
-
 // Cache-aware subject README loader backed by GitHub + Cache Storage only.
 async function loadGitHubTextCacheFirst(url: string, signal: AbortSignal) {
   const freshPromise = (async () => {
@@ -356,13 +343,6 @@ export default function SubjectPage() {
 
   const [favorites, setFavorites] = useState<SavedFavoriteTopic[]>([]);
 
-  const [savingOffline, setSavingOffline] = useState(false);
-  const [offlineSavedAt, setOfflineSavedAt] = useState<number | null>(null);
-  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number }>({
-    done: 0,
-    total: 0,
-  });
-
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -385,7 +365,6 @@ export default function SubjectPage() {
   useEffect(() => {
     if (!subjectStr) return;
     const meta = readOfflineMeta(subjectStr, accountKey);
-    setOfflineSavedAt(meta?.savedAt ?? null);
     if (meta?.subject_readme_url) setSubjectReadmeUrl(meta.subject_readme_url);
   }, [subjectStr, accountKey]);
 
@@ -420,7 +399,6 @@ export default function SubjectPage() {
 
           if (subjectStr) {
             const meta = readOfflineMeta(subjectStr, accountKey);
-            setOfflineSavedAt(meta?.savedAt ?? null);
             if (meta?.subject_readme_url) setSubjectReadmeUrl(meta.subject_readme_url);
           }
         }
@@ -586,72 +564,6 @@ export default function SubjectPage() {
       : topics;
   }, [topics, q]);
 
-  const handleSaveOffline = async () => {
-    if (!topics.length) return;
-
-    setSavingOffline(true);
-    setSaveProgress({ done: 0, total: 0 });
-
-    try {
-      const meta: OfflineSubjectMeta = {
-        subject: subjectStr,
-        savedAt: Date.now(),
-        topicCount: topics.length,
-        topics,
-        subject_readme_url: subjectReadmeUrl || undefined,
-      };
-
-      const urlsToCache = [
-        ...(subjectReadmeUrl ? [subjectReadmeUrl] : []),
-        ...topics.map((topic) => topic.md_url),
-      ];
-
-      const cacheResult = await cacheTextUrls(urlsToCache, fetchTextStrict, (done: number, total: number) => {
-        setSaveProgress({ done, total });
-      });
-      const iconCacheResult = await cacheAssetUrls(subjectMeta?.icon_url ? [subjectMeta.icon_url] : []);
-
-      const savedSubjectReadme =
-        !subjectReadmeUrl ||
-        cacheResult.savedUrls.includes(toRawGithub(subjectReadmeUrl));
-
-      if (!savedSubjectReadme || cacheResult.savedUrls.length === 0) {
-        throw new Error("Could not save the required files for offline use.");
-      }
-
-      writeOfflineSubjectMeta(meta, accountKey);
-      setOfflineSavedAt(meta.savedAt);
-
-      if (status === "authenticated") {
-        await fetch("/api/offline-subjects", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store",
-          },
-          body: JSON.stringify(meta),
-          cache: "no-store",
-        }).catch(() => undefined);
-      }
-
-      const failedAssetCount =
-        cacheResult.failedAssetUrls.length + iconCacheResult.failedAssetUrls.length;
-
-      if (cacheResult.failedUrls.length > 0 || failedAssetCount > 0) {
-        window.alert(
-          `Saved offline with ${cacheResult.failedUrls.length + failedAssetCount} skipped file(s). Some topic content may be limited offline.`
-        );
-        return;
-      }
-
-      window.alert(`Saved "${subjectStr}" for offline.`);
-    } catch {
-      window.alert("Offline save failed. Please try again while online.");
-    } finally {
-      setSavingOffline(false);
-    }
-  };
-
   const toggleFavorite = async (topic: SavedFavoriteTopic) => {
     const isFavorite = favorites.some((f) => f.slug === topic.slug);
     if (isFavorite) {
@@ -754,7 +666,6 @@ export default function SubjectPage() {
     ...topicCardStyle,
     boxShadow: "var(--shadow-feature)",
   };
-  const mutedTextStyle = { color: "var(--muted)" };
   const connectionTone = isOffline
     ? {
         label: "Offline",
@@ -822,45 +733,13 @@ export default function SubjectPage() {
                   </span>
                   {refreshing ? <span className="badge">Updating...</span> : null}
                   <span className="badge">{topics.length} topics</span>
-                  {offlineSavedAt ? <span className="badge">Offline saved</span> : null}
                 </div>
-
-                {offlineSavedAt && (
-                  <div style={{ ...mutedTextStyle, marginTop: 10, fontSize: 12 }}>
-                    Saved at: {formatDate(offlineSavedAt)}
-                  </div>
-                )}
               </div>
             </div>
 
             <div className="page-hero-actions">
               <button className="btn btn-outline" onClick={() => router.push("/dashboard")} type="button" title="Home">
                 <FaHome />
-              </button>
-
-              <button
-                className="btn btn-outline"
-                onClick={handleSaveOffline}
-                type="button"
-                disabled={savingOffline || topics.length === 0}
-                title="Save subject and topic markdown files for offline reading"
-              >
-                {savingOffline ? (
-                  <>
-                    <FaDownload className="animate-bounce" />
-                    Saving {saveProgress.done}/{saveProgress.total}
-                  </>
-                ) : offlineSavedAt ? (
-                  <>
-                    <FaCheckCircle style={{ color: "var(--status-online-color)" }} />
-                    Update Offline
-                  </>
-                ) : (
-                  <>
-                    <FaDownload />
-                    Save Offline
-                  </>
-                )}
               </button>
 
               <button className="btn btn-outline" onClick={() => goBackOr(router, "/courses")} type="button">
