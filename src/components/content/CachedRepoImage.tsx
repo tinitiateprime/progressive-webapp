@@ -57,6 +57,38 @@ const readCachedImageBlobUrl = async (url: string) => {
   return "";
 };
 
+const cacheImageForOffline = async (url: string) => {
+  if (!url || !canReadCacheStorage() || (typeof navigator !== "undefined" && !navigator.onLine)) {
+    return;
+  }
+
+  try {
+    const absoluteUrl = toAbsoluteUrl(url);
+    const targetUrl = new URL(absoluteUrl);
+    const cacheName =
+      targetUrl.origin === window.location.origin && targetUrl.pathname.startsWith("/api/proxy")
+        ? "repo-content"
+        : "static-image-assets";
+    const response = await fetch(absoluteUrl, {
+      cache: "no-store",
+      credentials: targetUrl.origin === window.location.origin ? "same-origin" : "omit",
+      headers:
+        targetUrl.origin === window.location.origin
+          ? {
+              "Cache-Control": "no-store",
+            }
+          : undefined,
+    });
+
+    if (!response.ok && response.type !== "opaque") return;
+
+    const cache = await caches.open(cacheName);
+    await cache.put(absoluteUrl, response.clone());
+  } catch {
+    // The visible image can still be served by the browser/service worker.
+  }
+};
+
 type CachedRepoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   src?: string;
 };
@@ -122,7 +154,15 @@ export default function CachedRepoImage({ src = "", alt = "", onError, ...props 
     onError?.(event);
   };
 
+  const handleLoad: ImgHTMLAttributes<HTMLImageElement>["onLoad"] = (event) => {
+    if (displaySrc && displaySrc !== objectUrlRef.current) {
+      void cacheImageForOffline(normalizedSrc);
+    }
+
+    props.onLoad?.(event);
+  };
+
   if (!displaySrc) return null;
 
-  return <img {...props} src={displaySrc} alt={alt} onError={handleError} />;
+  return <img {...props} src={displaySrc} alt={alt} onError={handleError} onLoad={handleLoad} />;
 }

@@ -404,6 +404,49 @@ export const extractMarkdownAssetUrls = (md: string, baseUrl?: string): string[]
   return Array.from(urls);
 };
 
+const getRepoAssetCacheName = (url: string) => {
+  if (typeof window === "undefined") return REPO_CONTENT_CACHE;
+
+  try {
+    const absoluteUrl = new URL(toAbsoluteRequestUrl(url));
+    if (absoluteUrl.origin === window.location.origin && absoluteUrl.pathname.startsWith("/api/proxy")) {
+      return REPO_CONTENT_CACHE;
+    }
+  } catch {
+    // keep GitHub assets in the repo-content cache by default
+  }
+
+  return REPO_CONTENT_CACHE;
+};
+
+const cacheMarkdownAssetUrls = async (md: string, baseUrl: string) => {
+  if (typeof window === "undefined" || !("caches" in window)) return;
+
+  const assetUrls = extractMarkdownAssetUrls(md, baseUrl)
+    .map((url) => toGithubProxyUrl(url))
+    .filter(Boolean);
+
+  await Promise.allSettled(
+    Array.from(new Set(assetUrls)).map(async (url) => {
+      const absoluteUrl = toAbsoluteRequestUrl(url);
+      const response = await fetch(absoluteUrl, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      });
+
+      if (!response.ok) return;
+
+      const cacheName = getRepoAssetCacheName(url);
+      const cache = await caches.open(cacheName);
+      await cache.put(absoluteUrl, response.clone());
+      notifyCacheStorageUpdated({ cacheName, url: absoluteUrl });
+    })
+  );
+};
+
 export const readCachedRepoText = async (url: string) => {
   if (typeof window === "undefined" || !("caches" in window)) return null;
 
@@ -432,6 +475,11 @@ const writeCachedRepoText = async (url: string, response: Response) => {
 
   try {
     const cache = await caches.open(REPO_CONTENT_CACHE);
+    const textForAssets = await response.clone().text().catch(() => "");
+    if (textForAssets) {
+      await cacheMarkdownAssetUrls(textForAssets, url);
+    }
+
     await Promise.all(
       getRepoTextCacheKeys(url).map((key) => cache.put(key, response.clone()))
     );
@@ -446,6 +494,8 @@ export const cacheRepoTextValue = async (url: string, text: string) => {
 
   try {
     const cache = await caches.open(REPO_CONTENT_CACHE);
+    await cacheMarkdownAssetUrls(text, url);
+
     const response = new Response(text, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",

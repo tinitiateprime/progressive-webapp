@@ -21,6 +21,7 @@ const STATIC_IMAGE_CACHE = "static-image-assets";
 const STATIC_AUDIO_CACHE = "static-audio-assets";
 const STATIC_VIDEO_CACHE = "static-video-assets";
 const OFFLINE_SYNC_STATE_KEY = "tinitiate.offline.sync-state";
+const OFFLINE_SYNC_VERSION = 2;
 export const OFFLINE_SYNC_STATE_EVENT = "tinitiate:offline-sync-state";
 const CORE_SECTION_ROUTES = ["/dashboard", "/courses", "/interview", "/cbt"] as const;
 const CORE_SECTION_CONTENT_URLS = [
@@ -31,6 +32,7 @@ const CORE_SECTION_CONTENT_URLS = [
 ] as const;
 
 type OfflineSyncState = {
+  version?: number;
   syncedAt: number;
   contentUpdatedAt: string | null;
   contentCommitSha: string | null;
@@ -55,6 +57,10 @@ const hasCurrentOfflineWorkspace = (
   statusInfo: { updatedAt: string | null; commitSha: string | null }
 ) => {
   if (!existingState || existingState.status !== "ready") {
+    return false;
+  }
+
+  if (existingState.version !== OFFLINE_SYNC_VERSION) {
     return false;
   }
 
@@ -303,6 +309,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       ]);
     } catch (error) {
       writeOfflineSyncState({
+        version: OFFLINE_SYNC_VERSION,
         syncedAt: Date.now(),
         contentUpdatedAt: statusInfo.updatedAt,
         contentCommitSha: statusInfo.commitSha,
@@ -549,6 +556,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       }
 
       writeOfflineSyncState({
+        version: OFFLINE_SYNC_VERSION,
         syncedAt: Date.now(),
         contentUpdatedAt: statusInfo.updatedAt,
         contentCommitSha: statusInfo.commitSha,
@@ -569,6 +577,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       const warningMessage = syncWarnings.length > 0 ? syncWarnings.slice(0, 5).join(" | ") : "";
 
       writeOfflineSyncState({
+        version: OFFLINE_SYNC_VERSION,
         syncedAt: Date.now(),
         contentUpdatedAt: statusInfo.updatedAt,
         contentCommitSha: statusInfo.commitSha,
