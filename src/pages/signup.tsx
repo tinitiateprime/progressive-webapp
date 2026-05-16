@@ -99,7 +99,7 @@ export default function SignupPage() {
           setGoogleConfig(config);
         }
 
-        if (!cancelled && config.enabled) {
+        if (!cancelled && config.enabled && !config.oauth) {
           void loadGoogleIdentityScript()
             .catch(() => undefined)
             .finally(() => {
@@ -148,6 +148,12 @@ export default function SignupPage() {
     setLoading(true);
     try {
       markBrowserSessionActive();
+
+      if (googleConfig.oauth) {
+        await signIn("google", { callbackUrl });
+        return;
+      }
+
       const accessToken = await requestGoogleAccessToken(googleConfig.clientId);
       const result = await signIn(googleConfig.tokenProviderId, {
         accessToken,

@@ -10,6 +10,33 @@ const firstForwardedValue = (value: string | string[] | undefined) =>
     .split(",")[0]
     .trim();
 
+const configuredNextAuthUrl = process.env.NEXTAUTH_URL || "";
+
+const isLocalhostUrl = (value: string) => {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(value).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+};
+
+const toOrigin = (value: string | undefined) => {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "";
+  }
+};
+
 const getRequestOrigin = (req: NextApiRequest) => {
   const host = firstForwardedValue(req.headers["x-forwarded-host"]) || req.headers.host || "";
 
@@ -27,8 +54,14 @@ const getRequestOrigin = (req: NextApiRequest) => {
   return `${protocol}://${host}`;
 };
 
+const getHostedDeploymentOrigin = () =>
+  toOrigin(process.env.URL) ||
+  toOrigin(process.env.DEPLOY_PRIME_URL) ||
+  toOrigin(process.env.DEPLOY_URL) ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+
 const ensureNextAuthUrl = (req: NextApiRequest) => {
-  if (process.env.NEXTAUTH_URL) {
+  if (configuredNextAuthUrl && !isLocalhostUrl(configuredNextAuthUrl)) {
     return;
   }
 
@@ -39,8 +72,10 @@ const ensureNextAuthUrl = (req: NextApiRequest) => {
     return;
   }
 
-  if (process.env.VERCEL_URL) {
-    process.env.NEXTAUTH_URL = `https://${process.env.VERCEL_URL}`;
+  const hostedOrigin = getHostedDeploymentOrigin();
+
+  if (hostedOrigin) {
+    process.env.NEXTAUTH_URL = hostedOrigin;
   }
 };
 
