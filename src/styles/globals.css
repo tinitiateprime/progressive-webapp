@@ -415,6 +415,59 @@ input:focus-visible {
   width: 100%;
 }
 
+.mermaid-diagram {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 86%, transparent);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mermaid-diagram svg {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  max-width: none;
+  height: auto;
+  margin: 0 auto;
+}
+
+.mermaid-diagram .nodeLabel,
+.mermaid-diagram .edgeLabel {
+  font-family: inherit;
+}
+
+.mermaid-diagram--loading,
+.mermaid-diagram__message {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mermaid-diagram--error {
+  border-color: color-mix(in srgb, var(--status-offline-color) 45%, var(--border));
+}
+
+.mermaid-diagram--error pre {
+  margin: 12px 0 0;
+  max-height: 420px;
+}
+
+@media (max-width: 700px) {
+  .mermaid-diagram {
+    margin-left: -8px;
+    margin-right: -8px;
+    padding: 12px;
+  }
+
+  .mermaid-diagram svg {
+    min-width: 860px;
+  }
+}
+
 .ticker-shell {
   width: 100%;
   overflow: hidden;
