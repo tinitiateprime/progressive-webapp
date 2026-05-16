@@ -1,7 +1,14 @@
 import { normalizeLibraryUserKey } from "./library";
-import { cacheRepoTextValue, toRawGithub } from "./readme-utils";
+import { notifyCacheStorageUpdated } from "./cache-events";
+import {
+  cacheRepoTextValue,
+  extractMarkdownAssetUrls,
+  toGithubProxyUrl,
+  toRawGithub,
+} from "./readme-utils";
 
 export const CACHE_NAME = "repo-content";
+const STATIC_IMAGE_CACHE = "static-image-assets";
 
 const OFFLINE_SUBJECTS_STORAGE_PREFIX = "offline_subjects_";
 const OFFLINE_SUBJECTS_STORAGE_FALLBACK = "offline_subjects";
@@ -23,6 +30,79 @@ export type OfflineSubjectMeta = {
 };
 
 type CacheProgressListener = (done: number, total: number) => void;
+
+const toAbsoluteUrl = (href: string) => new URL(href, window.location.origin).toString();
+
+const getImageCacheName = (url: string) => {
+  try {
+    const absoluteUrl = new URL(toAbsoluteUrl(url));
+    if (absoluteUrl.origin === window.location.origin && absoluteUrl.pathname.startsWith("/api/proxy")) {
+      return CACHE_NAME;
+    }
+  } catch {
+    // fall through to the static image cache
+  }
+
+  return STATIC_IMAGE_CACHE;
+};
+
+const cacheStaticAsset = async (url: string) => {
+  if (typeof window === "undefined" || !("caches" in window)) return;
+
+  const absoluteUrl = toAbsoluteUrl(url);
+  const targetUrl = new URL(absoluteUrl);
+  const sameOrigin = targetUrl.origin === window.location.origin;
+
+  const response = await fetch(
+    absoluteUrl,
+    sameOrigin
+      ? {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        }
+      : {
+          cache: "no-store",
+          credentials: "omit",
+          mode: "no-cors",
+        }
+  );
+
+  if (!response.ok && response.type !== "opaque") {
+    throw new Error(`Failed to cache asset ${absoluteUrl} (${response.status})`);
+  }
+
+  const cacheName = getImageCacheName(url);
+  const cache = await caches.open(cacheName);
+  await cache.put(absoluteUrl, response.clone());
+  notifyCacheStorageUpdated({ cacheName, url: absoluteUrl });
+};
+
+export const cacheAssetUrls = async (urls: string[]) => {
+  const uniqueUrls = Array.from(
+    new Set(urls.map((url) => toGithubProxyUrl(String(url || "").trim())).filter(Boolean))
+  );
+
+  const savedAssetUrls: string[] = [];
+  const failedAssetUrls: string[] = [];
+
+  if (typeof window === "undefined" || !("caches" in window)) {
+    return { savedAssetUrls, failedAssetUrls: uniqueUrls };
+  }
+
+  for (const url of uniqueUrls) {
+    try {
+      await cacheStaticAsset(url);
+      savedAssetUrls.push(url);
+    } catch {
+      failedAssetUrls.push(url);
+    }
+  }
+
+  return { savedAssetUrls, failedAssetUrls };
+};
 
 const resolveOfflineSubjectsStorageKey = (accountKey?: string) => {
   const normalized = normalizeLibraryUserKey(accountKey);
@@ -190,10 +270,13 @@ export const cacheTextUrls = async (
 
   const savedUrls: string[] = [];
   const failedUrls: string[] = [];
+  const discoveredAssetUrls = new Set<string>();
+  const savedAssetUrls: string[] = [];
+  const failedAssetUrls: string[] = [];
   let done = 0;
 
   if (typeof window === "undefined" || !("caches" in window)) {
-    return { savedUrls, failedUrls: uniqueUrls };
+    return { savedUrls, failedUrls: uniqueUrls, savedAssetUrls, failedAssetUrls };
   }
 
   for (const url of uniqueUrls) {
@@ -201,6 +284,13 @@ export const cacheTextUrls = async (
       const text = await fetcher(url);
       await cacheRepoTextValue(url, text);
       savedUrls.push(url);
+
+      extractMarkdownAssetUrls(text, url).forEach((assetUrl) => {
+        const normalizedAssetUrl = toGithubProxyUrl(assetUrl);
+        if (normalizedAssetUrl) {
+          discoveredAssetUrls.add(normalizedAssetUrl);
+        }
+      });
     } catch {
       failedUrls.push(url);
     } finally {
@@ -209,8 +299,14 @@ export const cacheTextUrls = async (
     }
   }
 
+  const assetResult = await cacheAssetUrls(Array.from(discoveredAssetUrls));
+  savedAssetUrls.push(...assetResult.savedAssetUrls);
+  failedAssetUrls.push(...assetResult.failedAssetUrls);
+
   return {
     savedUrls,
     failedUrls,
+    savedAssetUrls,
+    failedAssetUrls,
   };
 };

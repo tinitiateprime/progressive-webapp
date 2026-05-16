@@ -14,6 +14,7 @@ import {
   FaHome,
 } from "react-icons/fa";
 import {
+  cacheAssetUrls,
   cacheTextUrls,
   hydrateOfflineSubjectsForAccount,
   migrateLegacyOfflineSubjects,
@@ -608,6 +609,7 @@ export default function SubjectPage() {
       const cacheResult = await cacheTextUrls(urlsToCache, fetchTextStrict, (done: number, total: number) => {
         setSaveProgress({ done, total });
       });
+      const iconCacheResult = await cacheAssetUrls(subjectMeta?.icon_url ? [subjectMeta.icon_url] : []);
 
       const savedSubjectReadme =
         !subjectReadmeUrl ||
@@ -632,9 +634,12 @@ export default function SubjectPage() {
         }).catch(() => undefined);
       }
 
-      if (cacheResult.failedUrls.length > 0) {
+      const failedAssetCount =
+        cacheResult.failedAssetUrls.length + iconCacheResult.failedAssetUrls.length;
+
+      if (cacheResult.failedUrls.length > 0 || failedAssetCount > 0) {
         window.alert(
-          `Saved offline with ${cacheResult.failedUrls.length} skipped file(s). Some topic content may be limited offline.`
+          `Saved offline with ${cacheResult.failedUrls.length + failedAssetCount} skipped file(s). Some topic content may be limited offline.`
         );
         return;
       }
@@ -690,7 +695,7 @@ export default function SubjectPage() {
         !topic.subject_readme_url ||
         cacheResult.savedUrls.includes(toRawGithub(topic.subject_readme_url));
 
-      if (!savedTopicMd || !savedSubjectReadme) {
+      if (!savedTopicMd || !savedSubjectReadme || cacheResult.failedAssetUrls.length > 0) {
         throw new Error("Favorite cache is incomplete.");
       }
     } catch {

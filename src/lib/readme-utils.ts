@@ -384,13 +384,17 @@ export const extractMarkdownAssetUrls = (md: string, baseUrl?: string): string[]
     urls.add(resolved);
   };
 
-  const markdownImageRegex = /!\[[^\]]*]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  const markdownImageRegex = /!\[[^\]]*]\(([^)]+)\)/g;
   const htmlImageRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
 
   let match: RegExpExecArray | null = null;
 
   while ((match = markdownImageRegex.exec(source))) {
-    addUrl(match[1] || "");
+    const rawTarget = String(match[1] || "")
+      .trim()
+      .replace(/\s+["'][^"']*["']\s*$/, "")
+      .replace(/^<|>$/g, "");
+    addUrl(rawTarget);
   }
 
   while ((match = htmlImageRegex.exec(source))) {
