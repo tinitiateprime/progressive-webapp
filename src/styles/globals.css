@@ -417,21 +417,22 @@ input:focus-visible {
 
 .mermaid-diagram {
   margin: 18px 0;
-  padding: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface-2) 86%, transparent);
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
 }
 
 .mermaid-diagram svg {
   display: block;
-  width: 100%;
-  min-width: 720px;
-  max-width: none;
-  height: auto;
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100% !important;
+  height: auto !important;
   margin: 0 auto;
 }
 
@@ -456,15 +457,125 @@ input:focus-visible {
   max-height: 420px;
 }
 
+.mobile-architecture-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 16px 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mobile-architecture-diagram__layer {
+  display: grid;
+  justify-items: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.mobile-architecture-diagram__group {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-2) 34%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+}
+
+.mobile-architecture-diagram__group-title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.mobile-architecture-diagram__nodes {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-architecture-diagram__node {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--text) 6%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.mobile-architecture-diagram__node-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.mobile-architecture-diagram__details {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
+
+.mobile-architecture-diagram__details li {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mobile-architecture-diagram__connector {
+  position: relative;
+  height: 26px;
+}
+
+.mobile-architecture-diagram__connector::before,
+.mobile-architecture-diagram__connector::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.mobile-architecture-diagram__connector::before {
+  top: 0;
+  bottom: 5px;
+  border-left: 2px solid color-mix(in srgb, var(--brand) 58%, var(--border));
+}
+
+.mobile-architecture-diagram__connector::after {
+  bottom: 1px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid color-mix(in srgb, var(--brand) 58%, var(--border));
+  border-bottom: 2px solid color-mix(in srgb, var(--brand) 58%, var(--border));
+  transform: translateX(-50%) rotate(45deg);
+}
+
 @media (max-width: 700px) {
   .mermaid-diagram {
-    margin-left: -8px;
-    margin-right: -8px;
-    padding: 12px;
+    margin: 14px 0;
+    padding: 6px;
   }
 
   .mermaid-diagram svg {
-    min-width: 860px;
+    width: 100% !important;
+    min-width: 0;
+  }
+
+  .mermaid-diagram .nodeLabel,
+  .mermaid-diagram .edgeLabel {
+    font-size: 13px;
+  }
+
+  .mobile-architecture-diagram {
+    margin: 14px 0;
   }
 }
 
@@ -1848,19 +1959,19 @@ main,
     overflow-wrap: anywhere;
   }
 
-  .reader-card > div:first-child {
+  .reader-card > div:first-child:not(.prose) {
     display: grid !important;
     gap: 12px !important;
   }
 
-  .reader-card > div:first-child > div:last-child {
+  .reader-card > div:first-child:not(.prose) > div:last-child {
     width: 100%;
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px !important;
   }
 
-  .reader-card > div:first-child > div:last-child .btn {
+  .reader-card > div:first-child:not(.prose) > div:last-child .btn {
     width: 100%;
   }
 
