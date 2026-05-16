@@ -7,7 +7,7 @@ This project is a `Next.js` progressive web app for reading tutorial content fro
 - User signup and login with `NextAuth`
 - Dashboard with subjects and topics
 - Topic reader with markdown rendering and code highlighting
-- Save subjects for offline reading
+- Automatic offline-ready caching for content and assets
 - Per-user favorites
 
 ## Run locally
