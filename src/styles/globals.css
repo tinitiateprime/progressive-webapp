@@ -1852,20 +1852,39 @@ main,
     overflow-wrap: anywhere;
   }
 
-  .reader-card > div:first-child:not(.prose) {
+  .reader-card > div:first-child:not(.prose):not(.content-card__tags) {
     display: grid !important;
     gap: 12px !important;
   }
 
-  .reader-card > div:first-child:not(.prose) > div:last-child {
+  .reader-card > div:first-child:not(.prose):not(.content-card__tags) > div:last-child {
     width: 100%;
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px !important;
   }
 
-  .reader-card > div:first-child:not(.prose) > div:last-child .btn {
+  .reader-card > div:first-child:not(.prose):not(.content-card__tags) > div:last-child .btn {
     width: 100%;
+  }
+
+  .reader-card > .content-card__tags {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .reader-card > .content-card__tags::-webkit-scrollbar {
+    display: none;
+  }
+
+  .reader-card > .content-card__tags .badge {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .reader-card .prose img {
