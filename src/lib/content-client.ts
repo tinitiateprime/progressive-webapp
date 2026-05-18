@@ -2,6 +2,7 @@ import type {
   CbtCollections,
   ContentRepoStatus,
   CourseSubject,
+  DashboardCardTopic,
   DesignSystem,
   InterviewQuestionDetail,
   InterviewQuestionSummary,
@@ -29,6 +30,7 @@ const CORE_CONTENT_URLS = [
   "/api/content/courses",
   "/api/content/interview",
   "/api/content/cbt",
+  "/api/content/dashboard-cards",
 ] as const;
 
 export type ContentRequestOptions = {
@@ -223,6 +225,12 @@ export const fetchContentRepoStatus = async (
   options?: ContentRequestOptions
 ): Promise<ContentRepoStatus> =>
   fetchJsonNoStore<ContentRepoStatus>("/api/content/status", signal, options);
+
+export const fetchDashboardCards = async (
+  signal?: AbortSignal,
+  options?: ContentRequestOptions
+): Promise<DashboardCardTopic[]> =>
+  fetchJsonNoStore<DashboardCardTopic[]>("/api/content/dashboard-cards", signal, options);
 
 export const fetchCourseSubjects = async (
   signal?: AbortSignal,

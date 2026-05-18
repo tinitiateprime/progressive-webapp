@@ -173,6 +173,25 @@ export type ContentRepoStatus = {
   commitSha: string | null;
 };
 
+export type DashboardSlideTemplate = "text" | "imageText" | "image";
+
+export type DashboardCardSlide = {
+  eyebrow: string;
+  title: string;
+  body: string;
+  imageAlt: string;
+  imageUrl?: string;
+};
+
+export type DashboardCardTopic = {
+  id: string;
+  title: string;
+  label: string;
+  accent: string;
+  imageSurface: string;
+  slides: DashboardCardSlide[];
+};
+
 export type DesignSystem = {
   repoName: string;
   theme: {

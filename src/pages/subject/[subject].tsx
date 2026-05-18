@@ -754,7 +754,7 @@ export default function SubjectPage() {
           </div>
 
           {/* Search */}
-          <div className="page-hero-search glass search-bar-elevated" style={searchCardStyle}>
+          <div className="page-hero-search glass search-bar-elevated subject-topic-search" style={searchCardStyle}>
             <FaSearch style={{ color: "var(--muted)" }} />
               <input
                 value={q}

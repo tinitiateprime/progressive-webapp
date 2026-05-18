@@ -338,7 +338,7 @@ export default function TopicPage() {
               padding: 14,
               fontSize: 13,
               maxWidth: "100%",
-              overflowX: "auto",
+              overflowX: "hidden",
             }}
             {...props}
           >
@@ -348,7 +348,7 @@ export default function TopicPage() {
       }
 
       return (
-        <pre style={{ maxWidth: "100%", overflowX: "auto" }}>
+        <pre style={{ maxWidth: "100%", overflowX: "hidden", whiteSpace: "pre-wrap" }}>
           <code>{raw}</code>
         </pre>
       );
@@ -437,7 +437,7 @@ export default function TopicPage() {
               gap: 16,
             }}
           >
-            <aside className="card reader-layout__sidebar" style={{ padding: 16, borderRadius: 22, minWidth: 0 }}>
+            <aside className="card reader-layout__sidebar topic-reader-sidebar" style={{ padding: 16, borderRadius: 22, minWidth: 0 }}>
               <div className="card" style={{ padding: "10px 12px", borderRadius: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <FaSearch />

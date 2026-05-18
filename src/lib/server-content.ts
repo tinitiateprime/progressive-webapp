@@ -5,6 +5,7 @@ import type {
   CbtCollections,
   CourseCatalogEntry,
   CourseSubject,
+  DashboardCardTopic,
   DesignSystem,
   InterviewQuestionDetail,
   InterviewQuestionSummary,
@@ -80,6 +81,27 @@ type MediaCatalogFile = {
 type TickerFeedFile = {
   repoName: string;
   items: TickerItem[];
+};
+
+type DashboardCardsFile = {
+  repoName: string;
+  topics: Array<{
+    id: string;
+    title: string;
+    label?: string;
+    accent?: string;
+    imageSurface?: string;
+    imagePath?: string;
+    imageUrl?: string;
+    slides: Array<{
+      eyebrow?: string;
+      title: string;
+      body?: string;
+      imageAlt?: string;
+      imagePath?: string;
+      imageUrl?: string;
+    }>;
+  }>;
 };
 
 const CBT_ROOT_FOLDER = "cbt";
@@ -224,6 +246,53 @@ export const getTickerItems = async (repoRef?: string): Promise<TickerItem[]> =>
     repoRef
   );
   return [...feed.items].sort((a, b) => a.priority - b.priority);
+};
+
+export const getDashboardCards = async (repoRef?: string): Promise<DashboardCardTopic[]> => {
+  const { data: file, repoName } = await fetchRepoJsonWithSource<DashboardCardsFile>(
+    "dashboard/cards.json",
+    undefined,
+    repoRef
+  );
+
+  const topics = Array.isArray(file.topics) ? file.topics : [];
+
+  return topics
+    .map((topic, topicIndex) => {
+      const slides = (Array.isArray(topic.slides) ? topic.slides : [])
+        .map((slide, slideIndex) => {
+          const title = String(slide.title || "").trim();
+          if (!title) return null;
+
+          const imageUrl =
+            resolveOptionalRepoAssetUrl(slide.imagePath || slide.imageUrl, repoName, repoRef) ||
+            resolveOptionalRepoAssetUrl(topic.imagePath || topic.imageUrl, repoName, repoRef);
+
+          return {
+            eyebrow: String(slide.eyebrow || `Slide ${slideIndex + 1}`).trim(),
+            title,
+            body: String(slide.body || "").trim(),
+            imageAlt: String(slide.imageAlt || `${title} visual`).trim(),
+            ...(imageUrl ? { imageUrl } : {}),
+          };
+        })
+        .filter((slide): slide is DashboardCardTopic["slides"][number] => slide !== null);
+
+      if (slides.length === 0) return null;
+
+      return {
+        id: String(topic.id || `dashboard-topic-${topicIndex + 1}`).trim(),
+        title: String(topic.title || `Topic ${topicIndex + 1}`).trim(),
+        label: String(topic.label || "Dashboard topic").trim(),
+        accent: String(topic.accent || "var(--dashboard-section-courses-accent)").trim(),
+        imageSurface: String(
+          topic.imageSurface ||
+            "linear-gradient(135deg, color-mix(in srgb, var(--brand) 14%, var(--surface)), color-mix(in srgb, var(--brand-2) 10%, var(--surface)))"
+        ).trim(),
+        slides,
+      };
+    })
+    .filter((topic): topic is DashboardCardTopic => topic !== null);
 };
 
 export const getInterviewQuestionSummaries = async (

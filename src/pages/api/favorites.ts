@@ -19,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json(await getFavs(userKey));
   }
 
-  // POST /api/favorites  (body: {slug, topic_name, subject})
+  // POST /api/favorites  (body: {slug, topic_name, subject, kind?, href?})
   if (req.method === "POST") {
     const body = req.body as Partial<FavTopic>;
 
@@ -31,6 +31,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       slug: body.slug,
       topic_name: body.topic_name,
       subject: body.subject,
+      kind: body.kind,
+      summary: body.summary,
+      href: body.href,
+      md_url: body.md_url,
+      subject_readme_url: body.subject_readme_url,
+      savedAt: body.savedAt,
     });
 
     return res.status(200).json(updated);
@@ -39,9 +45,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // DELETE /api/favorites?slug=xxx
   if (req.method === "DELETE") {
     const slug = String(req.query.slug || "").trim();
+    const rawKind = String(req.query.kind || "topic").trim();
+    const kind: FavTopic["kind"] =
+      rawKind === "interview" ||
+      rawKind === "slideshow" ||
+      rawKind === "training-video" ||
+      rawKind === "audio-book"
+        ? rawKind
+        : "topic";
     if (!slug) return res.status(400).json({ error: "slug query param required" });
 
-    const updated = await removeFav(userKey, slug);
+    const updated = await removeFav(userKey, slug, kind);
     return res.status(200).json(updated);
   }
 

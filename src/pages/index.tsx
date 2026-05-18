@@ -105,7 +105,7 @@ export default function Home() {
       <main className="page-main" style={{ paddingTop: 20 }}>
         {/* Hero Section */}
         <section
-          className="card page-hero-card"
+          className="card page-hero-card landing-hero-card"
           style={{
             borderRadius: 30,
             overflow: "hidden",
@@ -120,7 +120,7 @@ export default function Home() {
           >
             {/* Hero Text */}
             <div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+              <div className="landing-hero-badges" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
                 <span className="badge">Installable PWA</span>
                 <span className="badge">Offline reading</span>
               </div>
@@ -176,7 +176,7 @@ export default function Home() {
                 Find the right subject, save it, and learn at your pace.
               </p>
 
-              <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 10 }}>
+              <div className="landing-hero-actions" style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 10 }}>
                 <button className="btn btn-primary btn-lg" onClick={() => router.push(primaryHref)} type="button">
                   {primaryLabel} <FaArrowRight />
                 </button>
@@ -188,6 +188,7 @@ export default function Home() {
 
             {/* Feature Cards Grid */}
             <div
+              className="landing-feature-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
@@ -200,7 +201,7 @@ export default function Home() {
                 return (
                 <div
                   key={feature.title}
-                  className="feature-card-hover"
+                  className="feature-card-hover landing-feature-card"
                   style={{
                     padding: "20px 18px",
                     borderRadius: 20,
@@ -239,8 +240,9 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="page-main" style={{ paddingTop: 0, paddingBottom: 28 }}>
-        <div className="card page-hero-card" style={{ padding: "clamp(16px, 3vw, 24px)", borderRadius: 28 }}>
+        <div className="card page-hero-card landing-footer-card" style={{ padding: "clamp(16px, 3vw, 24px)", borderRadius: 28 }}>
           <div
+            className="landing-footer-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",

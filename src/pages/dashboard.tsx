@@ -21,6 +21,7 @@ import {
 } from "react-icons/fa";
 
 import TickerBar from "../components/content/TickerBar";
+import CachedRepoImage from "../components/content/CachedRepoImage";
 import { ThemeContext } from "../context/ThemeContext";
 import { clearCachedSessionUser, useProtectedAppSession } from "../lib/app-session";
 import { clearBrowserSessionActive } from "../lib/browserSession";
@@ -28,12 +29,15 @@ import {
   fetchCbtCollections,
   fetchContentRepoStatus,
   fetchCourseSubjects,
+  fetchDashboardCards,
   fetchInterviewQuestions,
   fetchTickerItems,
 } from "../lib/content-client";
 import type {
   CbtCollections,
   CourseSubject,
+  DashboardCardTopic,
+  DashboardSlideTemplate,
   InterviewQuestionSummary,
   TickerItem,
 } from "../lib/content-types";
@@ -74,10 +78,16 @@ type DashboardSearchResult = {
   title: string;
   description: string;
   meta: string;
-  href: string | { pathname: string; query: Record<string, string> };
+  href: string | { pathname: string; query?: Record<string, string> };
   icon: IconType;
   accent: string;
 };
+
+const dashboardSlideTemplates: Array<{ value: DashboardSlideTemplate; label: string }> = [
+  { value: "text", label: "Text" },
+  { value: "imageText", label: "Image + Text" },
+  { value: "image", label: "Image" },
+];
 
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -100,6 +110,226 @@ const formatDateTime = (timestamp: number) =>
     minute: "2-digit",
   });
 
+const formatTime = (timestamp: number) =>
+  new Date(timestamp).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const favoriteKindLabel = (item: SavedFavoriteTopic) => {
+  switch (item.kind) {
+    case "interview":
+      return "Interview Question";
+    case "slideshow":
+      return "Slideshow";
+    case "training-video":
+      return "Training Video";
+    case "audio-book":
+      return "Audio Book";
+    default:
+      return "Topic";
+  }
+};
+
+const favoriteIcon = (item: SavedFavoriteTopic) => {
+  if (item.kind === "interview") return FaUserTie;
+  if (item.kind === "slideshow" || item.kind === "training-video" || item.kind === "audio-book") {
+    return FaLayerGroup;
+  }
+  return FaBookOpen;
+};
+
+const favoriteHref = (item: SavedFavoriteTopic) =>
+  item.href || {
+    pathname: "/topic/[topic]",
+    query: {
+      topic: item.topic_name,
+      subject: item.subject,
+      ...(item.subject_readme_url ? { readme: item.subject_readme_url } : {}),
+    },
+  };
+
+function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
+  const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const [topicIndex, setTopicIndex] = useState(0);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [selectedTemplate, setSelectedTemplate] = useState<DashboardSlideTemplate>("text");
+
+  const slideTopics = topics;
+
+  useEffect(() => {
+    setTopicIndex((current) => Math.max(0, Math.min(current, slideTopics.length - 1)));
+    setSlideIndex(0);
+  }, [slideTopics.length]);
+
+  if (slideTopics.length === 0) {
+    return null;
+  }
+
+  const activeTopic = slideTopics[topicIndex] || slideTopics[0];
+  const activeSlide = activeTopic.slides[slideIndex] || activeTopic.slides[0];
+  const showImage = (selectedTemplate === "image" || selectedTemplate === "imageText") && Boolean(activeSlide.imageUrl);
+  const showText = selectedTemplate === "text" || selectedTemplate === "imageText";
+
+  const moveSlide = (direction: number) => {
+    setSlideIndex((current) => {
+      const total = activeTopic.slides.length;
+      return (current + direction + total) % total;
+    });
+  };
+
+  const moveTopic = (direction: number) => {
+    setTopicIndex((current) => (current + direction + slideTopics.length) % slideTopics.length);
+    setSlideIndex(0);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+
+    pointerStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    if (!pointerStartRef.current) return;
+    event.preventDefault();
+  };
+
+  const handlePointerEnd = (event: React.PointerEvent<HTMLElement>) => {
+    const start = pointerStartRef.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    pointerStartRef.current = null;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+    const threshold = 42;
+
+    if (absX < threshold && absY < threshold) return;
+
+    if (absX > absY) {
+      moveSlide(deltaX < 0 ? 1 : -1);
+      return;
+    }
+
+    moveTopic(deltaY < 0 ? 1 : -1);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === "ArrowRight") moveSlide(1);
+    if (event.key === "ArrowLeft") moveSlide(-1);
+    if (event.key === "ArrowDown") moveTopic(1);
+    if (event.key === "ArrowUp") moveTopic(-1);
+  };
+
+  return (
+    <section className="dashboard-slide-carousel" aria-label="Topic slides">
+      <article
+        className={`card dashboard-slide-card dashboard-swipe-card dashboard-swipe-card--${selectedTemplate}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={() => {
+          pointerStartRef.current = null;
+        }}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        aria-label={`${activeTopic.title}, slide ${slideIndex + 1} of ${activeTopic.slides.length}`}
+      >
+        <div className="dashboard-swipe-card__toolbar">
+          <div className="dashboard-swipe-card__meta">
+            <span>{activeTopic.label}</span>
+            <strong>{activeTopic.title}</strong>
+            <span>
+              {slideIndex + 1}/{activeTopic.slides.length}
+            </span>
+          </div>
+
+          <label
+            className="dashboard-template-select"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <span>Template</span>
+            <select
+              value={selectedTemplate}
+              onChange={(event) => setSelectedTemplate(event.target.value as DashboardSlideTemplate)}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              {dashboardSlideTemplates.map((template) => (
+                <option key={template.value} value={template.value}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className={`dashboard-swipe-card__content dashboard-swipe-card__content--${selectedTemplate}`}>
+          {showImage && (
+            <div
+              className="dashboard-swipe-card__image-pane"
+              style={{ background: activeTopic.imageSurface }}
+            >
+              {activeSlide.imageUrl ? (
+                <CachedRepoImage
+                  src={activeSlide.imageUrl}
+                  alt={activeSlide.imageAlt}
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : null}
+            </div>
+          )}
+
+          {showText && (
+            <div className="dashboard-swipe-card__text-pane">
+              <div className="dashboard-swipe-card__eyebrow" style={{ color: activeTopic.accent }}>
+                {activeSlide.eyebrow}
+              </div>
+              <h3 className="dashboard-swipe-card__title">{activeSlide.title}</h3>
+              <p className="dashboard-swipe-card__body">{activeSlide.body}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="dashboard-swipe-card__footer">
+          <div className="dashboard-swipe-card__dots" aria-label="Topic navigation">
+            {slideTopics.map((topic, index) => (
+              <button
+                key={topic.id}
+                type="button"
+                onClick={() => {
+                  setTopicIndex(index);
+                  setSlideIndex(0);
+                }}
+                aria-label={`Open ${topic.title}`}
+                aria-current={topicIndex === index}
+              />
+            ))}
+          </div>
+
+          <div className="dashboard-swipe-card__dots" aria-label="Slide navigation">
+            {activeTopic.slides.map((slide, index) => (
+              <button
+                key={`${activeTopic.id}-${slide.title}`}
+                type="button"
+                onClick={() => setSlideIndex(index)}
+                aria-label={`Open slide ${index + 1}`}
+                aria-current={slideIndex === index}
+              />
+            ))}
+          </div>
+        </div>
+      </article>
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const { data: session, status } = useProtectedAppSession();
@@ -111,6 +341,7 @@ export default function Dashboard() {
   const [courses, setCourses] = useState<CourseSubject[]>([]);
   const [interviewItems, setInterviewItems] = useState<InterviewQuestionSummary[]>([]);
   const [cbtCollections, setCbtCollections] = useState<CbtCollections | null>(null);
+  const [dashboardTopics, setDashboardTopics] = useState<DashboardCardTopic[]>([]);
   const [q, setQ] = useState("");
   const [syncingContent, setSyncingContent] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -247,6 +478,7 @@ export default function Dashboard() {
           fetchCourseSubjects(controller.signal),
           fetchInterviewQuestions(controller.signal),
           fetchCbtCollections(controller.signal),
+          fetchDashboardCards(controller.signal),
         ]);
         if (cancelled) return;
 
@@ -264,6 +496,9 @@ export default function Dashboard() {
         }
         if (results[4].status === "fulfilled") {
           setCbtCollections(results[4].value);
+        }
+        if (results[5].status === "fulfilled" && results[5].value.length > 0) {
+          setDashboardTopics(results[5].value);
         }
         hasLoadedStatusRef.current = true;
       } catch (err: unknown) {
@@ -383,7 +618,9 @@ export default function Dashboard() {
 
     return favoriteTopics.filter((item) => {
       if (normalizeSearch(item.topic_name).includes(query)) return true;
-      return normalizeSearch(item.subject).includes(query);
+      if (normalizeSearch(item.subject).includes(query)) return true;
+      if (normalizeSearch(item.summary || "").includes(query)) return true;
+      return normalizeSearch(favoriteKindLabel(item)).includes(query);
     });
   }, [favoriteTopics, q]);
 
@@ -535,25 +772,18 @@ export default function Dashboard() {
     }
 
     for (const item of favoriteTopics) {
-      if (!matchesSearchTokens(tokens, item.topic_name, item.subject)) {
+      if (!matchesSearchTokens(tokens, item.topic_name, item.subject, item.summary, favoriteKindLabel(item))) {
         continue;
       }
 
       addResult({
-        key: `favorite:${item.subject}:${item.slug}`,
+        key: `favorite:${item.kind || "topic"}:${item.slug}`,
         kind: "Favorite",
         title: item.topic_name,
-        description: item.subject,
-        meta: "Saved topic",
-        href: {
-          pathname: "/topic/[topic]",
-          query: {
-            topic: item.topic_name,
-            subject: item.subject,
-            ...(item.subject_readme_url ? { readme: item.subject_readme_url } : {}),
-          },
-        },
-        icon: FaBookOpen,
+        description: item.summary || item.subject,
+        meta: `Saved ${favoriteKindLabel(item)}`,
+        href: favoriteHref(item),
+        icon: favoriteIcon(item),
         accent: "var(--dashboard-library-favorites-color)",
       });
     }
@@ -570,6 +800,15 @@ export default function Dashboard() {
       : lastSyncedAt
         ? `GitHub updated ${formatDateTime(lastSyncedAt)}`
         : "GitHub update time is unavailable right now.";
+  const mobileSyncStatusText = isOffline
+    ? lastSyncedAt
+      ? `GitHub ${formatTime(lastSyncedAt)}`
+      : "Offline mode"
+    : syncingContent
+      ? "Updating GitHub..."
+      : lastSyncedAt
+        ? `GitHub ${formatTime(lastSyncedAt)}`
+        : "GitHub unavailable";
 
   const secondaryStatusText =
     offlineSyncState?.status === "ready"
@@ -586,14 +825,7 @@ export default function Dashboard() {
 
   const openFavorite = (item: SavedFavoriteTopic) => {
     setLibraryOpen(false);
-    router.push({
-      pathname: "/topic/[topic]",
-      query: {
-        topic: item.topic_name,
-        subject: item.subject,
-        ...(item.subject_readme_url ? { readme: item.subject_readme_url } : {}),
-      },
-    });
+    router.push(favoriteHref(item));
   };
 
   return (
@@ -628,8 +860,10 @@ export default function Dashboard() {
                     gap: 10,
                   }}
                 >
-                  <span>{syncStatusText}</span>
+                  <span className="dashboard-sync-text dashboard-sync-text--desktop">{syncStatusText}</span>
+                  <span className="dashboard-sync-text dashboard-sync-text--mobile">{mobileSyncStatusText}</span>
                   <span
+                    className="dashboard-connection-pill"
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -663,24 +897,29 @@ export default function Dashboard() {
 
             <div className="page-hero-actions">
               {installPrompt && !installInstalled && (
-                <button className="btn btn-outline" onClick={handleInstall} type="button">
+                <button className="btn btn-outline dashboard-action-install" onClick={handleInstall} type="button">
                   <FaDownload />
-                  Install
+                  <span className="hide-mobile">Install</span>
                 </button>
               )}
 
-              <button className="btn btn-outline" onClick={() => setLibraryOpen(true)} type="button">
+              <button
+                className="btn btn-outline dashboard-menu-button"
+                onClick={() => setLibraryOpen(true)}
+                type="button"
+                aria-label="Open dashboard library"
+              >
                 <FaBars />
                 <span className="hide-mobile">Library</span>
               </button>
 
-              <button className="btn btn-outline" onClick={toggleTheme} type="button">
+              <button className="btn btn-outline dashboard-action-theme" onClick={toggleTheme} type="button">
                 {theme === "dark" ? <FaSun /> : <FaMoon />}
                 <span className="hide-mobile">{theme === "dark" ? "Light" : "Dark"}</span>
               </button>
 
               <div
-                className="btn btn-outline dashboard-profile-btn"
+                className="btn btn-outline dashboard-profile-btn dashboard-action-profile"
                 style={{
                   pointerEvents: "none",
                 }}
@@ -695,7 +934,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <button className="btn btn-outline" onClick={handleLogout} type="button">
+              <button className="btn btn-outline dashboard-action-logout" onClick={handleLogout} type="button">
                 <FaSignOutAlt />
                 <span className="hide-mobile">Logout</span>
               </button>
@@ -751,6 +990,8 @@ export default function Dashboard() {
             <TickerBar items={tickerItems} />
           </section>
         )}
+
+        <DashboardSlideCarousel topics={dashboardTopics} />
 
         {q.trim() && searchResults.length > 0 && (
           <section className="dashboard-search-results" style={{ marginBottom: 16 }}>
@@ -860,6 +1101,7 @@ export default function Dashboard() {
 
       {libraryOpen && (
         <div
+          className="dashboard-library-overlay"
           style={{
             position: "fixed",
             inset: 0,
@@ -872,7 +1114,7 @@ export default function Dashboard() {
           onClick={() => setLibraryOpen(false)}
         >
           <aside
-            className="card"
+            className="card dashboard-library-panel"
             style={{
               width: "min(420px, 100vw)",
               height: "100vh",
@@ -882,61 +1124,94 @@ export default function Dashboard() {
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 900 }}>Library</div>
-                <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>
-                  Favorite topics saved on this account.
+            <div className="dashboard-menu-header">
+              <div className="dashboard-menu-profile">
+                <div className="dashboard-menu-avatar">{accountInitial}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="dashboard-menu-title">
+                    <span className="dashboard-menu-title__mobile">Menu</span>
+                    <span className="dashboard-menu-title__desktop">Library</span>
+                  </div>
+                  <div className="dashboard-menu-subtitle">
+                    {firstName}
+                    {accountEmail ? ` - ${accountEmail}` : ""}
+                  </div>
                 </div>
               </div>
 
               <button
-                className="btn btn-outline"
+                className="btn btn-outline dashboard-menu-close"
                 type="button"
                 onClick={() => setLibraryOpen(false)}
-                style={{ width: 42, height: 42, padding: 0, borderRadius: 14 }}
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div style={{ marginTop: 22, display: "grid", gap: 18 }}>
-              <section>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)", marginBottom: 10 }}>
-                  FAVORITES
+            <div className="dashboard-menu-content">
+              <section className="dashboard-menu-section dashboard-menu-section--actions">
+                <div className="dashboard-menu-section-title">Quick Actions</div>
+                <div className="dashboard-menu-action-grid">
+                  {installPrompt && !installInstalled ? (
+                    <button
+                      className="btn btn-outline dashboard-menu-action"
+                      type="button"
+                      onClick={handleInstall}
+                    >
+                      <FaDownload />
+                      Install App
+                    </button>
+                  ) : null}
+                  <button
+                    className="btn btn-outline dashboard-menu-action"
+                    type="button"
+                    onClick={toggleTheme}
+                  >
+                    {theme === "dark" ? <FaSun /> : <FaMoon />}
+                    {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                  </button>
+                  <button
+                    className="btn btn-outline dashboard-menu-action"
+                    type="button"
+                    onClick={handleLogout}
+                  >
+                    <FaSignOutAlt />
+                    Logout
+                  </button>
                 </div>
-                <div style={{ display: "grid", gap: 10 }}>
+              </section>
+
+              <section>
+                <div className="dashboard-menu-section-head">
+                  <div>
+                    <div className="dashboard-menu-section-title">Favorites</div>
+                    <div className="dashboard-menu-section-copy">
+                      Saved topics, interview questions, slides, videos, and audio.
+                    </div>
+                  </div>
+                  <span className="badge">{filteredFavoriteTopics.length}</span>
+                </div>
+                <div className="dashboard-menu-favorites">
                   {filteredFavoriteTopics.length > 0 ? (
                     filteredFavoriteTopics.map((item) => (
                       <button
-                        key={`${item.subject}-${item.slug}`}
-                        className="btn btn-outline"
+                        key={`${item.kind || "topic"}-${item.subject}-${item.slug}`}
+                        className="btn btn-outline dashboard-menu-favorite"
                         type="button"
                         onClick={() => openFavorite(item)}
-                        style={{
-                          justifyContent: "space-between",
-                          padding: "14px 16px",
-                          borderRadius: 18,
-                          width: "100%",
-                        }}
                       >
-                        <span style={{ display: "grid", textAlign: "left", gap: 4, minWidth: 0 }}>
-                          <span style={{ fontSize: 15, fontWeight: 800 }}>{item.topic_name}</span>
-                          <span style={{ fontSize: 12, color: "var(--muted)" }}>{item.subject}</span>
+                        <span className="dashboard-menu-favorite__text">
+                          <span className="dashboard-menu-favorite__title">{item.topic_name}</span>
+                          <span className="dashboard-menu-favorite__meta">
+                            {favoriteKindLabel(item)} - {item.subject}
+                          </span>
                         </span>
                         <FaArrowRight />
                       </button>
                     ))
                   ) : (
-                    <div className="soft" style={{ padding: 14, borderRadius: 18, fontSize: 13, color: "var(--muted)" }}>
-                      {q ? "No favorites matched your search." : "No favorites saved yet."}
+                    <div className="soft dashboard-menu-empty">
+                      {q ? "No favorites matched your search." : "No favorites saved yet. Tap the star on content you want to revisit."}
                     </div>
                   )}
                 </div>

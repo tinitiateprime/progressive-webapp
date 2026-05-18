@@ -4,6 +4,7 @@ import {
   fetchCbtCollections,
   fetchContentRepoStatus,
   fetchCourseSubjects,
+  fetchDashboardCards,
   fetchDesignConfig,
   fetchInterviewQuestion,
   fetchInterviewQuestions,
@@ -29,6 +30,7 @@ const CORE_SECTION_CONTENT_URLS = [
   "/api/content/courses",
   "/api/content/interview",
   "/api/content/cbt",
+  "/api/content/dashboard-cards",
 ] as const;
 
 type OfflineSyncState = {
@@ -235,6 +237,7 @@ export async function syncCoreOfflineSections(router?: NextRouter | null) {
     fetchCourseSubjects(undefined, { strategy: "network-first" }),
     fetchInterviewQuestions(undefined, { strategy: "network-first" }),
     fetchCbtCollections(undefined, { strategy: "network-first" }),
+    fetchDashboardCards(undefined, { strategy: "network-first" }),
   ]);
 
   await Promise.allSettled([
@@ -299,13 +302,15 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
     let courses: Awaited<ReturnType<typeof fetchCourseSubjects>>;
     let interviewSummaries: Awaited<ReturnType<typeof fetchInterviewQuestions>>;
     let cbtCollections: Awaited<ReturnType<typeof fetchCbtCollections>>;
+    let dashboardCards: Awaited<ReturnType<typeof fetchDashboardCards>>;
 
     try {
-      [design, courses, interviewSummaries, cbtCollections] = await Promise.all([
+      [design, courses, interviewSummaries, cbtCollections, dashboardCards] = await Promise.all([
         fetchDesignConfig(undefined, { strategy: "network-first" }),
         fetchCourseSubjects(undefined, { strategy: "network-first" }),
         fetchInterviewQuestions(undefined, { strategy: "network-first" }),
         fetchCbtCollections(undefined, { strategy: "network-first" }),
+        fetchDashboardCards(undefined, { strategy: "network-first" }),
       ]);
     } catch (error) {
       writeOfflineSyncState({
@@ -354,6 +359,10 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       if (entry?.iconUrl) {
         addImageUrl(entry.iconUrl);
       }
+    });
+
+    dashboardCards.forEach((topic) => {
+      topic.slides.forEach((slide) => addImageUrl(slide.imageUrl));
     });
 
     for (const course of courses) {

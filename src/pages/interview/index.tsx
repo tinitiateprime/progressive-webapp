@@ -3,13 +3,23 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { FaArrowLeft, FaHome, FaMoon, FaSearch, FaSun } from "react-icons/fa";
+import { FaArrowLeft, FaHome, FaMoon, FaRegStar, FaSearch, FaStar, FaSun } from "react-icons/fa";
 import CacheProgressBadge from "../../components/content/CacheProgressBadge";
 import TickerBar from "../../components/content/TickerBar";
 import { ThemeContext } from "../../context/ThemeContext";
 import { useProtectedAppSession } from "../../lib/app-session";
 import { fetchInterviewQuestions, fetchTickerItems } from "../../lib/content-client";
 import type { InterviewQuestionSummary, TickerItem } from "../../lib/content-types";
+import {
+  getLibraryUserKey,
+  isFavoriteItem,
+  mergeFavoriteTopics,
+  readFavoriteTopics,
+  removeFavoriteTopic,
+  upsertFavoriteTopic,
+  writeFavoriteTopics,
+  type SavedFavoriteTopic,
+} from "../../lib/library";
 import { goBackOr } from "../../lib/navigation";
 import { buildInterviewCacheTargets, useCacheSaveProgress } from "../../lib/use-cache-save-progress";
 import { useConnectionStatus } from "../../lib/use-connection-status";
@@ -19,15 +29,63 @@ const normalizeSearch = (value: string) =>
 
 export default function InterviewIndexPage() {
   const router = useRouter();
-  const { status } = useProtectedAppSession();
+  const { data: session, status } = useProtectedAppSession();
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const accountKey = useMemo(() => getLibraryUserKey(session?.user), [session]);
   const isOffline = useConnectionStatus();
   const [items, setItems] = useState<InterviewQuestionSummary[]>([]);
   const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
+  const [favorites, setFavorites] = useState<SavedFavoriteTopic[]>([]);
   const hasLoadedItemsRef = useRef(false);
+
+  useEffect(() => {
+    const syncLibrary = () => setFavorites(readFavoriteTopics(accountKey));
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") syncLibrary();
+    };
+
+    syncLibrary();
+    window.addEventListener("focus", syncLibrary);
+    window.addEventListener("storage", syncLibrary);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", syncLibrary);
+      window.removeEventListener("storage", syncLibrary);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [accountKey]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/favorites", {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-store" },
+        });
+
+        if (!cancelled && res.ok) {
+          const serverFavorites = (await res.json()) as SavedFavoriteTopic[];
+          const mergedFavorites = mergeFavoriteTopics(readFavoriteTopics(accountKey), serverFavorites);
+          writeFavoriteTopics(mergedFavorites, accountKey);
+          setFavorites(mergedFavorites);
+        }
+      } catch {
+        // keep local favorites if server sync is unavailable
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountKey, status]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -87,6 +145,85 @@ export default function InterviewIndexPage() {
   }, [items, q]);
   const cacheTargets = useMemo(() => buildInterviewCacheTargets(items), [items]);
   const cacheProgress = useCacheSaveProgress(cacheTargets);
+
+  const openQuestion = (slug: string) => {
+    router.push({
+      pathname: "/interview/[slug]",
+      query: { slug },
+    });
+  };
+
+  const toggleFavorite = async (item: InterviewQuestionSummary) => {
+    const kind = "interview";
+    const isFavorite = isFavoriteItem(favorites, item.slug, kind);
+
+    if (isFavorite) {
+      const nextFavorites = removeFavoriteTopic(item.slug, accountKey, kind);
+      setFavorites(nextFavorites);
+
+      if (status === "authenticated") {
+        try {
+          const res = await fetch(
+            `/api/favorites?slug=${encodeURIComponent(item.slug)}&kind=${encodeURIComponent(kind)}`,
+            {
+              method: "DELETE",
+              headers: { "Cache-Control": "no-store" },
+              cache: "no-store",
+            }
+          );
+
+          if (res.ok) {
+            const serverFavorites = (await res.json()) as SavedFavoriteTopic[];
+            const mergedFavorites = mergeFavoriteTopics(nextFavorites, serverFavorites);
+            writeFavoriteTopics(mergedFavorites, accountKey);
+            setFavorites(mergedFavorites);
+          }
+        } catch {
+          // keep local state even if server sync fails
+        }
+      }
+
+      return;
+    }
+
+    const nextFavorite: SavedFavoriteTopic = {
+      slug: item.slug,
+      topic_name: item.title,
+      subject: item.category,
+      kind,
+      summary: item.question,
+      href: {
+        pathname: "/interview/[slug]",
+        query: { slug: item.slug },
+      },
+      savedAt: Date.now(),
+    };
+    const nextFavorites = upsertFavoriteTopic(nextFavorite, accountKey);
+    setFavorites(nextFavorites);
+
+    if (status === "authenticated") {
+      try {
+        const res = await fetch("/api/favorites", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+          },
+          body: JSON.stringify(nextFavorite),
+          cache: "no-store",
+        });
+
+        if (res.ok) {
+          const serverFavorites = (await res.json()) as SavedFavoriteTopic[];
+          const mergedFavorites = mergeFavoriteTopics(nextFavorites, serverFavorites);
+          writeFavoriteTopics(mergedFavorites, accountKey);
+          setFavorites(mergedFavorites);
+        }
+      } catch {
+        // keep local state even if server sync fails
+      }
+    }
+  };
 
   return (
     <div className="app-shell">
@@ -179,45 +316,99 @@ export default function InterviewIndexPage() {
             </div>
           )}
 
-          {!loading && !error && (
-            <div className="content-grid">
-              {filteredItems.map((item) => (
-                <Link
-                  key={item.slug}
-                  href={{
-                    pathname: "/interview/[slug]",
-                    query: { slug: item.slug },
-                  }}
-                  style={{ textDecoration: "none", color: "inherit" }}
-                >
-                  <div className="card content-card">
-                    <div className="content-card__tags" style={{ marginTop: 0 }}>
-                      <span className="badge" style={{ fontSize: 11 }}>
-                        {item.category}
-                      </span>
-                      <span className="badge" style={{ fontSize: 11 }}>
-                        {item.level}
-                      </span>
-                    </div>
+          {!loading && !error && filteredItems.length === 0 && (
+            <div className="card" style={{ padding: 18, borderRadius: 18 }}>
+              <div style={{ fontSize: 14, color: "var(--muted)" }}>
+                {q ? "No interview question matched your search." : "No interview questions are available right now."}
+              </div>
+            </div>
+          )}
 
-                    <div className="content-card__title" style={{ marginTop: 14 }}>{item.title}</div>
+          {!loading && !error && filteredItems.length > 0 && (
+            <div className="interview-question-list">
+              {filteredItems.map((item) => {
+                const excerpt = item.excerpt.trim();
+                const showExcerpt =
+                  excerpt && normalizeSearch(excerpt) !== normalizeSearch(item.question);
 
-                    <div className="content-card__body">{item.question}</div>
+                return (
+                  <div
+                    key={item.slug}
+                    className="interview-question-link"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest('[data-no-nav="true"]')) return;
+                      openQuestion(item.slug);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openQuestion(item.slug);
+                      }
+                    }}
+                  >
+                    <div className="card content-card interview-question-card">
+                      <div className="interview-question-card__content">
+                        <div className="content-card__tags interview-question-card__badges">
+                          <span className="badge" style={{ fontSize: 11 }}>
+                            {item.category}
+                          </span>
+                          <span className="badge" style={{ fontSize: 11 }}>
+                            {item.level}
+                          </span>
+                        </div>
 
-                    <div className="content-card__meta">
-                      {item.excerpt}
-                    </div>
+                        <div className="content-card__title interview-question-card__title">
+                          {item.title}
+                        </div>
 
-                    <div className="content-card__tags" style={{ marginTop: 14 }}>
-                      {item.tags.map((tag) => (
-                        <span key={tag} className="badge" style={{ fontSize: 10 }}>
-                          {tag}
-                        </span>
-                      ))}
+                        <div className="content-card__body interview-question-card__question">
+                          {item.question}
+                        </div>
+
+                        {showExcerpt ? (
+                          <div className="content-card__meta interview-question-card__excerpt">
+                            {excerpt}
+                          </div>
+                        ) : null}
+
+                        <div className="content-card__tags interview-question-card__tags">
+                          {item.tags.map((tag) => (
+                            <span key={tag} className="badge" style={{ fontSize: 10 }}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        data-no-nav="true"
+                        type="button"
+                        className="favorite-toggle interview-question-card__favorite"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleFavorite(item);
+                        }}
+                        aria-label={
+                          isFavoriteItem(favorites, item.slug, "interview")
+                            ? "Remove interview question from favorites"
+                            : "Add interview question to favorites"
+                        }
+                        aria-pressed={isFavoriteItem(favorites, item.slug, "interview")}
+                        title={
+                          isFavoriteItem(favorites, item.slug, "interview")
+                            ? "Remove from favorites"
+                            : "Add to favorites"
+                        }
+                      >
+                        {isFavoriteItem(favorites, item.slug, "interview") ? <FaStar /> : <FaRegStar />}
+                      </button>
                     </div>
                   </div>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
