@@ -62,10 +62,10 @@ export default function InterviewDetailPage() {
           <div className="page-hero-top">
             <div>
               <div style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>
-                INTERVIEW QUESTION DETAIL
+                INTERVIEW Q&A COURSE
               </div>
               <div style={{ marginTop: 6, fontSize: 28, fontWeight: 900 }}>
-                {item?.title || "Loading question..."}
+                {item?.title || "Loading course..."}
               </div>
             </div>
 
@@ -83,7 +83,7 @@ export default function InterviewDetailPage() {
 
         {loading && (
           <div className="card" style={{ padding: 18, borderRadius: 18, marginTop: 18 }}>
-            Loading answer...
+            Loading interview answers...
           </div>
         )}
 
@@ -99,7 +99,11 @@ export default function InterviewDetailPage() {
               <div className="card reader-card reader-card--compact" style={{ padding: 18, borderRadius: 22 }}>
                 <div className="content-card__tags" style={{ marginTop: 0 }}>
                   <span className="badge">{item.category}</span>
-                  <span className="badge">{item.level}</span>
+                  <span className="badge">
+                    {item.questionCount
+                      ? `${item.questionCount} ${item.questionCount === 1 ? "question" : "questions"}`
+                      : item.level}
+                  </span>
                   {item.tags.map((tag) => (
                     <span key={tag} className="badge" style={{ fontSize: 10 }}>
                       {tag}
@@ -108,19 +112,64 @@ export default function InterviewDetailPage() {
                 </div>
 
                 <div style={{ marginTop: 16, fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>
-                  INTERVIEW QUESTION
+                  COURSE
                 </div>
                 <div style={{ marginTop: 8, fontSize: 18, lineHeight: 1.7 }}>{item.question}</div>
               </div>
             </section>
 
-            <section style={{ marginTop: 18 }}>
-              <div className="card reader-card" style={{ padding: 22, borderRadius: 22 }}>
-                <div className="prose">
-                  <RepoMarkdown baseUrl={item.markdown_url}>{item.markdown}</RepoMarkdown>
+            {item.questions && item.questions.length > 0 ? (
+              <section style={{ marginTop: 18, display: "grid", gap: 16 }}>
+                {item.questions.map((question, index) => (
+                  <article
+                    key={question.slug}
+                    className="card reader-card"
+                    style={{ padding: 22, borderRadius: 22 }}
+                  >
+                    <div className="content-card__tags" style={{ marginTop: 0 }}>
+                      <span className="badge">Question {index + 1}</span>
+                      <span className="badge">{question.level}</span>
+                      {question.tags.map((tag) => (
+                        <span key={`${question.slug}-${tag}`} className="badge" style={{ fontSize: 10 }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    <h2
+                      style={{
+                        margin: "16px 0 8px",
+                        fontSize: 24,
+                        lineHeight: 1.25,
+                        fontWeight: 900,
+                      }}
+                    >
+                      {question.title}
+                    </h2>
+
+                    {question.question !== question.title ? (
+                      <div style={{ marginBottom: 16, fontSize: 16, lineHeight: 1.65 }}>
+                        {question.question}
+                      </div>
+                    ) : null}
+
+                    <div className="prose">
+                      <RepoMarkdown baseUrl={question.markdown_url || item.markdown_url}>
+                        {question.markdown}
+                      </RepoMarkdown>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            ) : (
+              <section style={{ marginTop: 18 }}>
+                <div className="card reader-card" style={{ padding: 22, borderRadius: 22 }}>
+                  <div className="prose">
+                    <RepoMarkdown baseUrl={item.markdown_url}>{item.markdown}</RepoMarkdown>
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
           </>
         )}
       </main>

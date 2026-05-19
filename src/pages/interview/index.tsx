@@ -146,7 +146,7 @@ export default function InterviewIndexPage() {
   const cacheTargets = useMemo(() => buildInterviewCacheTargets(items), [items]);
   const cacheProgress = useCacheSaveProgress(cacheTargets);
 
-  const openQuestion = (slug: string) => {
+  const openCourse = (slug: string) => {
     router.push({
       pathname: "/interview/[slug]",
       query: { slug },
@@ -235,10 +235,10 @@ export default function InterviewIndexPage() {
                 INTERVIEW QNA
               </div>
               <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
-                Practice high-signal interview answers
+                Choose a course
               </div>
               <div style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
-                Review concise explanations, key concepts, and likely follow-up areas.
+                Open a course to read all interview questions and answers in one place.
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
                 <span
@@ -291,7 +291,7 @@ export default function InterviewIndexPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search questions, category, level, or tags..."
+              placeholder="Search courses, questions, or tags..."
               style={{
                 width: "100%",
                 border: "none",
@@ -306,7 +306,7 @@ export default function InterviewIndexPage() {
         <section style={{ marginTop: 20 }}>
           {loading && (
             <div className="card" style={{ padding: 18, borderRadius: 18 }}>
-              Loading interview questions...
+              Loading interview courses...
             </div>
           )}
 
@@ -319,7 +319,7 @@ export default function InterviewIndexPage() {
           {!loading && !error && filteredItems.length === 0 && (
             <div className="card" style={{ padding: 18, borderRadius: 18 }}>
               <div style={{ fontSize: 14, color: "var(--muted)" }}>
-                {q ? "No interview question matched your search." : "No interview questions are available right now."}
+                {q ? "No interview course matched your search." : "No interview courses are available right now."}
               </div>
             </div>
           )}
@@ -339,12 +339,12 @@ export default function InterviewIndexPage() {
                     tabIndex={0}
                     onClick={(event) => {
                       if ((event.target as HTMLElement).closest('[data-no-nav="true"]')) return;
-                      openQuestion(item.slug);
+                      openCourse(item.slug);
                     }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        openQuestion(item.slug);
+                        openCourse(item.slug);
                       }
                     }}
                   >
@@ -355,7 +355,9 @@ export default function InterviewIndexPage() {
                             {item.category}
                           </span>
                           <span className="badge" style={{ fontSize: 11 }}>
-                            {item.level}
+                            {item.questionCount
+                              ? `${item.questionCount} ${item.questionCount === 1 ? "question" : "questions"}`
+                              : item.level}
                           </span>
                         </div>
 
@@ -393,8 +395,8 @@ export default function InterviewIndexPage() {
                         }}
                         aria-label={
                           isFavoriteItem(favorites, item.slug, "interview")
-                            ? "Remove interview question from favorites"
-                            : "Add interview question to favorites"
+                            ? "Remove interview course from favorites"
+                            : "Add interview course to favorites"
                         }
                         aria-pressed={isFavoriteItem(favorites, item.slug, "interview")}
                         title={

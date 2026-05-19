@@ -15,6 +15,7 @@ import type {
   DashboardSlideStyle,
   DashboardSlideTemplate,
   DashboardTextAlign,
+  InterviewCourseQuestion,
   DesignSystem,
   InterviewQuestionDetail,
   InterviewQuestionSummary,
@@ -425,14 +426,14 @@ const parseInterviewCourseMarkdown = (
   markdown: string,
   fileName: string,
   markdownUrl?: string
-): InterviewQuestionDetail[] => {
+): InterviewQuestionDetail | null => {
   const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
   const courseTitle =
     normalizedMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || titleFromFileName(fileName);
   const courseSlug = slugify(courseTitle || fileName, "interview");
   const headingMatches = Array.from(normalizedMarkdown.matchAll(/^##\s+(.+)$/gm));
 
-  return headingMatches
+  const questions = headingMatches
     .map((match, index) => {
       const next = headingMatches[index + 1];
       const rawTitle = stripMarkdownNoise(match[1]);
@@ -446,7 +447,7 @@ const parseInterviewCourseMarkdown = (
       const markdownBody = answerMarkdown || "Answer content will be added soon.";
 
       return {
-        slug: `${courseSlug}-${slugify(title || question, `question-${index + 1}`)}`,
+        slug: slugify(title || question, `question-${index + 1}`),
         title,
         category,
         level,
@@ -455,12 +456,48 @@ const parseInterviewCourseMarkdown = (
         excerpt: summarizeMarkdown(markdownBody),
         markdown: markdownBody,
         ...(markdownUrl ? { markdown_url: markdownUrl } : {}),
-      };
+      } satisfies InterviewCourseQuestion & { category?: string };
     })
     .filter((question) => Boolean(question.title && question.question));
+
+  if (questions.length === 0) return null;
+
+  const seenQuestionSlugs = new Map<string, number>();
+  const uniqueQuestions = questions.map((question) => {
+    const count = seenQuestionSlugs.get(question.slug) || 0;
+    seenQuestionSlugs.set(question.slug, count + 1);
+
+    return count === 0
+      ? question
+      : {
+          ...question,
+          slug: `${question.slug}-${count + 1}`,
+        };
+  });
+
+  const courseTags = Array.from(
+    new Set(uniqueQuestions.flatMap((question) => question.tags).filter(Boolean))
+  );
+  const questionCount = uniqueQuestions.length;
+  const category = uniqueQuestions[0]?.category || courseTitle || "Interview";
+  const questionTitles = uniqueQuestions.map((question) => question.title).slice(0, 4).join(", ");
+
+  return {
+    slug: courseSlug,
+    title: courseTitle,
+    category,
+    level: `${questionCount} ${questionCount === 1 ? "Question" : "Questions"}`,
+    question: `Open ${questionCount} ${questionCount === 1 ? "question and answer" : "questions and answers"} for ${courseTitle}.`,
+    tags: courseTags.length > 0 ? courseTags : [courseSlug],
+    excerpt: questionTitles,
+    questionCount,
+    markdown: normalizedMarkdown,
+    ...(markdownUrl ? { markdown_url: markdownUrl } : {}),
+    questions: uniqueQuestions,
+  };
 };
 
-const uniquifyInterviewSlugs = (items: InterviewQuestionDetail[]) => {
+const uniquifyInterviewCourseSlugs = (items: InterviewQuestionDetail[]) => {
   const seen = new Map<string, number>();
 
   return items.map((item) => {
@@ -476,7 +513,7 @@ const uniquifyInterviewSlugs = (items: InterviewQuestionDetail[]) => {
   });
 };
 
-const getMarkdownInterviewQuestions = async (
+const getMarkdownInterviewCourses = async (
   repoRef?: string
 ): Promise<InterviewQuestionDetail[]> => {
   const { entries, repoName } = await readRepoDirectory("interview-qna", undefined, repoRef);
@@ -495,11 +532,13 @@ const getMarkdownInterviewQuestions = async (
     4
   );
 
-  return uniquifyInterviewSlugs(
-    courseFiles.flatMap((source) => {
-      const fileName = source.url.split("/").pop() || source.url;
-      return parseInterviewCourseMarkdown(source.text, fileName, source.url);
-    })
+  return uniquifyInterviewCourseSlugs(
+    courseFiles
+      .map((source) => {
+        const fileName = source.url.split("/").pop() || source.url;
+        return parseInterviewCourseMarkdown(source.text, fileName, source.url);
+      })
+      .filter((course): course is InterviewQuestionDetail => course !== null)
   );
 };
 
@@ -639,10 +678,10 @@ export const getDashboardCards = async (repoRef?: string): Promise<DashboardCard
 export const getInterviewQuestionSummaries = async (
   repoRef?: string
 ): Promise<InterviewQuestionSummary[]> => {
-  const markdownQuestions = await getMarkdownInterviewQuestions(repoRef).catch(() => []);
+  const markdownCourses = await getMarkdownInterviewCourses(repoRef).catch(() => []);
 
-  if (markdownQuestions.length > 0) {
-    return markdownQuestions.map((item) => ({
+  if (markdownCourses.length > 0) {
+    return markdownCourses.map((item) => ({
       slug: item.slug,
       title: item.title,
       category: item.category,
@@ -650,6 +689,7 @@ export const getInterviewQuestionSummaries = async (
       question: item.question,
       tags: item.tags,
       excerpt: item.excerpt,
+      questionCount: item.questionCount,
     }));
   }
 
@@ -678,10 +718,10 @@ export const getInterviewQuestionBySlug = async (
   slug: string,
   repoRef?: string
 ): Promise<InterviewQuestionDetail | null> => {
-  const markdownQuestions = await getMarkdownInterviewQuestions(repoRef).catch(() => []);
-  const markdownQuestion = markdownQuestions.find((item) => item.slug === slug);
+  const markdownCourses = await getMarkdownInterviewCourses(repoRef).catch(() => []);
+  const markdownCourse = markdownCourses.find((item) => item.slug === slug);
 
-  if (markdownQuestion) return markdownQuestion;
+  if (markdownCourse) return markdownCourse;
 
   const { data: catalog, repoName } = await fetchRepoYamlWithSource<InterviewCatalogFile>(
     "interview-qna/catalog.yaml",

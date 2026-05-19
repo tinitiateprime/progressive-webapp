@@ -17,11 +17,24 @@ export type InterviewQuestionSummary = {
   question: string;
   tags: string[];
   excerpt: string;
+  questionCount?: number;
+};
+
+export type InterviewCourseQuestion = {
+  slug: string;
+  title: string;
+  level: string;
+  question: string;
+  tags: string[];
+  excerpt: string;
+  markdown: string;
+  markdown_url?: string;
 };
 
 export type InterviewQuestionDetail = InterviewQuestionSummary & {
   markdown: string;
   markdown_url?: string;
+  questions?: InterviewCourseQuestion[];
 };
 
 export type CourseCatalogEntry = {

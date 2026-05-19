@@ -717,10 +717,12 @@ export default function Dashboard() {
 
       addResult({
         key: `interview:${item.slug}`,
-        kind: "Interview",
+        kind: "Interview Course",
         title: item.title,
         description: item.question,
-        meta: `${item.category} - ${item.level}`,
+        meta: item.questionCount
+          ? `${item.category} - ${item.questionCount} ${item.questionCount === 1 ? "question" : "questions"}`
+          : `${item.category} - ${item.level}`,
         href: {
           pathname: "/interview/[slug]",
           query: { slug: item.slug },
