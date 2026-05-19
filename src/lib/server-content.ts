@@ -1,7 +1,11 @@
 import { parse as parseYaml } from "yaml";
 import { buildContentRepoRawUrl } from "./content-repo-config";
 import { normalize, parseSubjectTopicsFromReadme, toRawGithub, type ParsedTopic } from "./readme-utils";
-import { readRepoContentSource, readRepoContentText } from "./server-content-source";
+import {
+  readRepoContentSource,
+  readRepoContentText,
+  readRepoDirectory,
+} from "./server-content-source";
 import type {
   CbtCollections,
   CourseCatalogEntry,
@@ -348,6 +352,157 @@ const splitSlides = (markdown: string): SlideshowSlide[] =>
       markdown: chunk,
     }));
 
+const slugify = (value: string, fallback = "item") => {
+  const slug = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || fallback;
+};
+
+const titleFromFileName = (fileName: string) =>
+  String(fileName || "")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .trim();
+
+const parseInterviewTags = (value: string | undefined) => {
+  const rawTags = String(value || "").match(/#[a-z0-9_-]+|[a-z0-9][a-z0-9_-]*/gi) || [];
+
+  return Array.from(
+    new Set(
+      rawTags
+        .map((tag) => tag.replace(/^#/, "").trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+};
+
+const stripMarkdownNoise = (value: string) =>
+  String(value || "")
+    .replace(/^#+\s+/, "")
+    .replace(/\*\*/g, "")
+    .trim();
+
+const extractInterviewAnswer = (block: string) => {
+  const metadata: Record<string, string> = {};
+  const answerLines: string[] = [];
+  let inFence = false;
+
+  for (const line of block.replace(/\r\n/g, "\n").split("\n")) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+      answerLines.push(line);
+      continue;
+    }
+
+    if (!inFence) {
+      const metadataMatch = trimmed.match(/^(title|question|category|course|level|tags?)\s*:\s*(.+)$/i);
+      if (metadataMatch) {
+        metadata[metadataMatch[1].toLowerCase()] = metadataMatch[2].trim();
+        continue;
+      }
+
+      if (/^#{3,6}\s+answer\b/i.test(trimmed)) {
+        continue;
+      }
+    }
+
+    answerLines.push(line);
+  }
+
+  return {
+    metadata,
+    markdown: answerLines.join("\n").replace(/^\s+|\s+$/g, ""),
+  };
+};
+
+const parseInterviewCourseMarkdown = (
+  markdown: string,
+  fileName: string,
+  markdownUrl?: string
+): InterviewQuestionDetail[] => {
+  const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
+  const courseTitle =
+    normalizedMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || titleFromFileName(fileName);
+  const courseSlug = slugify(courseTitle || fileName, "interview");
+  const headingMatches = Array.from(normalizedMarkdown.matchAll(/^##\s+(.+)$/gm));
+
+  return headingMatches
+    .map((match, index) => {
+      const next = headingMatches[index + 1];
+      const rawTitle = stripMarkdownNoise(match[1]);
+      const block = normalizedMarkdown.slice(match.index! + match[0].length, next?.index).trim();
+      const { metadata, markdown: answerMarkdown } = extractInterviewAnswer(block);
+      const title = stripMarkdownNoise(metadata.title || rawTitle);
+      const question = stripMarkdownNoise(metadata.question || rawTitle);
+      const category = stripMarkdownNoise(metadata.category || metadata.course || courseTitle || "Interview");
+      const level = stripMarkdownNoise(metadata.level || "General");
+      const tags = parseInterviewTags(metadata.tags || metadata.tag);
+      const markdownBody = answerMarkdown || "Answer content will be added soon.";
+
+      return {
+        slug: `${courseSlug}-${slugify(title || question, `question-${index + 1}`)}`,
+        title,
+        category,
+        level,
+        question,
+        tags: tags.length > 0 ? tags : [courseSlug],
+        excerpt: summarizeMarkdown(markdownBody),
+        markdown: markdownBody,
+        ...(markdownUrl ? { markdown_url: markdownUrl } : {}),
+      };
+    })
+    .filter((question) => Boolean(question.title && question.question));
+};
+
+const uniquifyInterviewSlugs = (items: InterviewQuestionDetail[]) => {
+  const seen = new Map<string, number>();
+
+  return items.map((item) => {
+    const count = seen.get(item.slug) || 0;
+    seen.set(item.slug, count + 1);
+
+    return count === 0
+      ? item
+      : {
+          ...item,
+          slug: `${item.slug}-${count + 1}`,
+        };
+  });
+};
+
+const getMarkdownInterviewQuestions = async (
+  repoRef?: string
+): Promise<InterviewQuestionDetail[]> => {
+  const { entries, repoName } = await readRepoDirectory("interview-qna", undefined, repoRef);
+  const markdownFiles = entries
+    .filter((entry) => entry.type === "file")
+    .filter((entry) => /\.md$/i.test(entry.name) && !/^readme\.md$/i.test(entry.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (markdownFiles.length === 0) {
+    return [];
+  }
+
+  const courseFiles = await runConcurrent(
+    markdownFiles,
+    (entry) => fetchRepoTextWithSource(entry.path, repoName, repoRef),
+    4
+  );
+
+  return uniquifyInterviewSlugs(
+    courseFiles.flatMap((source) => {
+      const fileName = source.url.split("/").pop() || source.url;
+      return parseInterviewCourseMarkdown(source.text, fileName, source.url);
+    })
+  );
+};
+
 const readOptionalMarkdownSource = async (
   filePath: string | undefined,
   repoName: string,
@@ -484,6 +639,20 @@ export const getDashboardCards = async (repoRef?: string): Promise<DashboardCard
 export const getInterviewQuestionSummaries = async (
   repoRef?: string
 ): Promise<InterviewQuestionSummary[]> => {
+  const markdownQuestions = await getMarkdownInterviewQuestions(repoRef).catch(() => []);
+
+  if (markdownQuestions.length > 0) {
+    return markdownQuestions.map((item) => ({
+      slug: item.slug,
+      title: item.title,
+      category: item.category,
+      level: item.level,
+      question: item.question,
+      tags: item.tags,
+      excerpt: item.excerpt,
+    }));
+  }
+
   // ONE GitHub request: just the catalog YAML.
   // The `question` field already contains the question text which serves as the
   // excerpt on the list page — no need to fetch each answer markdown file here.
@@ -509,6 +678,11 @@ export const getInterviewQuestionBySlug = async (
   slug: string,
   repoRef?: string
 ): Promise<InterviewQuestionDetail | null> => {
+  const markdownQuestions = await getMarkdownInterviewQuestions(repoRef).catch(() => []);
+  const markdownQuestion = markdownQuestions.find((item) => item.slug === slug);
+
+  if (markdownQuestion) return markdownQuestion;
+
   const { data: catalog, repoName } = await fetchRepoYamlWithSource<InterviewCatalogFile>(
     "interview-qna/catalog.yaml",
     undefined,

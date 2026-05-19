@@ -6,6 +6,7 @@ import {
   getContentRepoDisplayName,
   getContentRepoPathCandidates,
   getContentRepoNameCandidates,
+  resolveContentRepoPath,
 } from "./content-repo-config";
 import type { ContentRepoStatus } from "./content-types";
 
@@ -13,6 +14,13 @@ export type RepoContentSource = {
   repoName: string;
   text: string;
   url: string;
+};
+
+export type RepoDirectoryEntry = {
+  name: string;
+  path: string;
+  type: "file" | "dir";
+  downloadUrl?: string;
 };
 
 export async function readRepoContentSource(
@@ -67,6 +75,70 @@ export async function readRepoContentText(
 ) {
   const source = await readRepoContentSource(repoFilePath, preferredRepoName, repoRef);
   return source.text;
+}
+
+export async function readRepoDirectory(
+  repoFolderPath: string,
+  preferredRepoName?: string,
+  repoRef = CONTENT_REPO_BRANCH
+): Promise<{ repoName: string; entries: RepoDirectoryEntry[] }> {
+  const pathCandidates = getContentRepoPathCandidates(repoFolderPath);
+  const repoNameCandidates = getContentRepoNameCandidates(preferredRepoName);
+  let lastStatus: number | null = null;
+
+  for (const repoName of repoNameCandidates) {
+    for (const pathCandidate of pathCandidates) {
+      const resolvedPath = resolveContentRepoPath(pathCandidate)
+        .split("/")
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join("/");
+      const apiUrl = `https://api.github.com/repos/${CONTENT_REPO_OWNER}/${repoName}/contents/${resolvedPath}?ref=${encodeURIComponent(repoRef)}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      let response: Response;
+      try {
+        response = await fetch(apiUrl, {
+          cache: "no-store",
+          headers: {
+            Accept: "application/vnd.github+json",
+            "User-Agent": "Tinitiate-Edu-App",
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (response.ok) {
+        const payload = await response.json();
+        if (!Array.isArray(payload)) {
+          throw new Error(`${repoFolderPath} is not a GitHub directory`);
+        }
+
+        return {
+          repoName,
+          entries: payload
+            .filter((entry): entry is { name: string; path: string; type: string; download_url?: string } =>
+              Boolean(entry?.name && entry?.path && entry?.type)
+            )
+            .map((entry) => ({
+              name: entry.name,
+              path: entry.path,
+              type: entry.type === "dir" ? "dir" : "file",
+              ...(entry.download_url ? { downloadUrl: entry.download_url } : {}),
+            })),
+        };
+      }
+
+      lastStatus = response.status;
+    }
+  }
+
+  throw new Error(
+    `Failed to list ${repoFolderPath} from GitHub${lastStatus ? ` (${lastStatus})` : ""}`
+  );
 }
 
 export async function readContentRepoStatus(): Promise<ContentRepoStatus> {
