@@ -110,8 +110,13 @@ const fetchJsonFromNetwork = async <T>(url: string, signal?: AbortSignal): Promi
   await writeCachedJson(url, response);
   const payload = (await response.json()) as T;
   writeMemoryJson(url, payload);
+  writeContentAvailability(false);
   return payload;
 };
+
+const shouldMarkContentOffline = (error: unknown) =>
+  !(error instanceof HttpStatusError) &&
+  !(error instanceof DOMException && error.name === "AbortError");
 
 const requestJsonFromNetwork = <T>(url: string, signal?: AbortSignal): Promise<T> => {
   const key = getRequestKey(url);
@@ -144,7 +149,9 @@ const revalidateCachedJson = (url: string) => {
     const cached = await readCachedJson(url);
     if (cached !== null) {
       writeMemoryJson(url, cached);
-      writeContentAvailability(true);
+      if (shouldMarkContentOffline(error)) {
+        writeContentAvailability(true);
+      }
     }
   });
 };
@@ -183,7 +190,9 @@ const fetchJsonNoStore = async <T>(
   } catch (error) {
     if (!(error instanceof DOMException && error.name === "AbortError")) {
       const cached = await readCachedJson<T>(url);
-      writeContentAvailability(true);
+      if (shouldMarkContentOffline(error)) {
+        writeContentAvailability(true);
+      }
 
       if (cached !== null) {
         writeMemoryJson(url, cached);

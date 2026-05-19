@@ -356,23 +356,376 @@ const titleFromFileName = (fileName: string) =>
     .replace(/\b\w/g, (match) => match.toUpperCase())
     .trim();
 
-const parseInterviewTags = (value: string | undefined) => {
-  const rawTags = String(value || "").match(/#[a-z0-9_-]+|[a-z0-9][a-z0-9_-]*/gi) || [];
-
-  return Array.from(
-    new Set(
-      rawTags
-        .map((tag) => tag.replace(/^#/, "").trim().toLowerCase())
-        .filter(Boolean)
-    )
-  );
-};
-
 const stripMarkdownNoise = (value: string) =>
   String(value || "")
     .replace(/^#+\s+/, "")
     .replace(/\*\*/g, "")
     .trim();
+
+const AUTO_TAG_LIMIT = 6;
+
+const AUTO_TAG_STOP_WORDS = new Set([
+  "a",
+  "about",
+  "above",
+  "add",
+  "after",
+  "all",
+  "also",
+  "an",
+  "and",
+  "answer",
+  "answers",
+  "any",
+  "are",
+  "as",
+  "at",
+  "basic",
+  "basics",
+  "be",
+  "been",
+  "before",
+  "best",
+  "between",
+  "by",
+  "can",
+  "chapter",
+  "code",
+  "course",
+  "courses",
+  "define",
+  "describe",
+  "detail",
+  "details",
+  "did",
+  "difference",
+  "do",
+  "does",
+  "each",
+  "example",
+  "examples",
+  "explain",
+  "for",
+  "from",
+  "get",
+  "give",
+  "guide",
+  "has",
+  "have",
+  "help",
+  "how",
+  "important",
+  "in",
+  "interview",
+  "into",
+  "is",
+  "it",
+  "its",
+  "key",
+  "learn",
+  "lesson",
+  "level",
+  "main",
+  "make",
+  "module",
+  "more",
+  "need",
+  "new",
+  "not",
+  "of",
+  "on",
+  "one",
+  "or",
+  "overview",
+  "part",
+  "question",
+  "questions",
+  "section",
+  "show",
+  "soon",
+  "step",
+  "steps",
+  "summary",
+  "student",
+  "students",
+  "that",
+  "the",
+  "their",
+  "then",
+  "there",
+  "these",
+  "this",
+  "to",
+  "topic",
+  "topics",
+  "type",
+  "types",
+  "understand",
+  "use",
+  "used",
+  "user",
+  "users",
+  "using",
+  "was",
+  "what",
+  "when",
+  "where",
+  "which",
+  "why",
+  "will",
+  "with",
+  "without",
+  "learning",
+  "would",
+  "you",
+]);
+
+const AUTO_TAG_ACRONYM_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "answer",
+  "are",
+  "as",
+  "at",
+  "by",
+  "for",
+  "from",
+  "how",
+  "in",
+  "is",
+  "of",
+  "on",
+  "or",
+  "question",
+  "the",
+  "to",
+  "what",
+  "when",
+  "where",
+  "which",
+  "why",
+  "would",
+  "with",
+  "you",
+]);
+
+type AutoTagCandidate = {
+  label: string;
+  score: number;
+  firstSeen: number;
+};
+
+const cleanupAutoTagText = (value: string) =>
+  String(value || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*]\([^)]+\)/g, " ")
+    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replace(/^(title|question|category|course|level|tags?)\s*:\s*.+$/gim, " ")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/&amp;/gi, " and ")
+    .replace(/[#>*_~()[\]{}|,;!?]/g, " ");
+
+const tokenizeAutoTagText = (value: string) =>
+  (cleanupAutoTagText(value).match(/\.net|[a-z0-9][a-z0-9+#.:-]*/gi) || [])
+    .map((token) =>
+      token
+        .replace(/^[^a-z0-9.]+|[^a-z0-9+#.]+$/gi, "")
+        .replace(/\.$/, "")
+        .toLowerCase()
+    )
+    .filter(Boolean);
+
+const isUsefulAutoTagToken = (token: string, allowShort = false) => {
+  if (!token || AUTO_TAG_STOP_WORDS.has(token)) return false;
+  if (/^\d+$/.test(token)) return false;
+  if (token.length >= 3) return true;
+  return allowShort || /[+#.]/.test(token);
+};
+
+const normalizeAutoTagForCompare = (label: string) =>
+  label.replace(/[^a-z0-9]/gi, "").toLowerCase().replace(/s$/, "");
+
+const addAutoTagCandidate = (
+  candidates: Map<string, AutoTagCandidate>,
+  tokens: string[],
+  score: number,
+  firstSeen: number,
+  displayLabel?: string,
+  force = false
+) => {
+  if (tokens.length === 0) return;
+  if (!force && !tokens.every((token) => isUsefulAutoTagToken(token, tokens.length > 1))) return;
+
+  const label = (displayLabel || tokens.join(" ")).replace(/\s+/g, " ").trim();
+  if (!label) return;
+
+  const key = normalizeAutoTagForCompare(label);
+  if (!key) return;
+
+  const existing = candidates.get(key);
+  if (existing) {
+    existing.score += score;
+    existing.firstSeen = Math.min(existing.firstSeen, firstSeen);
+    return;
+  }
+
+  candidates.set(key, { label, score, firstSeen });
+};
+
+const isContentAcronym = (token: string) => {
+  const cleaned = token.replace(/^[^a-z0-9.]+|[^a-z0-9+#.:-]+$/gi, "");
+  if (cleaned.length < 2 || AUTO_TAG_STOP_WORDS.has(cleaned.toLowerCase())) return false;
+  if (/^\d+$/.test(cleaned)) return false;
+
+  const letters = cleaned.replace(/[^a-z]/gi, "");
+  const uppercaseCount = (cleaned.match(/[A-Z]/g) || []).length;
+
+  return (
+    /^\.?[A-Z0-9]{2,}[A-Z0-9+#.:-]*s?$/.test(cleaned) ||
+    (letters.length >= 3 && uppercaseCount >= 2 && cleaned.length <= 16)
+  );
+};
+
+const extractContentAcronyms = (value: string) => {
+  const acronyms = new Map<string, string>();
+  const rawTokens = cleanupAutoTagText(value).match(/\.?[A-Za-z0-9][A-Za-z0-9+#.:-]*/g) || [];
+
+  rawTokens.forEach((token) => {
+    const cleaned = token.replace(/^[^a-z0-9.]+|[^a-z0-9+#.:-]+$/gi, "").replace(/\.$/, "");
+    if (!isContentAcronym(cleaned)) return;
+
+    const key = normalizeAutoTagForCompare(cleaned);
+    if (key && !acronyms.has(key)) {
+      acronyms.set(key, cleaned);
+    }
+  });
+
+  return acronyms;
+};
+
+const getAutoTagAcronym = (label: string) => {
+  const words = label
+    .split(/\s+/)
+    .flatMap((token) => token.split(/[-/]+/))
+    .map((word) => word.replace(/[^a-z0-9]/gi, "").toLowerCase())
+    .filter((word) => word.length >= 2 && !AUTO_TAG_ACRONYM_STOP_WORDS.has(word));
+
+  if (words.length < 2 || words.length > 5) return "";
+
+  const acronym = words.map((word) => word[0]).join("");
+  return acronym.length >= 2 ? acronym : "";
+};
+
+const addAutoTagAcronymCandidate = (
+  candidates: Map<string, AutoTagCandidate>,
+  contentAcronyms: Map<string, string>,
+  phraseLabel: string,
+  score: number,
+  firstSeen: number
+) => {
+  const acronym = getAutoTagAcronym(phraseLabel);
+  const displayLabel = contentAcronyms.get(normalizeAutoTagForCompare(acronym));
+  if (!displayLabel) return;
+
+  addAutoTagCandidate(candidates, [displayLabel.toLowerCase()], score, firstSeen, displayLabel, true);
+};
+
+const autoTagRank = (candidate: AutoTagCandidate) =>
+  candidate.score + (candidate.label.split(" ").length - 1) * 12;
+
+const formatAutoTagLabel = (label: string, contentAcronyms: Map<string, string>) =>
+  label
+    .split(" ")
+    .map((token) => contentAcronyms.get(normalizeAutoTagForCompare(token)) || token)
+    .join(" ");
+
+const deriveInterviewCourseTags = (markdown: string, courseTitle: string) => {
+  const headings = Array.from(markdown.matchAll(/^#{1,6}\s+(.+)$/gm), (match) => match[1]);
+  const contentAcronyms = extractContentAcronyms(markdown);
+  const sources = [
+    { text: courseTitle, weight: 14 },
+    { text: headings.join("\n"), weight: 5 },
+    { text: markdown, weight: 1 },
+  ];
+  const candidates = new Map<string, AutoTagCandidate>();
+  let position = 0;
+  const titleTokens = tokenizeAutoTagText(courseTitle).filter((token) => isUsefulAutoTagToken(token, true));
+
+  if (titleTokens.length > 0 && titleTokens.length <= 3) {
+    addAutoTagCandidate(candidates, titleTokens, 80, 0);
+    addAutoTagAcronymCandidate(candidates, contentAcronyms, titleTokens.join(" "), 78, 0);
+  }
+
+  contentAcronyms.forEach((label, key) => {
+    addAutoTagCandidate(candidates, [key], 26, 0, label, true);
+  });
+
+  for (const source of sources) {
+    const tokens = tokenizeAutoTagText(source.text);
+
+    tokens.forEach((token, index) => {
+      addAutoTagCandidate(candidates, [token], source.weight, position + index);
+    });
+
+    if (source.weight > 1) {
+      for (let index = 0; index < tokens.length; index += 1) {
+        for (let size = 2; size <= 3 && index + size <= tokens.length; size += 1) {
+          const phraseTokens = tokens.slice(index, index + size);
+          addAutoTagCandidate(
+            candidates,
+            phraseTokens,
+            source.weight + size * 1.5,
+            position + index
+          );
+          addAutoTagAcronymCandidate(
+            candidates,
+            contentAcronyms,
+            phraseTokens.join(" "),
+            source.weight + size * 1.5 + 10,
+            position + index
+          );
+        }
+      }
+    }
+
+    position += tokens.length;
+  }
+
+  const selected: string[] = [];
+
+  for (const candidate of Array.from(candidates.values()).sort(
+    (a, b) =>
+      autoTagRank(b) - autoTagRank(a) ||
+      b.score - a.score ||
+      a.firstSeen - b.firstSeen ||
+      a.label.localeCompare(b.label)
+  )) {
+    const candidateWords = candidate.label.toLowerCase().split(" ");
+    const candidateCompare = normalizeAutoTagForCompare(candidate.label);
+    const candidateAcronym = getAutoTagAcronym(candidate.label);
+    const overlapsExisting = selected.some((tag) => {
+      const tagWords = tag.toLowerCase().split(" ");
+      const tagCompare = normalizeAutoTagForCompare(tag);
+      const tagAcronym = getAutoTagAcronym(tag);
+
+      return (
+        candidateWords.every((word) => tagWords.includes(word)) ||
+        tagWords.every((word) => candidateWords.includes(word)) ||
+        Boolean(candidateAcronym && normalizeAutoTagForCompare(candidateAcronym) === tagCompare) ||
+        Boolean(tagAcronym && normalizeAutoTagForCompare(tagAcronym) === candidateCompare)
+      );
+    });
+
+    if (overlapsExisting) continue;
+
+    selected.push(formatAutoTagLabel(candidate.label, contentAcronyms));
+    if (selected.length >= AUTO_TAG_LIMIT) break;
+  }
+
+  return selected;
+};
 
 const extractInterviewAnswer = (block: string) => {
   const metadata: Record<string, string> = {};
@@ -430,7 +783,6 @@ const parseInterviewCourseMarkdown = (
       const question = stripMarkdownNoise(metadata.question || rawTitle);
       const category = stripMarkdownNoise(metadata.category || metadata.course || courseTitle || "Interview");
       const level = stripMarkdownNoise(metadata.level || "General");
-      const tags = parseInterviewTags(metadata.tags || metadata.tag);
       const markdownBody = answerMarkdown || "Answer content will be added soon.";
 
       return {
@@ -439,7 +791,7 @@ const parseInterviewCourseMarkdown = (
         category,
         level,
         question,
-        tags,
+        tags: [],
         excerpt: summarizeMarkdown(markdownBody),
         markdown: markdownBody,
         ...(markdownUrl ? { markdown_url: markdownUrl } : {}),
@@ -462,9 +814,7 @@ const parseInterviewCourseMarkdown = (
         };
   });
 
-  const courseTags = Array.from(
-    new Set(uniqueQuestions.flatMap((question) => question.tags).filter(Boolean))
-  );
+  const courseTags = deriveInterviewCourseTags(normalizedMarkdown, courseTitle);
   const questionCount = uniqueQuestions.length;
   const category = uniqueQuestions[0]?.category || courseTitle || "Interview";
   const questionTitles = uniqueQuestions.map((question) => question.title).slice(0, 4).join(", ");
@@ -474,7 +824,7 @@ const parseInterviewCourseMarkdown = (
     title: courseTitle,
     category,
     level: `${questionCount} ${questionCount === 1 ? "Question" : "Questions"}`,
-    question: `Open ${questionCount} ${questionCount === 1 ? "question and answer" : "questions and answers"} for ${courseTitle}.`,
+    question: "",
     tags: courseTags,
     excerpt: questionTitles,
     questionCount,

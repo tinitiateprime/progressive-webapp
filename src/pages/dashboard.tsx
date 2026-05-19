@@ -80,6 +80,7 @@ type DashboardSearchResult = {
   href: string | { pathname: string; query?: Record<string, string> };
   icon: IconType;
   accent: string;
+  tags?: string[];
 };
 
 const normalizeSearch = (value: string) =>
@@ -142,7 +143,7 @@ const favoriteHref = (item: SavedFavoriteTopic) =>
     },
   };
 
-function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
+function DashboardSlideCarousel({ topics = [] }: { topics?: DashboardCardTopic[] }) {
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const [topicIndex, setTopicIndex] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -719,7 +720,7 @@ export default function Dashboard() {
         key: `interview:${item.slug}`,
         kind: "Interview Course",
         title: item.title,
-        description: item.question,
+        description: item.excerpt,
         meta: item.questionCount
           ? `${item.category} - ${item.questionCount} ${item.questionCount === 1 ? "question" : "questions"}`
           : `${item.category} - ${item.level}`,
@@ -729,6 +730,7 @@ export default function Dashboard() {
         },
         icon: FaUserTie,
         accent: "var(--dashboard-section-interview-accent)",
+        tags: item.tags,
       });
     }
 
@@ -1031,6 +1033,15 @@ export default function Dashboard() {
                           {result.description}
                         </div>
                         <div className="dashboard-search-result-card__meta">{result.meta}</div>
+                        {result.tags?.length ? (
+                          <div className="dashboard-search-result-card__tags">
+                            {result.tags.slice(0, 4).map((tag) => (
+                              <span key={`${result.key}-${tag}`} className="badge">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </Link>

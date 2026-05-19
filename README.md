@@ -160,9 +160,10 @@ Supported heading levels are `##`, `###`, and `####`.
 
 | To change | Edit this file |
 | --- | --- |
-| Add/remove interview questions | `../tiai-edu-app/interview-qna/catalog.yaml` |
-| Change question title/category/level/tags | `../tiai-edu-app/interview-qna/catalog.yaml` |
-| Change the full answer | The `answerPath` markdown file, for example `../tiai-edu-app/interview-qna/questions/design-authentication-service.md` |
+| Add/remove interview courses | Add/remove Markdown files in `../tiai-edu-app/interview-qna/` |
+| Change course title | The first `# Heading` in the course Markdown file, or the file name as fallback |
+| Add/remove questions | Add/remove `## Question heading` sections in the course Markdown file |
+| Change generated tags | Edit the course title, headings, and answer text; tags are inferred automatically from the course content |
 
 ### CBT Content
 

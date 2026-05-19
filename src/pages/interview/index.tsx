@@ -191,7 +191,7 @@ export default function InterviewIndexPage() {
       topic_name: item.title,
       subject: item.category,
       kind,
-      summary: item.question,
+      summary: item.excerpt,
       href: {
         pathname: "/interview/[slug]",
         query: { slug: item.slug },
@@ -328,8 +328,9 @@ export default function InterviewIndexPage() {
             <div className="interview-question-list">
               {filteredItems.map((item) => {
                 const excerpt = item.excerpt.trim();
+                const showQuestion = Boolean(item.question.trim());
                 const showExcerpt =
-                  excerpt && normalizeSearch(excerpt) !== normalizeSearch(item.question);
+                  excerpt && (!showQuestion || normalizeSearch(excerpt) !== normalizeSearch(item.question));
 
                 return (
                   <div
@@ -350,24 +351,15 @@ export default function InterviewIndexPage() {
                   >
                     <div className="card content-card interview-question-card">
                       <div className="interview-question-card__content">
-                        <div className="content-card__tags interview-question-card__badges">
-                          <span className="badge" style={{ fontSize: 11 }}>
-                            {item.category}
-                          </span>
-                          <span className="badge" style={{ fontSize: 11 }}>
-                            {item.questionCount
-                              ? `${item.questionCount} ${item.questionCount === 1 ? "question" : "questions"}`
-                              : item.level}
-                          </span>
-                        </div>
-
                         <div className="content-card__title interview-question-card__title">
                           {item.title}
                         </div>
 
-                        <div className="content-card__body interview-question-card__question">
-                          {item.question}
-                        </div>
+                        {showQuestion ? (
+                          <div className="content-card__body interview-question-card__question">
+                            {item.question}
+                          </div>
+                        ) : null}
 
                         {showExcerpt ? (
                           <div className="content-card__meta interview-question-card__excerpt">

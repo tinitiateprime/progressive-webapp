@@ -98,23 +98,12 @@ export default function InterviewDetailPage() {
             <section style={{ marginTop: 18 }}>
               <div className="card reader-card reader-card--compact" style={{ padding: 18, borderRadius: 22 }}>
                 <div className="content-card__tags" style={{ marginTop: 0 }}>
-                  <span className="badge">{item.category}</span>
-                  <span className="badge">
-                    {item.questionCount
-                      ? `${item.questionCount} ${item.questionCount === 1 ? "question" : "questions"}`
-                      : item.level}
-                  </span>
                   {item.tags.map((tag) => (
                     <span key={tag} className="badge" style={{ fontSize: 10 }}>
                       {tag}
                     </span>
                   ))}
                 </div>
-
-                <div style={{ marginTop: 16, fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>
-                  COURSE
-                </div>
-                <div style={{ marginTop: 8, fontSize: 18, lineHeight: 1.7 }}>{item.question}</div>
               </div>
             </section>
 
@@ -129,11 +118,6 @@ export default function InterviewDetailPage() {
                     <div className="content-card__tags" style={{ marginTop: 0 }}>
                       <span className="badge">Question {index + 1}</span>
                       <span className="badge">{question.level}</span>
-                      {question.tags.map((tag) => (
-                        <span key={`${question.slug}-${tag}`} className="badge" style={{ fontSize: 10 }}>
-                          {tag}
-                        </span>
-                      ))}
                     </div>
 
                     <h2
