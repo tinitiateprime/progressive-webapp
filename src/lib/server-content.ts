@@ -26,19 +26,6 @@ import type {
   TickerItem,
 } from "./content-types";
 
-type InterviewCatalogFile = {
-  repoName: string;
-  questions: Array<{
-    slug: string;
-    title: string;
-    category: string;
-    level: string;
-    question: string;
-    tags: string[];
-    answerPath: string;
-  }>;
-};
-
 type CoursesCatalogFile = {
   repoName: string;
   subjects: CourseCatalogEntry[];
@@ -678,39 +665,17 @@ export const getDashboardCards = async (repoRef?: string): Promise<DashboardCard
 export const getInterviewQuestionSummaries = async (
   repoRef?: string
 ): Promise<InterviewQuestionSummary[]> => {
-  const markdownCourses = await getMarkdownInterviewCourses(repoRef).catch(() => []);
+  const markdownCourses = await getMarkdownInterviewCourses(repoRef);
 
-  if (markdownCourses.length > 0) {
-    return markdownCourses.map((item) => ({
-      slug: item.slug,
-      title: item.title,
-      category: item.category,
-      level: item.level,
-      question: item.question,
-      tags: item.tags,
-      excerpt: item.excerpt,
-      questionCount: item.questionCount,
-    }));
-  }
-
-  // ONE GitHub request: just the catalog YAML.
-  // The `question` field already contains the question text which serves as the
-  // excerpt on the list page — no need to fetch each answer markdown file here.
-  const { data: catalog } = await fetchRepoYamlWithSource<InterviewCatalogFile>(
-    "interview-qna/catalog.yaml",
-    undefined,
-    repoRef
-  );
-
-  return catalog.questions.map((entry) => ({
-    slug: entry.slug,
-    title: entry.title,
-    category: entry.category,
-    level: entry.level,
-    question: entry.question,
-    tags: entry.tags,
-    // Use the question itself as the excerpt — avoids N round-trips to GitHub.
-    excerpt: entry.question,
+  return markdownCourses.map((item) => ({
+    slug: item.slug,
+    title: item.title,
+    category: item.category,
+    level: item.level,
+    question: item.question,
+    tags: item.tags,
+    excerpt: item.excerpt,
+    questionCount: item.questionCount,
   }));
 };
 
@@ -718,33 +683,10 @@ export const getInterviewQuestionBySlug = async (
   slug: string,
   repoRef?: string
 ): Promise<InterviewQuestionDetail | null> => {
-  const markdownCourses = await getMarkdownInterviewCourses(repoRef).catch(() => []);
+  const markdownCourses = await getMarkdownInterviewCourses(repoRef);
   const markdownCourse = markdownCourses.find((item) => item.slug === slug);
 
-  if (markdownCourse) return markdownCourse;
-
-  const { data: catalog, repoName } = await fetchRepoYamlWithSource<InterviewCatalogFile>(
-    "interview-qna/catalog.yaml",
-    undefined,
-    repoRef
-  );
-  const entry = catalog.questions.find((item) => item.slug === slug);
-
-  if (!entry) return null;
-
-  const markdownSource = await fetchRepoTextWithSource(entry.answerPath, repoName, repoRef);
-
-  return {
-    slug: entry.slug,
-    title: entry.title,
-    category: entry.category,
-    level: entry.level,
-    question: entry.question,
-    tags: entry.tags,
-    excerpt: summarizeMarkdown(markdownSource.text),
-    markdown: markdownSource.text,
-    markdown_url: markdownSource.url,
-  };
+  return markdownCourse || null;
 };
 
 export const getCourseSubjects = async (repoRef?: string): Promise<CourseSubject[]> => {
