@@ -174,13 +174,27 @@ export type ContentRepoStatus = {
 };
 
 export type DashboardSlideTemplate = "text" | "imageText" | "image";
+export type DashboardImagePosition = "left" | "right" | "top" | "bottom";
+export type DashboardTextAlign = "left" | "center" | "right";
+
+export type DashboardSlideStyle = {
+  imagePosition: DashboardImagePosition;
+  textAlign: DashboardTextAlign;
+  titleSize?: string;
+  bodySize?: string;
+  eyebrowSize?: string;
+  imageSize?: string;
+  mobileImageSize?: string;
+};
 
 export type DashboardCardSlide = {
+  template: DashboardSlideTemplate;
   eyebrow: string;
   title: string;
   body: string;
   imageAlt: string;
   imageUrl?: string;
+  style: DashboardSlideStyle;
 };
 
 export type DashboardCardTopic = {

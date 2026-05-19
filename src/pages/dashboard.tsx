@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { signOut } from "next-auth/react";
 import type { IconType } from "react-icons";
 import {
@@ -37,7 +37,6 @@ import type {
   CbtCollections,
   CourseSubject,
   DashboardCardTopic,
-  DashboardSlideTemplate,
   InterviewQuestionSummary,
   TickerItem,
 } from "../lib/content-types";
@@ -82,12 +81,6 @@ type DashboardSearchResult = {
   icon: IconType;
   accent: string;
 };
-
-const dashboardSlideTemplates: Array<{ value: DashboardSlideTemplate; label: string }> = [
-  { value: "text", label: "Text" },
-  { value: "imageText", label: "Image + Text" },
-  { value: "image", label: "Image" },
-];
 
 const normalizeSearch = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -153,7 +146,6 @@ function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const [topicIndex, setTopicIndex] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
-  const [selectedTemplate, setSelectedTemplate] = useState<DashboardSlideTemplate>("text");
 
   const slideTopics = topics;
 
@@ -168,8 +160,32 @@ function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
 
   const activeTopic = slideTopics[topicIndex] || slideTopics[0];
   const activeSlide = activeTopic.slides[slideIndex] || activeTopic.slides[0];
-  const showImage = (selectedTemplate === "image" || selectedTemplate === "imageText") && Boolean(activeSlide.imageUrl);
-  const showText = selectedTemplate === "text" || selectedTemplate === "imageText";
+  const selectedTemplate = activeSlide.template || "text";
+  const imagePosition = activeSlide.style?.imagePosition || "left";
+  const textAlign = activeSlide.style?.textAlign || "left";
+  const showImage = selectedTemplate !== "text" && Boolean(activeSlide.imageUrl);
+  const showText = selectedTemplate !== "image" || !showImage;
+  const slideStyle = {
+    "--dashboard-slide-text-align": textAlign,
+    ...(activeSlide.style?.titleSize ? { "--dashboard-slide-title-size": activeSlide.style.titleSize } : {}),
+    ...(activeSlide.style?.bodySize ? { "--dashboard-slide-body-size": activeSlide.style.bodySize } : {}),
+    ...(activeSlide.style?.eyebrowSize ? { "--dashboard-slide-eyebrow-size": activeSlide.style.eyebrowSize } : {}),
+    ...(activeSlide.style?.imageSize ? { "--dashboard-slide-image-size": activeSlide.style.imageSize } : {}),
+    ...(activeSlide.style?.mobileImageSize
+      ? { "--dashboard-slide-mobile-image-size": activeSlide.style.mobileImageSize }
+      : {}),
+  } as CSSProperties & Record<string, string>;
+  const contentClassName = [
+    "dashboard-swipe-card__content",
+    `dashboard-swipe-card__content--${selectedTemplate}`,
+    selectedTemplate === "imageText" ? `dashboard-swipe-card__content--image-${imagePosition}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const textPaneClassName = [
+    "dashboard-swipe-card__text-pane",
+    `dashboard-swipe-card__text-pane--${textAlign}`,
+  ].join(" ");
 
   const moveSlide = (direction: number) => {
     setSlideIndex((current) => {
@@ -245,6 +261,7 @@ function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
         }}
         onKeyDown={handleKeyDown}
         tabIndex={0}
+        style={slideStyle}
         aria-label={`${activeTopic.title}, slide ${slideIndex + 1} of ${activeTopic.slides.length}`}
       >
         <div className="dashboard-swipe-card__toolbar">
@@ -255,27 +272,9 @@ function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
               {slideIndex + 1}/{activeTopic.slides.length}
             </span>
           </div>
-
-          <label
-            className="dashboard-template-select"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <span>Template</span>
-            <select
-              value={selectedTemplate}
-              onChange={(event) => setSelectedTemplate(event.target.value as DashboardSlideTemplate)}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              {dashboardSlideTemplates.map((template) => (
-                <option key={template.value} value={template.value}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
-        <div className={`dashboard-swipe-card__content dashboard-swipe-card__content--${selectedTemplate}`}>
+        <div className={contentClassName}>
           {showImage && (
             <div
               className="dashboard-swipe-card__image-pane"
@@ -293,7 +292,7 @@ function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
           )}
 
           {showText && (
-            <div className="dashboard-swipe-card__text-pane">
+            <div className={textPaneClassName}>
               <div className="dashboard-swipe-card__eyebrow" style={{ color: activeTopic.accent }}>
                 {activeSlide.eyebrow}
               </div>

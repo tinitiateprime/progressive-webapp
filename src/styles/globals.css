@@ -937,13 +937,43 @@ input:focus-visible {
   justify-content: start;
 }
 
+.dashboard-swipe-card__content--image-left {
+  grid-template-columns: minmax(142px, var(--dashboard-slide-image-size, 180px)) minmax(0, 1fr);
+}
+
+.dashboard-swipe-card__content--image-right {
+  grid-template-columns: minmax(0, 1fr) minmax(142px, var(--dashboard-slide-image-size, 180px));
+}
+
+.dashboard-swipe-card__content--image-right .dashboard-swipe-card__image-pane {
+  order: 2;
+}
+
+.dashboard-swipe-card__content--image-right .dashboard-swipe-card__text-pane {
+  order: 1;
+}
+
+.dashboard-swipe-card__content--image-top,
+.dashboard-swipe-card__content--image-bottom {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.dashboard-swipe-card__content--image-bottom .dashboard-swipe-card__image-pane {
+  order: 2;
+}
+
+.dashboard-swipe-card__content--image-bottom .dashboard-swipe-card__text-pane {
+  order: 1;
+}
+
 .dashboard-swipe-card__content--image {
   grid-template-columns: 1fr;
   padding-block: 6px;
 }
 
 .dashboard-swipe-card__image-pane {
-  width: clamp(132px, 15vw, 176px);
+  width: var(--dashboard-slide-image-size, clamp(132px, 15vw, 176px));
   aspect-ratio: 1;
   min-height: 0;
   padding: 18px;
@@ -956,7 +986,7 @@ input:focus-visible {
 }
 
 .dashboard-swipe-card__content--image .dashboard-swipe-card__image-pane {
-  width: clamp(180px, 22vw, 260px);
+  width: var(--dashboard-slide-image-size, clamp(180px, 22vw, 260px));
   min-height: 0;
   align-self: center;
   justify-self: center;
@@ -976,17 +1006,27 @@ input:focus-visible {
   align-content: center;
   gap: 10px;
   overflow: hidden;
+  text-align: var(--dashboard-slide-text-align, left);
+  justify-items: start;
+}
+
+.dashboard-swipe-card__text-pane--center {
+  justify-items: center;
+}
+
+.dashboard-swipe-card__text-pane--right {
+  justify-items: end;
 }
 
 .dashboard-swipe-card__eyebrow {
-  font-size: 12px;
+  font-size: var(--dashboard-slide-eyebrow-size, 12px);
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .dashboard-swipe-card__title {
   margin: 0;
-  font-size: clamp(28px, 4.8vw, 58px);
+  font-size: var(--dashboard-slide-title-size, clamp(28px, 4.8vw, 58px));
   line-height: 1.02;
   font-weight: 900;
 }
@@ -995,7 +1035,7 @@ input:focus-visible {
   margin: 0;
   max-width: 620px;
   color: var(--muted);
-  font-size: clamp(15px, 1.6vw, 19px);
+  font-size: var(--dashboard-slide-body-size, clamp(15px, 1.6vw, 19px));
   line-height: 1.62;
 }
 
@@ -1741,19 +1781,28 @@ main,
     justify-items: center;
   }
 
+  .dashboard-swipe-card__content--image-left,
+  .dashboard-swipe-card__content--image-right,
+  .dashboard-swipe-card__content--image-top,
+  .dashboard-swipe-card__content--image-bottom {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, auto);
+    justify-items: center;
+  }
+
   .dashboard-swipe-card__content--image {
     grid-template-rows: 1fr;
   }
 
   .dashboard-swipe-card__image-pane {
-    width: clamp(108px, 32vw, 136px);
+    width: var(--dashboard-slide-mobile-image-size, var(--dashboard-slide-image-size, clamp(108px, 32vw, 136px)));
     min-height: 0;
     padding: 13px;
     border-radius: 17px;
   }
 
   .dashboard-swipe-card__content--image .dashboard-swipe-card__image-pane {
-    width: clamp(148px, 46vw, 190px);
+    width: var(--dashboard-slide-mobile-image-size, var(--dashboard-slide-image-size, clamp(148px, 46vw, 190px)));
     min-height: 0;
   }
 
@@ -1763,7 +1812,7 @@ main,
   }
 
   .dashboard-swipe-card__title {
-    font-size: clamp(26px, 9vw, 44px);
+    font-size: var(--dashboard-slide-title-size, clamp(26px, 9vw, 44px));
   }
 
   .dashboard-swipe-card__body {
@@ -1771,7 +1820,7 @@ main,
     overflow: hidden;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 4;
-    font-size: 14px;
+    font-size: var(--dashboard-slide-body-size, 14px);
     line-height: 1.55;
   }
 
@@ -3537,11 +3586,12 @@ main,
   }
 
   .dashboard-swipe-card__title {
-    font-size: clamp(24px, 8.2vw, 38px) !important;
+    font-size: var(--dashboard-slide-title-size, clamp(24px, 8.2vw, 38px)) !important;
     line-height: 1.06 !important;
   }
 
   .dashboard-swipe-card__body {
+    font-size: var(--dashboard-slide-body-size, 14px) !important;
     -webkit-line-clamp: 5 !important;
   }
 

@@ -6,7 +6,11 @@ import type {
   CbtCollections,
   CourseCatalogEntry,
   CourseSubject,
+  DashboardImagePosition,
   DashboardCardTopic,
+  DashboardSlideStyle,
+  DashboardSlideTemplate,
+  DashboardTextAlign,
   DesignSystem,
   InterviewQuestionDetail,
   InterviewQuestionSummary,
@@ -86,7 +90,19 @@ type TickerFeedFile = {
 
 type DashboardCardsFile = {
   repoName: string;
-  topics: Array<{
+  templateFiles?: Array<string | { path: string }>;
+  files?: Array<string | { path: string }>;
+  cardFiles?: Array<string | { path: string }>;
+  defaults?: DashboardSlideStyleInput;
+  template?: string;
+  imagePosition?: string;
+  textAlign?: string;
+  titleSize?: string | number;
+  bodySize?: string | number;
+  eyebrowSize?: string | number;
+  imageSize?: string | number;
+  mobileImageSize?: string | number;
+  topics?: Array<{
     id: string;
     title: string;
     label?: string;
@@ -94,6 +110,16 @@ type DashboardCardsFile = {
     imageSurface?: string;
     imagePath?: string;
     imageUrl?: string;
+    defaults?: DashboardSlideStyleInput;
+    style?: DashboardSlideStyleInput;
+    template?: string;
+    imagePosition?: string;
+    textAlign?: string;
+    titleSize?: string | number;
+    bodySize?: string | number;
+    eyebrowSize?: string | number;
+    imageSize?: string | number;
+    mobileImageSize?: string | number;
     slides: Array<{
       eyebrow?: string;
       title: string;
@@ -101,8 +127,28 @@ type DashboardCardsFile = {
       imageAlt?: string;
       imagePath?: string;
       imageUrl?: string;
+      style?: DashboardSlideStyleInput;
+      template?: string;
+      imagePosition?: string;
+      textAlign?: string;
+      titleSize?: string | number;
+      bodySize?: string | number;
+      eyebrowSize?: string | number;
+      imageSize?: string | number;
+      mobileImageSize?: string | number;
     }>;
   }>;
+};
+
+type DashboardSlideStyleInput = {
+  template?: string;
+  imagePosition?: string;
+  textAlign?: string;
+  titleSize?: string | number;
+  bodySize?: string | number;
+  eyebrowSize?: string | number;
+  imageSize?: string | number;
+  mobileImageSize?: string | number;
 };
 
 const CBT_ROOT_FOLDER = "cbt";
@@ -151,6 +197,117 @@ const resolveOptionalRepoAssetUrl = (
 
   return buildContentRepoRawUrl(trimmed, repoName, repoRef);
 };
+
+const dashboardTemplateValues = new Set<DashboardSlideTemplate>(["text", "imageText", "image"]);
+const dashboardImagePositions = new Set<DashboardImagePosition>(["left", "right", "top", "bottom"]);
+const dashboardTextAlignments = new Set<DashboardTextAlign>(["left", "center", "right"]);
+
+const normalizeDashboardTemplate = (value: string | undefined): DashboardSlideTemplate | undefined => {
+  const normalized = String(value || "").trim();
+  if (dashboardTemplateValues.has(normalized as DashboardSlideTemplate)) {
+    return normalized as DashboardSlideTemplate;
+  }
+
+  const compact = normalized.toLowerCase().replace(/[\s_-]+/g, "");
+  if (compact === "text") return "text";
+  if (compact === "imagetext" || compact === "textimage") return "imageText";
+  if (compact === "image") return "image";
+  return undefined;
+};
+
+const normalizeDashboardImagePosition = (
+  value: string | undefined
+): DashboardImagePosition | undefined => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (dashboardImagePositions.has(normalized as DashboardImagePosition)) {
+    return normalized as DashboardImagePosition;
+  }
+
+  const compact = normalized.replace(/[\s_-]+/g, "");
+  if (compact === "imageleft") return "left";
+  if (compact === "imageright") return "right";
+  if (compact === "imagetop") return "top";
+  if (compact === "imagebottom") return "bottom";
+  return undefined;
+};
+
+const normalizeDashboardTextAlign = (value: string | undefined): DashboardTextAlign | undefined => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return dashboardTextAlignments.has(normalized as DashboardTextAlign)
+    ? (normalized as DashboardTextAlign)
+    : undefined;
+};
+
+const normalizeDashboardCssValue = (value: string | number | undefined) => {
+  if (value === undefined || value === null) return undefined;
+  const normalized = typeof value === "number" ? `${value}px` : String(value).trim();
+  if (!normalized) return undefined;
+  return normalized.replace(/[;"{}]/g, "");
+};
+
+const pickDashboardStyle = (input: DashboardSlideStyleInput | undefined): DashboardSlideStyleInput => {
+  const picked: DashboardSlideStyleInput = {};
+  if (input?.template !== undefined) picked.template = input.template;
+  if (input?.imagePosition !== undefined) picked.imagePosition = input.imagePosition;
+  if (input?.textAlign !== undefined) picked.textAlign = input.textAlign;
+  if (input?.titleSize !== undefined) picked.titleSize = input.titleSize;
+  if (input?.bodySize !== undefined) picked.bodySize = input.bodySize;
+  if (input?.eyebrowSize !== undefined) picked.eyebrowSize = input.eyebrowSize;
+  if (input?.imageSize !== undefined) picked.imageSize = input.imageSize;
+  if (input?.mobileImageSize !== undefined) picked.mobileImageSize = input.mobileImageSize;
+  return picked;
+};
+
+const mergeDashboardSlideStyle = (
+  ...inputs: Array<DashboardSlideStyleInput | undefined>
+): { template: DashboardSlideTemplate; style: DashboardSlideStyle } => {
+  const merged = inputs.reduce<DashboardSlideStyleInput>(
+    (acc, input) => ({
+      ...acc,
+      ...pickDashboardStyle(input),
+    }),
+    {}
+  );
+
+  return {
+    template: normalizeDashboardTemplate(merged.template) || "text",
+    style: {
+      imagePosition: normalizeDashboardImagePosition(merged.imagePosition) || "left",
+      textAlign: normalizeDashboardTextAlign(merged.textAlign) || "left",
+      ...(normalizeDashboardCssValue(merged.titleSize)
+        ? { titleSize: normalizeDashboardCssValue(merged.titleSize) }
+        : {}),
+      ...(normalizeDashboardCssValue(merged.bodySize)
+        ? { bodySize: normalizeDashboardCssValue(merged.bodySize) }
+        : {}),
+      ...(normalizeDashboardCssValue(merged.eyebrowSize)
+        ? { eyebrowSize: normalizeDashboardCssValue(merged.eyebrowSize) }
+        : {}),
+      ...(normalizeDashboardCssValue(merged.imageSize)
+        ? { imageSize: normalizeDashboardCssValue(merged.imageSize) }
+        : {}),
+      ...(normalizeDashboardCssValue(merged.mobileImageSize)
+        ? { mobileImageSize: normalizeDashboardCssValue(merged.mobileImageSize) }
+        : {}),
+    },
+  };
+};
+
+const getDashboardStyleInput = (
+  input:
+    | (DashboardSlideStyleInput & { style?: DashboardSlideStyleInput; defaults?: DashboardSlideStyleInput })
+    | undefined
+): DashboardSlideStyleInput => ({
+  ...pickDashboardStyle(input?.defaults),
+  ...pickDashboardStyle(input),
+  ...pickDashboardStyle(input?.style),
+});
+
+const getDashboardTemplateFilePaths = (file: DashboardCardsFile) =>
+  [...(file.templateFiles || []), ...(file.files || []), ...(file.cardFiles || [])]
+    .map((entry) => (typeof entry === "string" ? entry : entry.path))
+    .map((path) => String(path || "").trim())
+    .filter(Boolean);
 
 const fetchRepoYamlWithSource = async <T>(
   filePath: string,
@@ -250,31 +407,59 @@ export const getTickerItems = async (repoRef?: string): Promise<TickerItem[]> =>
 };
 
 export const getDashboardCards = async (repoRef?: string): Promise<DashboardCardTopic[]> => {
-  const { data: file, repoName } = await fetchRepoYamlWithSource<DashboardCardsFile>(
+  const { data: indexFile, repoName } = await fetchRepoYamlWithSource<DashboardCardsFile>(
     "dashboard/cards.yaml",
     undefined,
     repoRef
   );
 
-  const topics = Array.isArray(file.topics) ? file.topics : [];
+  const templateFilePaths = getDashboardTemplateFilePaths(indexFile);
+  const sourceFiles =
+    templateFilePaths.length > 0
+      ? await Promise.all(
+          templateFilePaths.map((filePath) =>
+            fetchRepoYamlWithSource<DashboardCardsFile>(filePath, repoName, repoRef)
+          )
+        )
+      : [{ data: indexFile, repoName }];
 
-  return topics
-    .map((topic, topicIndex) => {
+  const topicSources = sourceFiles.flatMap((source) => {
+    const topics = Array.isArray(source.data.topics) ? source.data.topics : [];
+    const fileStyle = getDashboardStyleInput(source.data);
+
+    return topics.map((topic) => ({
+      topic,
+      repoName: source.repoName,
+      fileStyle,
+    }));
+  });
+
+  return topicSources
+    .map(({ topic, repoName: sourceRepoName, fileStyle }, topicIndex) => {
+      const topicStyle = getDashboardStyleInput(topic);
       const slides = (Array.isArray(topic.slides) ? topic.slides : [])
         .map((slide, slideIndex) => {
           const title = String(slide.title || "").trim();
           if (!title) return null;
 
           const imageUrl =
-            resolveOptionalRepoAssetUrl(slide.imagePath || slide.imageUrl, repoName, repoRef) ||
-            resolveOptionalRepoAssetUrl(topic.imagePath || topic.imageUrl, repoName, repoRef);
+            resolveOptionalRepoAssetUrl(slide.imagePath || slide.imageUrl, sourceRepoName, repoRef) ||
+            resolveOptionalRepoAssetUrl(topic.imagePath || topic.imageUrl, sourceRepoName, repoRef);
+          const presentation = mergeDashboardSlideStyle(
+            { template: imageUrl ? "imageText" : "text" },
+            fileStyle,
+            topicStyle,
+            getDashboardStyleInput(slide)
+          );
 
           return {
+            template: presentation.template,
             eyebrow: String(slide.eyebrow || `Slide ${slideIndex + 1}`).trim(),
             title,
             body: String(slide.body || "").trim(),
             imageAlt: String(slide.imageAlt || `${title} visual`).trim(),
             ...(imageUrl ? { imageUrl } : {}),
+            style: presentation.style,
           };
         })
         .filter((slide): slide is DashboardCardTopic["slides"][number] => slide !== null);
