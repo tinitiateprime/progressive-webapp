@@ -1,14 +1,16 @@
 import Head from "next/head";
+import Link from "next/link";
 import type { AppProps } from "next/app";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
+import { FaBookOpen, FaHome, FaLayerGroup, FaUserTie } from "react-icons/fa";
 import "../styles/globals.css";
 
 import { SessionProvider, useSession } from "next-auth/react";
 import { DesignContext } from "../context/DesignContext";
 import { ThemeContext, Theme } from "../context/ThemeContext";
 import { markBrowserSessionActive } from "../lib/browserSession";
-import { writeCachedSessionUser } from "../lib/app-session";
+import { useAppSession, writeCachedSessionUser } from "../lib/app-session";
 import { fetchDesignConfig, warmCoreContent } from "../lib/content-client";
 import type { DesignSystem } from "../lib/content-types";
 import {
@@ -353,6 +355,67 @@ function CoreContentWarmupController() {
   return null;
 }
 
+const mobileNavItems = [
+  {
+    href: "/dashboard",
+    label: "Home",
+    icon: FaHome,
+    matches: ["/dashboard"],
+  },
+  {
+    href: "/courses",
+    label: "Courses",
+    icon: FaBookOpen,
+    matches: ["/courses", "/subject/[subject]", "/topic/[topic]"],
+  },
+  {
+    href: "/interview",
+    label: "Interview",
+    icon: FaUserTie,
+    matches: ["/interview", "/interview/[slug]"],
+  },
+  {
+    href: "/cbt",
+    label: "CBT",
+    icon: FaLayerGroup,
+    matches: ["/cbt", "/cbt/slides/[slug]", "/cbt/media/[slug]"],
+  },
+];
+
+function MobileAppNav() {
+  const router = useRouter();
+  const { status } = useAppSession();
+  const publicRoute =
+    router.pathname === "/" || router.pathname === "/login" || router.pathname === "/signup";
+
+  if (status !== "authenticated" || publicRoute) {
+    return null;
+  }
+
+  return (
+    <nav className="mobile-app-nav" aria-label="Primary app navigation">
+      {mobileNavItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = item.matches.includes(router.pathname);
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="mobile-app-nav__item"
+            aria-current={isActive ? "page" : undefined}
+          >
+            <span className="mobile-app-nav__icon">
+              <Icon />
+            </span>
+            <span className="mobile-app-nav__label">{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 export default function App({ Component, pageProps }: AppProps) {
   const [theme, setTheme] = useState<Theme>("light");
   const [design, setDesign] = useState<DesignSystem | null>(null);
@@ -535,6 +598,7 @@ export default function App({ Component, pageProps }: AppProps) {
           </Head>
 
           {renderDesignState()}
+          <MobileAppNav />
         </DesignContext.Provider>
       </ThemeContext.Provider>
     </SessionProvider>

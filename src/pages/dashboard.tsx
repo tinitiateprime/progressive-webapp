@@ -195,8 +195,14 @@ function DashboardSlideCarousel({ topics }: { topics: DashboardCardTopic[] }) {
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
-    if (!pointerStartRef.current) return;
-    event.preventDefault();
+    const start = pointerStartRef.current;
+    if (!start) return;
+
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      event.preventDefault();
+    }
   };
 
   const handlePointerEnd = (event: React.PointerEvent<HTMLElement>) => {

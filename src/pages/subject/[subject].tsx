@@ -5,9 +5,12 @@ import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import CachedRepoImage from "../../components/content/CachedRepoImage";
 import { ThemeContext } from "../../context/ThemeContext";
 import {
+  FaArrowRight,
   FaArrowLeft,
   FaMoon,
+  FaRegStar,
   FaSearch,
+  FaStar,
   FaSun,
   FaHome,
 } from "react-icons/fa";
@@ -848,9 +851,11 @@ export default function SubjectPage() {
                       }}
                       className="subject-topic-card__favorite absolute top-4 right-4 z-50 pointer-events-auto text-xl transition-transform hover:scale-125"
                       style={{ color: isFav ? "var(--brand-2)" : "var(--muted)" }}
+                      aria-label={isFav ? "Remove topic from favorites" : "Add topic to favorites"}
+                      aria-pressed={isFav}
                       title={isFav ? "Remove from favorites" : "Add to favorites"}
                     >
-                      {isFav ? "★" : "☆"}
+                      {isFav ? <FaStar /> : <FaRegStar />}
                     </button>
 
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>
@@ -876,7 +881,7 @@ export default function SubjectPage() {
 
                     <div className="mt-6 flex items-center justify-between">
                       <div style={{ fontSize: 14, fontWeight: 700, color: subjectTone.color }}>
-                        Open →
+                        Open <FaArrowRight style={{ display: "inline", marginLeft: 6 }} />
                       </div>
                     </div>
                   </div>

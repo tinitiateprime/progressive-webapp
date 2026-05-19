@@ -253,7 +253,7 @@ export default function LoginPage() {
       </div>
 
       {/* Topbar */}
-      <header className="auth-header mx-auto max-w-6xl pt-5 sm:pt-7 w-full relative">
+      <header className="auth-header mx-auto max-w-2xl pt-5 sm:pt-7 w-full relative">
         <div className="auth-topbar glass rounded-2xl px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between">
           <div
             className="flex items-center gap-3 min-w-0 cursor-pointer"
@@ -287,43 +287,9 @@ export default function LoginPage() {
       </header>
 
       {/* Content */}
-      <main className="auth-main mx-auto max-w-6xl mt-8 sm:mt-12 w-full flex-1 relative">
-        <div className="auth-layout grid lg:grid-cols-2 gap-6 lg:gap-10 items-stretch">
-          {/* Left marketing panel */}
-          <section className="auth-panel auth-promo-panel glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
-            <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[color:var(--brand)] opacity-[0.10] blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-[color:var(--brand-2)] opacity-[0.10] blur-3xl" />
-
-            <div className="relative">
-              <div className="auth-eyebrow inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
-                <span className="h-2 w-2 rounded-full bg-[color:var(--brand)]" />
-                Futuristic
-              </div>
-
-              <h2 className="auth-panel-title mt-4 text-2xl sm:text-4xl font-extrabold tracking-tight">
-                Welcome back
-              </h2>
-
-              <p className="auth-panel-copy mt-3 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-prose">
-                Sign in to access your dashboard, manage your workspace, and continue
-                where you left off - with a modern, distraction-free experience.
-              </p>
-
-              <div className="mt-6 text-xs text-[color:var(--text-muted)]">
-                New here? Create your account first.
-              </div>
-
-              <button
-                className="mt-3 btn btn-outline !rounded-2xl w-full sm:w-auto"
-                type="button"
-                onClick={() => router.push("/signup")}
-              >
-                New user? Sign up
-              </button>
-            </div>
-          </section>
-
-          {/* Right form panel */}
+      <main className="auth-main auth-main--focused mx-auto max-w-2xl mt-8 sm:mt-12 w-full flex-1 relative">
+        <div className="auth-layout auth-layout--focused grid gap-6 items-stretch">
+          {/* Form panel */}
           <section className="auth-panel auth-form-panel glass rounded-3xl p-6 sm:p-10 relative overflow-hidden">
             <div
               className="pointer-events-none absolute top-0 left-0 right-0 h-[120px] opacity-[0.55]"
@@ -333,7 +299,7 @@ export default function LoginPage() {
               }}
             />
 
-            <div className="max-w-xl relative">
+            <div className="auth-form-inner max-w-xl mx-auto relative">
               <div className="auth-eyebrow inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
                 <span className="h-2 w-2 rounded-full bg-[color:var(--brand)]" />
                 Existing users login
@@ -451,7 +417,7 @@ export default function LoginPage() {
       </main>
 
       {/* Footer */}
-      <footer className="auth-footer mx-auto max-w-6xl w-full py-8 sm:py-10 relative">
+      <footer className="auth-footer mx-auto max-w-2xl w-full py-8 sm:py-10 relative">
         <div className="glass rounded-3xl p-5 sm:p-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] sm:text-xs text-[color:var(--text-muted)]">
             <span>Copyright {new Date().getFullYear()} TINITIATE Technologies Pvt Ltd.</span>
