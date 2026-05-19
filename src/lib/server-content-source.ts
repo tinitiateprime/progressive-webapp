@@ -137,7 +137,7 @@ export async function checkContentRepoReachability() {
 
   // Use raw content instead of the GitHub commits API so browser status is not
   // treated as offline just because the unauthenticated API rate limit is hit.
-  for (const filePath of ["design/colour.json", "news-ticker/feed.json"]) {
+  for (const filePath of ["design/colour.yaml", "news-ticker/feed.yaml"]) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 

@@ -545,7 +545,7 @@ export default function App({ Component, pageProps }: AppProps) {
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>Design config not available</div>
             <div style={{ marginTop: 10, maxWidth: 620, lineHeight: 1.6 }}>
-              Push `design/colour.json`, `design/icon.json`, and `design/course-icons/*` to the
+              Push `design/colour.yaml`, `design/icon.yaml`, and `design/course-icons/*` to the
               content repo, then refresh the app.
             </div>
             <div style={{ marginTop: 10, maxWidth: 760, lineHeight: 1.6 }}>{designError}</div>

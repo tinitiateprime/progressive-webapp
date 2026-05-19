@@ -1,3 +1,4 @@
+import { parse as parseYaml } from "yaml";
 import { buildContentRepoRawUrl } from "./content-repo-config";
 import { normalize, parseSubjectTopicsFromReadme, toRawGithub, type ParsedTopic } from "./readme-utils";
 import { readRepoContentSource, readRepoContentText } from "./server-content-source";
@@ -151,7 +152,7 @@ const resolveOptionalRepoAssetUrl = (
   return buildContentRepoRawUrl(trimmed, repoName, repoRef);
 };
 
-const fetchRepoJsonWithSource = async <T>(
+const fetchRepoYamlWithSource = async <T>(
   filePath: string,
   preferredRepoName?: string,
   repoRef?: string
@@ -159,7 +160,7 @@ const fetchRepoJsonWithSource = async <T>(
   const source = await fetchRepoTextWithSource(filePath, preferredRepoName, repoRef);
   return {
     ...source,
-    data: JSON.parse(source.text) as T,
+    data: parseYaml(source.text) as T,
   };
 };
 
@@ -210,8 +211,8 @@ const loadCourseTopics = async (
 };
 
 const getCourseIconRegistry = async (repoRef?: string) => {
-  const { data: iconFile, repoName } = await fetchRepoJsonWithSource<DesignIconFile>(
-    "design/icon.json",
+  const { data: iconFile, repoName } = await fetchRepoYamlWithSource<DesignIconFile>(
+    "design/icon.yaml",
     undefined,
     repoRef
   );
@@ -229,7 +230,7 @@ const getCourseIconRegistry = async (repoRef?: string) => {
 
 export const getDesignSystem = async (repoRef?: string): Promise<DesignSystem> => {
   const [{ data: colorFile }, courseIcons] = await Promise.all([
-    fetchRepoJsonWithSource<DesignColorFile>("design/colour.json", undefined, repoRef),
+    fetchRepoYamlWithSource<DesignColorFile>("design/colour.yaml", undefined, repoRef),
     getCourseIconRegistry(repoRef),
   ]);
 
@@ -240,8 +241,8 @@ export const getDesignSystem = async (repoRef?: string): Promise<DesignSystem> =
 };
 
 export const getTickerItems = async (repoRef?: string): Promise<TickerItem[]> => {
-  const { data: feed } = await fetchRepoJsonWithSource<TickerFeedFile>(
-    "news-ticker/feed.json",
+  const { data: feed } = await fetchRepoYamlWithSource<TickerFeedFile>(
+    "news-ticker/feed.yaml",
     undefined,
     repoRef
   );
@@ -249,8 +250,8 @@ export const getTickerItems = async (repoRef?: string): Promise<TickerItem[]> =>
 };
 
 export const getDashboardCards = async (repoRef?: string): Promise<DashboardCardTopic[]> => {
-  const { data: file, repoName } = await fetchRepoJsonWithSource<DashboardCardsFile>(
-    "dashboard/cards.json",
+  const { data: file, repoName } = await fetchRepoYamlWithSource<DashboardCardsFile>(
+    "dashboard/cards.yaml",
     undefined,
     repoRef
   );
@@ -298,11 +299,11 @@ export const getDashboardCards = async (repoRef?: string): Promise<DashboardCard
 export const getInterviewQuestionSummaries = async (
   repoRef?: string
 ): Promise<InterviewQuestionSummary[]> => {
-  // ONE GitHub request: just the catalog JSON.
+  // ONE GitHub request: just the catalog YAML.
   // The `question` field already contains the question text which serves as the
   // excerpt on the list page — no need to fetch each answer markdown file here.
-  const { data: catalog } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
-    "interview-qna/catalog.json",
+  const { data: catalog } = await fetchRepoYamlWithSource<InterviewCatalogFile>(
+    "interview-qna/catalog.yaml",
     undefined,
     repoRef
   );
@@ -323,8 +324,8 @@ export const getInterviewQuestionBySlug = async (
   slug: string,
   repoRef?: string
 ): Promise<InterviewQuestionDetail | null> => {
-  const { data: catalog, repoName } = await fetchRepoJsonWithSource<InterviewCatalogFile>(
-    "interview-qna/catalog.json",
+  const { data: catalog, repoName } = await fetchRepoYamlWithSource<InterviewCatalogFile>(
+    "interview-qna/catalog.yaml",
     undefined,
     repoRef
   );
@@ -350,7 +351,7 @@ export const getInterviewQuestionBySlug = async (
 export const getCourseSubjects = async (repoRef?: string): Promise<CourseSubject[]> => {
   // Two parallel requests: catalog + icon registry (independent of each other).
   const [{ data: catalog, repoName }, courseIcons] = await Promise.all([
-    fetchRepoJsonWithSource<CoursesCatalogFile>("courses/catalog.json", undefined, repoRef),
+    fetchRepoYamlWithSource<CoursesCatalogFile>("courses/catalog.yaml", undefined, repoRef),
     getCourseIconRegistry(repoRef),
   ]);
 
@@ -398,8 +399,8 @@ const loadMediaCollection = async (
   includeNotes = false,
   repoRef?: string
 ): Promise<MediaCollectionItem[]> => {
-  const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
-    resolveCbtPath(folderName, "av-metadata.json"),
+  const { data: catalog, repoName } = await fetchRepoYamlWithSource<MediaCatalogFile>(
+    resolveCbtPath(folderName, "av-metadata.yaml"),
     undefined,
     repoRef
   );
@@ -433,8 +434,8 @@ const loadMediaCollection = async (
 };
 
 export const getSlideshows = async (repoRef?: string): Promise<SlideshowSummary[]> => {
-  const { data: catalog } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
-    resolveCbtPath("slideshows", "av-metadata.json"),
+  const { data: catalog } = await fetchRepoYamlWithSource<SlideshowCatalogFile>(
+    resolveCbtPath("slideshows", "av-metadata.yaml"),
     undefined,
     repoRef
   );
@@ -452,8 +453,8 @@ export const getSlideshowBySlug = async (
   slug: string,
   repoRef?: string
 ): Promise<SlideshowDeck | null> => {
-  const { data: catalog, repoName } = await fetchRepoJsonWithSource<SlideshowCatalogFile>(
-    resolveCbtPath("slideshows", "av-metadata.json"),
+  const { data: catalog, repoName } = await fetchRepoYamlWithSource<SlideshowCatalogFile>(
+    resolveCbtPath("slideshows", "av-metadata.yaml"),
     undefined,
     repoRef
   );
@@ -499,8 +500,8 @@ export const getMediaItemBySlug = async (
   slug: string,
   repoRef?: string
 ): Promise<MediaCollectionItem | null> => {
-  const { data: catalog, repoName } = await fetchRepoJsonWithSource<MediaCatalogFile>(
-    resolveCbtPath(kind, "av-metadata.json"),
+  const { data: catalog, repoName } = await fetchRepoYamlWithSource<MediaCatalogFile>(
+    resolveCbtPath(kind, "av-metadata.yaml"),
     undefined,
     repoRef
   );

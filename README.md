@@ -140,11 +140,11 @@ src/lib/content-repo-config.ts
 
 | To change | Edit this file |
 | --- | --- |
-| Add/remove a course card | `../tiai-edu-app/courses/catalog.json` |
-| Change course title, category, level, summary | `../tiai-edu-app/courses/catalog.json` |
+| Add/remove a course card | `../tiai-edu-app/courses/catalog.yaml` |
+| Change course title, category, level, summary | `../tiai-edu-app/courses/catalog.yaml` |
 | Change course topics | The course README, for example `../tiai-edu-app/courses/java/README.md` |
 | Change a topic page's markdown content | The markdown file linked from that course README |
-| Change course icon mapping | `../tiai-edu-app/design/icon.json` |
+| Change course icon mapping | `../tiai-edu-app/design/icon.yaml` |
 | Add/change icon image files | `../tiai-edu-app/design/course-icons/` |
 
 Course README parsing expects topic headings with markdown links, for example:
@@ -160,28 +160,28 @@ Supported heading levels are `##`, `###`, and `####`.
 
 | To change | Edit this file |
 | --- | --- |
-| Add/remove interview questions | `../tiai-edu-app/interview-qna/catalog.json` |
-| Change question title/category/level/tags | `../tiai-edu-app/interview-qna/catalog.json` |
+| Add/remove interview questions | `../tiai-edu-app/interview-qna/catalog.yaml` |
+| Change question title/category/level/tags | `../tiai-edu-app/interview-qna/catalog.yaml` |
 | Change the full answer | The `answerPath` markdown file, for example `../tiai-edu-app/interview-qna/questions/design-authentication-service.md` |
 
 ### CBT Content
 
 | To change | Edit this file |
 | --- | --- |
-| Add/remove slideshow decks | `../tiai-edu-app/cbt/slideshows/av-metadata.json` |
+| Add/remove slideshow decks | `../tiai-edu-app/cbt/slideshows/av-metadata.yaml` |
 | Change slideshow markdown | The deck `contentPath`, for example `../tiai-edu-app/cbt/slideshows/decks/react-state-basics/slideshow-content.md` |
-| Add/remove training videos | `../tiai-edu-app/cbt/training-videos/av-metadata.json` |
+| Add/remove training videos | `../tiai-edu-app/cbt/training-videos/av-metadata.yaml` |
 | Change training video notes | The item `notesPath` markdown file |
-| Add/remove audio books | `../tiai-edu-app/cbt/audio-books/av-metadata.json` |
+| Add/remove audio books | `../tiai-edu-app/cbt/audio-books/av-metadata.yaml` |
 | Change audio notes | The item `notesPath` markdown file |
 
-For videos/audio, use `embedUrl`, `playlistUrl`, `mediaUrl`, or `mediaPath` in the metadata JSON.
+For videos/audio, use `embedUrl`, `playlistUrl`, `mediaUrl`, or `mediaPath` in the metadata YAML.
 
 ### News Ticker
 
 | To change | Edit this file |
 | --- | --- |
-| Ticker labels, messages, links, order | `../tiai-edu-app/news-ticker/feed.json` |
+| Ticker labels, messages, links, order | `../tiai-edu-app/news-ticker/feed.yaml` |
 
 Lower `priority` numbers appear first.
 
@@ -189,11 +189,11 @@ Lower `priority` numbers appear first.
 
 | To change | Edit this file |
 | --- | --- |
-| Light/dark colors | `../tiai-edu-app/design/colour.json` |
-| Dashboard section colors | `../tiai-edu-app/design/colour.json` |
-| Course card category colors | `../tiai-edu-app/design/colour.json` |
-| Landing feature colors | `../tiai-edu-app/design/colour.json` |
-| Course icons | `../tiai-edu-app/design/icon.json` and `../tiai-edu-app/design/course-icons/` |
+| Light/dark colors | `../tiai-edu-app/design/colour.yaml` |
+| Dashboard section colors | `../tiai-edu-app/design/colour.yaml` |
+| Course card category colors | `../tiai-edu-app/design/colour.yaml` |
+| Landing feature colors | `../tiai-edu-app/design/colour.yaml` |
+| Course icons | `../tiai-edu-app/design/icon.yaml` and `../tiai-edu-app/design/course-icons/` |
 | CSS layout and responsive behavior | `src/styles/globals.css` |
 
 The app fetches design JSON through `/api/content/design`, stores it in browser storage, and applies it as CSS variables in `src/pages/_app.tsx`.
@@ -261,7 +261,7 @@ Then restart the dev server.
 2. The page calls helper functions in `src/lib/content-client.ts`.
 3. Those helpers call local API routes under `src/pages/api/content/`.
 4. API routes call `src/lib/server-content.ts`.
-5. `server-content.ts` fetches JSON/markdown from the GitHub content repo.
+5. `server-content.ts` fetches YAML/markdown from the GitHub content repo.
 6. The browser caches API JSON, markdown, and supported assets for offline use.
 
 ## Important API Routes
@@ -335,8 +335,8 @@ Do not use `http://localhost:3001` for `NEXTAUTH_URL` in production.
 
 | Problem | Check |
 | --- | --- |
-| Design config not available | Make sure `design/colour.json`, `design/icon.json`, and `design/course-icons/*` exist in the content repo. |
-| Courses are empty | Check `courses/catalog.json` and each course `readmePath`. |
+| Design config not available | Make sure `design/colour.yaml`, `design/icon.yaml`, and `design/course-icons/*` exist in the content repo. |
+| Courses are empty | Check `courses/catalog.yaml` and each course `readmePath`. |
 | Topic list is empty | Make sure the course README has `##`, `###`, or `####` headings with `.md` links. |
 | Google button is missing | Set `GOOGLE_CLIENT_ID` and restart the app. |
 | Google redirect fails | Check `NEXTAUTH_URL` and the Google authorized redirect URI. |
