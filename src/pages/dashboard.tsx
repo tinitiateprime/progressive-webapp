@@ -285,8 +285,9 @@ function DashboardSlideCarousel({ topics = [] }: { topics?: DashboardCardTopic[]
                 <CachedRepoImage
                   src={activeSlide.imageUrl}
                   alt={activeSlide.imageAlt}
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
+                  fetchPriority="high"
                 />
               ) : null}
             </div>
@@ -472,54 +473,83 @@ export default function Dashboard() {
 
     let cancelled = false;
     const controller = new AbortController();
+    let pendingRequests = 6;
 
-    (async () => {
-      try {
-        if (!hasLoadedStatusRef.current) {
-          setSyncingContent(true);
-        }
-        const results = await Promise.allSettled([
-          fetchTickerItems(controller.signal),
-          fetchContentRepoStatus(controller.signal),
-          fetchCourseSubjects(controller.signal),
-          fetchInterviewQuestions(controller.signal),
-          fetchCbtCollections(controller.signal),
-          fetchDashboardCards(controller.signal),
-        ]);
-        if (cancelled) return;
-
-        if (results[0].status === "fulfilled") {
-          setTickerItems(results[0].value);
-        }
-        if (results[1].status === "fulfilled") {
-          setLastSyncedAt(results[1].value.updatedAt ? Date.parse(results[1].value.updatedAt) : null);
-        }
-        if (results[2].status === "fulfilled") {
-          setCourses(results[2].value);
-        }
-        if (results[3].status === "fulfilled") {
-          setInterviewItems(results[3].value);
-        }
-        if (results[4].status === "fulfilled") {
-          setCbtCollections(results[4].value);
-        }
-        if (results[5].status === "fulfilled" && results[5].value.length > 0) {
-          setDashboardTopics(results[5].value);
-        }
-        hasLoadedStatusRef.current = true;
-      } catch (err: unknown) {
-        if (!cancelled && !(err instanceof DOMException && err.name === "AbortError")) {
-          if (!hasLoadedStatusRef.current) {
-            setTickerItems([]);
-            setLastSyncedAt(null);
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setSyncingContent(false);
-        }
+    const completeRequest = () => {
+      pendingRequests -= 1;
+      if (!cancelled && pendingRequests <= 0) {
+        setSyncingContent(false);
       }
-    })();
+    };
+
+    const requestOptions = {
+      strategy: "cache-first" as const,
+      revalidateOnCacheHit: true,
+    };
+
+    if (!hasLoadedStatusRef.current) {
+      setSyncingContent(true);
+    }
+
+    fetchDashboardCards(controller.signal, requestOptions)
+      .then((items) => {
+        if (!cancelled && items.length > 0) {
+          setDashboardTopics(items);
+        }
+      })
+      .catch(() => undefined)
+      .finally(completeRequest);
+
+    fetchTickerItems(controller.signal, requestOptions)
+      .then((items) => {
+        if (!cancelled) {
+          setTickerItems(items);
+        }
+      })
+      .catch(() => undefined)
+      .finally(completeRequest);
+
+    fetchContentRepoStatus(controller.signal, requestOptions)
+      .then((repoStatus) => {
+        if (!cancelled) {
+          setLastSyncedAt(repoStatus.updatedAt ? Date.parse(repoStatus.updatedAt) : null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && !hasLoadedStatusRef.current) {
+          setLastSyncedAt(null);
+        }
+      })
+      .finally(completeRequest);
+
+    fetchCourseSubjects(controller.signal, requestOptions)
+      .then((items) => {
+        if (!cancelled) {
+          setCourses(items);
+        }
+      })
+      .catch(() => undefined)
+      .finally(completeRequest);
+
+    fetchInterviewQuestions(controller.signal, requestOptions)
+      .then((items) => {
+        if (!cancelled) {
+          setInterviewItems(items);
+        }
+      })
+      .catch(() => undefined)
+      .finally(completeRequest);
+
+    fetchCbtCollections(controller.signal, requestOptions)
+      .then((items) => {
+        if (!cancelled) {
+          setCbtCollections(items);
+        }
+      })
+      .catch(() => undefined)
+      .finally(completeRequest);
+
+    hasLoadedStatusRef.current = true;
 
     return () => {
       cancelled = true;
