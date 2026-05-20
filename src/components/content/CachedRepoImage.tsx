@@ -4,6 +4,7 @@
 import type { ImgHTMLAttributes } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { notifyCacheStorageUpdated } from "../../lib/cache-events";
 import { toGithubProxyUrl } from "../../lib/readme-utils";
 
 const IMAGE_CACHE_NAMES = ["repo-content", "static-image-assets"];
@@ -84,6 +85,7 @@ const cacheImageForOffline = async (url: string) => {
 
     const cache = await caches.open(cacheName);
     await cache.put(absoluteUrl, response.clone());
+    notifyCacheStorageUpdated({ cacheName, url: absoluteUrl });
   } catch {
     // The visible image can still be served by the browser/service worker.
   }

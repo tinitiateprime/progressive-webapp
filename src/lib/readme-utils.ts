@@ -62,15 +62,13 @@ const getRepoTextCacheKeys = (url: string) => {
   );
 };
 
-const GITHUB_IMAGE_HOSTS = new Set(["raw.githubusercontent.com", "github.com"]);
-
 export const toGithubProxyUrl = (url: string) => {
   const rawUrl = toRawGithub(String(url || "").trim());
   if (!rawUrl) return "";
 
   try {
     const parsed = new URL(rawUrl);
-    if (parsed.protocol === "https:" && GITHUB_IMAGE_HOSTS.has(parsed.hostname)) {
+    if (parsed.protocol === "https:") {
       return buildGithubProxyUrl(rawUrl);
     }
   } catch {
@@ -468,6 +466,46 @@ export const readCachedRepoText = async (url: string) => {
   }
 
   return null;
+};
+
+const ASSET_CACHE_NAMES = ["repo-content", "static-image-assets"];
+
+const getAssetCacheKeys = (url: string) => {
+  const proxyUrl = toGithubProxyUrl(String(url || "").trim());
+
+  return Array.from(
+    new Set([proxyUrl, toAbsoluteRequestUrl(proxyUrl)].filter(Boolean))
+  );
+};
+
+export const hasCachedMarkdownAssetUrls = async (md: string, baseUrl?: string) => {
+  if (typeof window === "undefined" || !("caches" in window)) return false;
+
+  const assetUrls = extractMarkdownAssetUrls(md, baseUrl);
+  if (assetUrls.length === 0) return true;
+
+  for (const assetUrl of assetUrls) {
+    const keys = getAssetCacheKeys(assetUrl);
+    let matched = false;
+
+    for (const cacheName of ASSET_CACHE_NAMES) {
+      const cache = await caches.open(cacheName);
+
+      for (const key of keys) {
+        const cached = await cache.match(key, { ignoreSearch: false });
+        if (cached && (cached.ok || cached.type === "opaque")) {
+          matched = true;
+          break;
+        }
+      }
+
+      if (matched) break;
+    }
+
+    if (!matched) return false;
+  }
+
+  return true;
 };
 
 const writeCachedRepoText = async (url: string, response: Response) => {

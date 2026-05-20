@@ -762,44 +762,218 @@ const extractInterviewAnswer = (block: string) => {
   };
 };
 
-const parseInterviewCourseMarkdown = (
-  markdown: string,
-  fileName: string,
-  markdownUrl?: string
-): InterviewQuestionDetail | null => {
-  const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
-  const courseTitle =
-    normalizedMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || titleFromFileName(fileName);
-  const courseSlug = slugify(courseTitle || fileName, "interview");
-  const headingMatches = Array.from(normalizedMarkdown.matchAll(/^##\s+(.+)$/gm));
+type MarkdownHeading = {
+  level: number;
+  text: string;
+  index: number;
+  endIndex: number;
+};
 
-  const questions = headingMatches
-    .map((match, index) => {
-      const next = headingMatches[index + 1];
-      const rawTitle = stripMarkdownNoise(match[1]);
-      const block = normalizedMarkdown.slice(match.index! + match[0].length, next?.index).trim();
+type InterviewSectionCandidate = InterviewCourseQuestion & {
+  category: string;
+  isQuestionLike: boolean;
+  hasExplicitQuestionSignal: boolean;
+  hasAnswerSignal: boolean;
+};
+
+const QUESTION_HEADING_RE =
+  /^(?:q(?:uestion)?\s*\d*\s*[:.)-]\s*)?(?:what|why|when|where|which|who|whom|whose|how|can|could|should|would|do|does|did|is|are|was|were|will|shall|explain|describe|define|compare|differentiate|list|name|tell|write)\b/i;
+const QUESTION_NUMBER_HEADING_RE = /^(?:q|question)\s*\d+\b/i;
+const INLINE_QUESTION_SIGNAL_RE = /^(?:q|question)\s*\d*\s*[:.)-]\s*\S+/im;
+const ANSWER_SIGNAL_RE = /^(?:#{3,6}\s*)?(?:answer|a)\s*(?:[:.)-]\s*)?$/im;
+
+const findMarkdownHeadings = (markdown: string): MarkdownHeading[] => {
+  const headings: MarkdownHeading[] = [];
+  const lines = markdown.match(/.*(?:\n|$)/g) || [];
+  let offset = 0;
+  let fenceMarker = "";
+
+  for (const rawLine of lines) {
+    if (!rawLine) continue;
+
+    const line = rawLine.replace(/\n$/, "");
+    const fenceMatch = line.match(/^\s{0,3}(```|~~~)/);
+
+    if (fenceMatch) {
+      const marker = fenceMatch[1];
+      fenceMarker = fenceMarker && marker === fenceMarker ? "" : marker;
+      offset += rawLine.length;
+      continue;
+    }
+
+    if (!fenceMarker) {
+      const headingMatch = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+
+      if (headingMatch) {
+        headings.push({
+          level: headingMatch[1].length,
+          text: stripMarkdownNoise(headingMatch[2].replace(/\s+#+\s*$/, "")),
+          index: offset,
+          endIndex: offset + rawLine.length,
+        });
+      }
+    }
+
+    offset += rawLine.length;
+  }
+
+  return headings;
+};
+
+const isQuestionLikeHeading = (value: string) => {
+  const normalized = stripMarkdownNoise(value).replace(/\s+/g, " ").trim();
+  if (!normalized) return false;
+
+  return (
+    normalized.endsWith("?") ||
+    QUESTION_NUMBER_HEADING_RE.test(normalized) ||
+    QUESTION_HEADING_RE.test(normalized)
+  );
+};
+
+const buildInterviewSectionCandidates = (
+  markdown: string,
+  headings: MarkdownHeading[],
+  headingLevel: number,
+  courseTitle: string,
+  markdownUrl?: string
+): InterviewSectionCandidate[] =>
+  headings
+    .map((heading, headingIndex) => {
+      if (heading.level !== headingLevel) return null;
+
+      const nextHeading = headings
+        .slice(headingIndex + 1)
+        .find((candidate) => candidate.level <= headingLevel);
+      const rawTitle = stripMarkdownNoise(heading.text);
+      const block = markdown.slice(heading.endIndex, nextHeading?.index).trim();
       const { metadata, markdown: answerMarkdown } = extractInterviewAnswer(block);
       const title = stripMarkdownNoise(metadata.title || rawTitle);
       const question = stripMarkdownNoise(metadata.question || rawTitle);
       const category = stripMarkdownNoise(metadata.category || metadata.course || courseTitle || "Interview");
       const level = stripMarkdownNoise(metadata.level || "General");
       const markdownBody = answerMarkdown || "Answer content will be added soon.";
+      const hasExplicitQuestionSignal = Boolean(metadata.question) || INLINE_QUESTION_SIGNAL_RE.test(block);
+
+      if (!title || !question) return null;
 
       return {
-        slug: slugify(title || question, `question-${index + 1}`),
+        slug: slugify(title || question, `question-${headingIndex + 1}`),
         title,
         category,
         level,
         question,
-        tags: [],
+        tags: [] as string[],
         excerpt: summarizeMarkdown(markdownBody),
         markdown: markdownBody,
         ...(markdownUrl ? { markdown_url: markdownUrl } : {}),
-      } satisfies InterviewCourseQuestion & { category?: string };
+        isQuestionLike: isQuestionLikeHeading(question || title),
+        hasExplicitQuestionSignal,
+        hasAnswerSignal: ANSWER_SIGNAL_RE.test(block),
+      };
     })
-    .filter((question) => Boolean(question.title && question.question));
+    .filter((section): section is InterviewSectionCandidate => section !== null);
 
-  if (questions.length === 0) return null;
+const selectInterviewQuestionSections = (
+  markdown: string,
+  headings: MarkdownHeading[],
+  courseTitle: string,
+  markdownUrl?: string
+) => {
+  let best:
+    | {
+        sections: InterviewSectionCandidate[];
+        score: number;
+      }
+    | null = null;
+
+  for (let headingLevel = 2; headingLevel <= 6; headingLevel += 1) {
+    const sections = buildInterviewSectionCandidates(
+      markdown,
+      headings,
+      headingLevel,
+      courseTitle,
+      markdownUrl
+    );
+
+    if (sections.length === 0) continue;
+
+    const explicitCount = sections.filter((section) => section.hasExplicitQuestionSignal).length;
+    const questionLikeCount = sections.filter((section) => section.isQuestionLike).length;
+    const answerSignalCount = sections.filter((section) => section.hasAnswerSignal).length;
+    const evidenceCount = sections.filter(
+      (section) => section.hasExplicitQuestionSignal || section.isQuestionLike
+    ).length;
+    const explicitThreshold = Math.max(1, Math.ceil(sections.length * 0.5));
+    const questionThreshold = Math.max(1, Math.ceil(sections.length * 0.6));
+    const evidenceThreshold = Math.max(1, Math.ceil(sections.length * 0.7));
+    const qualifies =
+      explicitCount >= explicitThreshold ||
+      questionLikeCount >= questionThreshold ||
+      evidenceCount >= evidenceThreshold;
+
+    if (!qualifies) continue;
+
+    const score =
+      explicitCount * 5 +
+      questionLikeCount * 3 +
+      answerSignalCount +
+      evidenceCount +
+      (6 - headingLevel) / 10;
+
+    if (!best || score > best.score) {
+      best = { sections, score };
+    }
+  }
+
+  return best?.sections || [];
+};
+
+const getMarkdownOutlineTitles = (headings: MarkdownHeading[]) => {
+  const topSections = headings.filter((heading) => heading.level === 2);
+  const outline = topSections.length > 0 ? topSections : headings.filter((heading) => heading.level > 1);
+
+  return outline.map((heading) => stripMarkdownNoise(heading.text)).filter(Boolean);
+};
+
+const parseInterviewCourseMarkdown = (
+  markdown: string,
+  fileName: string,
+  markdownUrl?: string
+): InterviewQuestionDetail | null => {
+  const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
+  if (!normalizedMarkdown.trim()) return null;
+
+  const headings = findMarkdownHeadings(normalizedMarkdown);
+  const courseTitle =
+    headings.find((heading) => heading.level === 1)?.text || titleFromFileName(fileName);
+  const courseSlug = slugify(courseTitle || fileName, "interview");
+  const questions = selectInterviewQuestionSections(
+    normalizedMarkdown,
+    headings,
+    courseTitle,
+    markdownUrl
+  );
+  const courseTags = deriveInterviewCourseTags(normalizedMarkdown, courseTitle);
+
+  if (questions.length === 0) {
+    const outlineTitles = getMarkdownOutlineTitles(headings);
+    const sectionCount = outlineTitles.length;
+
+    return {
+      slug: courseSlug,
+      title: courseTitle,
+      category: courseTitle || "Interview",
+      level: sectionCount
+        ? `${sectionCount} ${sectionCount === 1 ? "Section" : "Sections"}`
+        : "Document",
+      question: "",
+      tags: courseTags,
+      excerpt: outlineTitles.slice(0, 4).join(", ") || summarizeMarkdown(normalizedMarkdown),
+      markdown: normalizedMarkdown,
+      ...(markdownUrl ? { markdown_url: markdownUrl } : {}),
+    };
+  }
 
   const seenQuestionSlugs = new Map<string, number>();
   const uniqueQuestions = questions.map((question) => {
@@ -814,7 +988,6 @@ const parseInterviewCourseMarkdown = (
         };
   });
 
-  const courseTags = deriveInterviewCourseTags(normalizedMarkdown, courseTitle);
   const questionCount = uniqueQuestions.length;
   const category = uniqueQuestions[0]?.category || courseTitle || "Interview";
   const questionTitles = uniqueQuestions.map((question) => question.title).slice(0, 4).join(", ");

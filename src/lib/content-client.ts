@@ -18,7 +18,7 @@ import {
   writeContentAvailability,
 } from "./content-availability";
 
-import { normalize } from "./readme-utils";
+import { extractMarkdownAssetUrls, normalize, toGithubProxyUrl } from "./readme-utils";
 
 class HttpStatusError extends Error {}
 
@@ -67,9 +67,92 @@ const readCachedJson = async <T>(url: string): Promise<T | null> => {
   }
 };
 
+const CONTENT_ASSET_CACHE_NAMES = ["repo-content", "static-image-assets"];
+
+const getContentAssetMatchUrls = (url: string) => {
+  const normalizedUrl = toGithubProxyUrl(String(url || "").trim());
+  const urls = new Set<string>();
+
+  if (normalizedUrl) {
+    urls.add(normalizedUrl);
+    urls.add(toAbsoluteRequestUrl(normalizedUrl));
+  }
+
+  return Array.from(urls);
+};
+
+const hasCachedContentAssetUrl = async (url: string) => {
+  if (!canUseCacheStorage()) return false;
+
+  const matchUrls = getContentAssetMatchUrls(url);
+  if (matchUrls.length === 0) return true;
+
+  for (const cacheName of CONTENT_ASSET_CACHE_NAMES) {
+    const cache = await caches.open(cacheName);
+
+    for (const matchUrl of matchUrls) {
+      const cached = await cache.match(matchUrl, { ignoreSearch: false });
+      if (cached && (cached.ok || cached.type === "opaque")) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+const collectMarkdownAssetUrlsFromPayload = (value: unknown, inheritedBaseUrl?: string) => {
+  const urls = new Set<string>();
+
+  const visit = (entry: unknown, baseUrl?: string) => {
+    if (!entry || typeof entry !== "object") return;
+
+    if (Array.isArray(entry)) {
+      entry.forEach((item) => visit(item, baseUrl));
+      return;
+    }
+
+    const record = entry as Record<string, unknown>;
+    const nextBaseUrl =
+      typeof record.markdown_url === "string"
+        ? record.markdown_url
+        : typeof record.notesMarkdownUrl === "string"
+          ? record.notesMarkdownUrl
+          : typeof record.readme_url === "string"
+            ? record.readme_url
+            : typeof record.md_url === "string"
+              ? record.md_url
+              : baseUrl;
+
+    for (const [key, fieldValue] of Object.entries(record)) {
+      if (typeof fieldValue === "string" && /markdown/i.test(key)) {
+        extractMarkdownAssetUrls(fieldValue, nextBaseUrl).forEach((url) => urls.add(url));
+        continue;
+      }
+
+      if (fieldValue && typeof fieldValue === "object") {
+        visit(fieldValue, nextBaseUrl);
+      }
+    }
+  };
+
+  visit(value, inheritedBaseUrl);
+  return Array.from(urls);
+};
+
+const hasCachedMarkdownAssetsInPayload = async (payload: unknown) => {
+  const assetUrls = collectMarkdownAssetUrlsFromPayload(payload);
+  if (assetUrls.length === 0) return true;
+
+  const results = await Promise.all(assetUrls.map((url) => hasCachedContentAssetUrl(url)));
+  return results.every(Boolean);
+};
+
 export const hasCachedContentUrl = async (url: string) => {
   const cached = await readCachedJson<unknown>(url);
-  return cached !== null;
+  if (cached === null) return false;
+
+  return hasCachedMarkdownAssetsInPayload(cached);
 };
 
 const writeCachedJson = async (url: string, response: Response) => {

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { CACHE_STORAGE_UPDATED_EVENT, type CacheStorageUpdatedDetail } from "./cache-events";
+import { CACHE_STORAGE_UPDATED_EVENT } from "./cache-events";
 import { hasCachedContentUrl } from "./content-client";
 import type { CbtCollections, CourseSubject, InterviewQuestionSummary } from "./content-types";
-import { readCachedRepoText } from "./readme-utils";
+import { hasCachedMarkdownAssetUrls, readCachedRepoText } from "./readme-utils";
 
 export type CacheProgressTarget = {
   key: string;
   kind: "content-json" | "repo-text" | "request";
   url: string;
+  urls?: string[];
 };
 
 export type CacheSaveProgress = {
@@ -23,21 +24,6 @@ const canReadCacheStorage = () =>
 const toAbsoluteRequestUrl = (url: string) => {
   if (typeof window === "undefined") return url;
   return new URL(url, window.location.origin).toString();
-};
-
-const getUrlMatchValues = (url: string) => {
-  if (!url) return [];
-
-  const values = new Set([url]);
-  if (typeof window !== "undefined") {
-    try {
-      values.add(new URL(url, window.location.origin).toString());
-    } catch {
-      // keep the raw URL only
-    }
-  }
-
-  return Array.from(values);
 };
 
 const hasCachedRequestUrl = async (url: string) => {
@@ -55,18 +41,31 @@ const hasCachedRequestUrl = async (url: string) => {
   }
 };
 
+const getTargetUrls = (target: CacheProgressTarget) =>
+  Array.from(new Set((target.urls?.length ? target.urls : [target.url]).filter(Boolean)));
+
+const hasCachedRepoTextUrl = async (url: string) => {
+  const cachedText = await readCachedRepoText(url);
+  if (!cachedText) return false;
+  return hasCachedMarkdownAssetUrls(cachedText, url);
+};
+
 const hasCachedTarget = async (target: CacheProgressTarget) => {
-  if (!target.url) return false;
+  const targetUrls = getTargetUrls(target);
+  if (targetUrls.length === 0) return false;
 
   if (target.kind === "repo-text") {
-    return Boolean(await readCachedRepoText(target.url));
+    const results = await Promise.all(targetUrls.map((url) => hasCachedRepoTextUrl(url)));
+    return results.every(Boolean);
   }
 
   if (target.kind === "content-json") {
-    return hasCachedContentUrl(target.url);
+    const results = await Promise.all(targetUrls.map((url) => hasCachedContentUrl(url)));
+    return results.every(Boolean);
   }
 
-  return hasCachedRequestUrl(target.url);
+  const results = await Promise.all(targetUrls.map((url) => hasCachedRequestUrl(url)));
+  return results.every(Boolean);
 };
 
 const readCachedTargetKeys = async (targets: CacheProgressTarget[]) => {
@@ -97,28 +96,18 @@ export const useCacheSaveProgress = (targets: CacheProgressTarget[]) => {
   });
 
   const targetKey = useMemo(
-    () => targets.map((target) => `${target.kind}:${target.key}:${target.url}`).join("|"),
+    () =>
+      targets
+        .map((target) => `${target.kind}:${target.key}:${getTargetUrls(target).join(",")}`)
+        .join("|"),
     [targets]
   );
 
   useEffect(() => {
     const currentTargets = [...targets];
-    const targetKeysByUrl = new Map<string, Set<string>>();
     const savedKeysRef = { current: new Set<string>() };
     let cancelled = false;
     let frameId: number | null = null;
-
-    const addTargetUrl = (url: string, key: string) => {
-      for (const value of getUrlMatchValues(url)) {
-        const existingKeys = targetKeysByUrl.get(value) || new Set<string>();
-        existingKeys.add(key);
-        targetKeysByUrl.set(value, existingKeys);
-      }
-    };
-
-    for (const target of currentTargets) {
-      addTargetUrl(target.url, target.key);
-    }
 
     const writeProgress = (savedKeys: Set<string>, ready = true) => {
       setProgress({
@@ -132,9 +121,8 @@ export const useCacheSaveProgress = (targets: CacheProgressTarget[]) => {
       const savedKeys = await readCachedTargetKeys(currentTargets);
       if (cancelled) return;
 
-      const mergedSavedKeys = new Set([...savedKeysRef.current, ...savedKeys]);
-      savedKeysRef.current = mergedSavedKeys;
-      writeProgress(mergedSavedKeys);
+      savedKeysRef.current = savedKeys;
+      writeProgress(savedKeys);
     };
 
     const scheduleRefresh = () => {
@@ -150,25 +138,8 @@ export const useCacheSaveProgress = (targets: CacheProgressTarget[]) => {
       });
     };
 
-    const markUrlSaved = (url: string) => {
-      const keys = targetKeysByUrl.get(url);
-      if (!keys?.size) return false;
-
-      const nextSavedKeys = new Set(savedKeysRef.current);
-      keys.forEach((key) => nextSavedKeys.add(key));
-      savedKeysRef.current = nextSavedKeys;
-      writeProgress(nextSavedKeys);
-      return true;
-    };
-
-    const handleCacheUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<CacheStorageUpdatedDetail>).detail;
-      const updatedUrl = detail?.url || "";
-      const matched = getUrlMatchValues(updatedUrl).some(markUrlSaved);
-
-      if (!matched) {
-        scheduleRefresh();
-      }
+    const handleCacheUpdated = () => {
+      scheduleRefresh();
     };
 
     const handleVisibilityChange = () => {
@@ -214,11 +185,21 @@ export const useCacheSaveProgress = (targets: CacheProgressTarget[]) => {
 };
 
 export const buildCourseCacheTargets = (courses: CourseSubject[]): CacheProgressTarget[] =>
-  courses.map((course) => ({
-    key: course.slug || course.subject,
-    kind: "repo-text",
-    url: course.readme_url,
-  }));
+  courses.flatMap((course) => {
+    const courseKey = course.slug || course.subject;
+    const urls = [course.readme_url, ...course.topics.map((topic) => topic.md_url)].filter(Boolean);
+
+    if (urls.length === 0) return [];
+
+    return [
+      {
+        key: `course:${courseKey}`,
+        kind: "repo-text",
+        url: urls[0],
+        urls,
+      },
+    ];
+  });
 
 export const buildInterviewCacheTargets = (
   items: InterviewQuestionSummary[]

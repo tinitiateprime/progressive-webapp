@@ -14,7 +14,13 @@ import {
   hasCachedContentUrl,
 } from "./content-client";
 import { notifyCacheStorageUpdated } from "./cache-events";
-import { extractMarkdownAssetUrls, fetchTextStrict, toGithubProxyUrl } from "./readme-utils";
+import {
+  extractMarkdownAssetUrls,
+  fetchTextStrict,
+  hasCachedMarkdownAssetUrls,
+  readCachedRepoText,
+  toGithubProxyUrl,
+} from "./readme-utils";
 
 const APP_PAGES_CACHE = "app-pages-v2";
 const REPO_CONTENT_CACHE = "repo-content";
@@ -22,7 +28,7 @@ const STATIC_IMAGE_CACHE = "static-image-assets";
 const STATIC_AUDIO_CACHE = "static-audio-assets";
 const STATIC_VIDEO_CACHE = "static-video-assets";
 const OFFLINE_SYNC_STATE_KEY = "tinitiate.offline.sync-state";
-const OFFLINE_SYNC_VERSION = 2;
+const OFFLINE_SYNC_VERSION = 3;
 export const OFFLINE_SYNC_STATE_EVENT = "tinitiate:offline-sync-state";
 const CORE_SECTION_ROUTES = ["/dashboard", "/courses", "/interview", "/cbt"] as const;
 const CORE_SECTION_CONTENT_URLS = [
@@ -179,6 +185,95 @@ const cacheStaticAsset = async (url: string, cacheName: string) => {
   const cache = await caches.open(cacheName);
   await cache.put(absoluteUrl, response.clone());
   notifyCacheStorageUpdated({ cacheName, url: absoluteUrl });
+};
+
+const hasCachedRequestInCaches = async (url: string, cacheNames: string[]) => {
+  if (typeof window === "undefined" || !("caches" in window)) return false;
+
+  const urls = Array.from(new Set([url, toAbsoluteUrl(url)].filter(Boolean)));
+
+  for (const cacheName of cacheNames) {
+    const cache = await caches.open(cacheName);
+
+    for (const cacheUrl of urls) {
+      const cached = await cache.match(cacheUrl, { ignoreSearch: false });
+      if (cached && (cached.ok || cached.type === "opaque")) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+const verifyOfflineWorkspaceCaches = async ({
+  routeHrefs,
+  contentUrls,
+  markdownUrls,
+  imageUrls,
+  audioUrls,
+  videoUrls,
+}: {
+  routeHrefs: Set<string>;
+  contentUrls: Set<string>;
+  markdownUrls: Set<string>;
+  imageUrls: Set<string>;
+  audioUrls: Set<string>;
+  videoUrls: Set<string>;
+}) => {
+  if (typeof window === "undefined" || !("caches" in window)) {
+    throw new Error("Cache Storage is not available.");
+  }
+
+  const missing: string[] = [];
+  const appCache = await caches.open(APP_PAGES_CACHE);
+
+  for (const href of routeHrefs) {
+    const cached = await appCache.match(toAbsoluteUrl(href), { ignoreSearch: false });
+    if (!cached?.ok) {
+      missing.push(`route ${href}`);
+    }
+  }
+
+  for (const url of contentUrls) {
+    if (!(await hasCachedContentUrl(url))) {
+      missing.push(`content ${url}`);
+    }
+  }
+
+  for (const url of markdownUrls) {
+    const cachedText = await readCachedRepoText(url);
+    if (!cachedText) {
+      missing.push(`markdown ${url}`);
+      continue;
+    }
+
+    if (!(await hasCachedMarkdownAssetUrls(cachedText, url))) {
+      missing.push(`markdown assets ${url}`);
+    }
+  }
+
+  for (const url of imageUrls) {
+    if (!(await hasCachedRequestInCaches(url, [REPO_CONTENT_CACHE, STATIC_IMAGE_CACHE]))) {
+      missing.push(`image ${url}`);
+    }
+  }
+
+  for (const url of audioUrls) {
+    if (!(await hasCachedRequestInCaches(url, [STATIC_AUDIO_CACHE]))) {
+      missing.push(`audio ${url}`);
+    }
+  }
+
+  for (const url of videoUrls) {
+    if (!(await hasCachedRequestInCaches(url, [STATIC_VIDEO_CACHE]))) {
+      missing.push(`video ${url}`);
+    }
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Missing cached workspace items: ${missing.slice(0, 5).join(" | ")}`);
+  }
 };
 
 const prefetchRoute = async (router: NextRouter | null, href: string) => {
@@ -344,6 +439,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
     const imageUrls = new Set<string>();
     const audioUrls = new Set<string>();
     const videoUrls = new Set<string>();
+    const contentUrls = new Set<string>(CORE_SECTION_CONTENT_URLS);
     const primaryContentTasks: Array<() => Promise<void>> = [];
     const detailTasks: Array<() => Promise<void>> = [];
     let cachedRouteCount = 0;
@@ -385,7 +481,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
             });
             extractMarkdownAssetUrls(readmeMarkdown, readmeUrl).forEach(addImageUrl);
           } catch (error) {
-            rememberWarning(`Subject README ${course.subject}`, error);
+            rememberFailure(`Subject README ${course.subject}`, error);
           }
         });
       }
@@ -409,7 +505,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
             });
             extractMarkdownAssetUrls(topicMarkdown, topic.md_url).forEach(addImageUrl);
           } catch (error) {
-            rememberWarning(`Topic ${course.subject} / ${topic.topic_name}`, error);
+            rememberFailure(`Topic ${course.subject} / ${topic.topic_name}`, error);
           }
         });
       }
@@ -417,6 +513,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
 
     for (const item of interviewSummaries) {
       routeHrefs.add(`/interview/${encodeURIComponent(item.slug)}`);
+      contentUrls.add(`/api/content/interview/${encodeURIComponent(item.slug)}`);
       primaryContentTasks.push(async () => {
         try {
           const detail = await fetchInterviewQuestion(item.slug, undefined, {
@@ -424,13 +521,14 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           });
           extractMarkdownAssetUrls(detail.markdown, detail.markdown_url).forEach(addImageUrl);
         } catch (error) {
-          rememberWarning(`Interview detail ${item.slug}`, error);
+          rememberFailure(`Interview detail ${item.slug}`, error);
         }
       });
     }
 
     for (const deck of cbtCollections.slideshows) {
       routeHrefs.add(`/cbt/slides/${encodeURIComponent(deck.slug)}`);
+      contentUrls.add(`/api/content/slideshows/${encodeURIComponent(deck.slug)}`);
       primaryContentTasks.push(async () => {
         try {
           const slideshow = await fetchSlideshow(deck.slug, undefined, {
@@ -438,7 +536,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           });
           extractMarkdownAssetUrls(slideshow.markdown, slideshow.markdown_url).forEach(addImageUrl);
         } catch (error) {
-          rememberWarning(`Slideshow ${deck.slug}`, error);
+          rememberFailure(`Slideshow ${deck.slug}`, error);
         }
       });
     }
@@ -446,6 +544,11 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
     for (const item of cbtCollections.trainingVideos) {
       routeHrefs.add(
         `/cbt/media/${encodeURIComponent(item.slug)}?kind=${encodeURIComponent("training-videos")}`
+      );
+      contentUrls.add(
+        `/api/content/media/${encodeURIComponent("training-videos")}/${encodeURIComponent(
+          item.slug
+        )}`
       );
       primaryContentTasks.push(async () => {
         try {
@@ -460,7 +563,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           }
           extractMarkdownAssetUrls(mediaItem.notesMarkdown || "", mediaItem.notesMarkdownUrl).forEach(addImageUrl);
         } catch (error) {
-          rememberWarning(`Training video ${item.slug}`, error);
+          rememberFailure(`Training video ${item.slug}`, error);
         }
       });
     }
@@ -468,6 +571,9 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
     for (const item of cbtCollections.audioBooks) {
       routeHrefs.add(
         `/cbt/media/${encodeURIComponent(item.slug)}?kind=${encodeURIComponent("audio-books")}`
+      );
+      contentUrls.add(
+        `/api/content/media/${encodeURIComponent("audio-books")}/${encodeURIComponent(item.slug)}`
       );
       primaryContentTasks.push(async () => {
         try {
@@ -482,7 +588,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           }
           extractMarkdownAssetUrls(mediaItem.notesMarkdown || "", mediaItem.notesMarkdownUrl).forEach(addImageUrl);
         } catch (error) {
-          rememberWarning(`Audio item ${item.slug}`, error);
+          rememberFailure(`Audio item ${item.slug}`, error);
         }
       });
     }
@@ -530,7 +636,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           try {
             await cacheStaticAsset(url, getImageCacheName(url));
           } catch (error) {
-            rememberWarning(`Image asset ${url}`, error);
+            rememberFailure(`Image asset ${url}`, error);
           }
         },
         ASSET_SYNC_CONCURRENCY
@@ -542,7 +648,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           try {
             await cacheStaticAsset(url, STATIC_AUDIO_CACHE);
           } catch (error) {
-            rememberWarning(`Audio asset ${url}`, error);
+            rememberFailure(`Audio asset ${url}`, error);
           }
         },
         ASSET_SYNC_CONCURRENCY
@@ -554,7 +660,7 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
           try {
             await cacheStaticAsset(url, STATIC_VIDEO_CACHE);
           } catch (error) {
-            rememberWarning(`Video asset ${url}`, error);
+            rememberFailure(`Video asset ${url}`, error);
           }
         },
         ASSET_SYNC_CONCURRENCY
@@ -563,6 +669,15 @@ export async function syncOfflineWorkspace(router?: NextRouter | null) {
       if (syncFailures.length > 0) {
         throw new Error(syncFailures.slice(0, 5).join(" | "));
       }
+
+      await verifyOfflineWorkspaceCaches({
+        routeHrefs,
+        contentUrls,
+        markdownUrls,
+        imageUrls,
+        audioUrls,
+        videoUrls,
+      });
 
       writeOfflineSyncState({
         version: OFFLINE_SYNC_VERSION,
